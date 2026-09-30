@@ -278,6 +278,9 @@ export default function SanadControlGatePage() {
     audioUrl: '',
     description: '',
     episodes: [],
+    prerequisites: [],
+    nextCourses: [],
+    pedagogicalRole: '',
   })
 
   // رفع وإدارة ملفات الـ PDF من اللابتوب
@@ -824,6 +827,9 @@ export default function SanadControlGatePage() {
       pdfUrl: formData.pdfUrl?.trim() || undefined,
       audioUrl: formData.audioUrl?.trim() || undefined,
       description: formData.description?.trim() || '',
+      prerequisites: formData.prerequisites || [],
+      nextCourses: formData.nextCourses || [],
+      pedagogicalRole: formData.pedagogicalRole?.trim() || undefined,
       episodes: (formData.episodes || []).map((ep) => ({
         ...ep,
         youtubeUrl: (ep.youtubeUrl || '').trim().replace(/[\/\\]+$/, ''),
@@ -857,6 +863,9 @@ export default function SanadControlGatePage() {
       stage: (course.stage as 1 | 2 | 3) || 1,
       reversePlaylist: Boolean(course.reversePlaylist),
       videoUrl: course.videoUrl || '',
+      prerequisites: course.prerequisites || [],
+      nextCourses: course.nextCourses || [],
+      pedagogicalRole: course.pedagogicalRole || '',
       episodes: course.episodes && course.episodes.length > 0 ? [...course.episodes] : [],
     })
     setVideoInputMode(course.videoUrl ? 'upload' : 'youtube')
@@ -882,6 +891,9 @@ export default function SanadControlGatePage() {
       audioUrl: '',
       description: '',
       episodes: [],
+      prerequisites: [],
+      nextCourses: [],
+      pedagogicalRole: '',
     })
     setVideoInputMode('upload')
     setIsModalOpen(true)
@@ -2819,6 +2831,15 @@ export default function SanadControlGatePage() {
                                     </span>
                                   </div>
                                 )}
+                              {analysis.suggestedNextCourses &&
+                                analysis.suggestedNextCourses.length > 0 && (
+                                  <div>
+                                    المتون التالية المقترحة بعده:{' '}
+                                    <span className="font-bold text-teal-800 dark:text-teal-400">
+                                      {analysis.suggestedNextCourses.join('، ')}
+                                    </span>
+                                  </div>
+                                )}
                             </div>
                           </div>
 
@@ -2857,6 +2878,9 @@ export default function SanadControlGatePage() {
                                   pdfUrl: '',
                                   audioUrl: '',
                                   description: analysis.rationale,
+                                  prerequisites: analysis.pedagogicalPrerequisites || [],
+                                  nextCourses: analysis.suggestedNextCourses || [],
+                                  pedagogicalRole: analysis.rationale,
                                   episodes: [],
                                 })
                                 setIsModalOpen(true)
@@ -3752,6 +3776,14 @@ export default function SanadControlGatePage() {
                             </span>
                           </span>
                         )}
+                        {analysis.suggestedNextCourses && analysis.suggestedNextCourses.length > 0 && (
+                          <span>
+                            المتون التالية المقترحة:{' '}
+                            <span className="font-bold text-teal-800 dark:text-teal-400">
+                              {analysis.suggestedNextCourses.join('، ')}
+                            </span>
+                          </span>
+                        )}
                       </div>
 
                       <div className="pt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/50 dark:border-stone-700/50">
@@ -3773,7 +3805,7 @@ export default function SanadControlGatePage() {
                           )}
                         </div>
 
-                        {(!isStageMatching || !isCategoryMatching || (!formData.author && analysis.classicalAuthor)) && (
+                        {(!isStageMatching || !isCategoryMatching || (!formData.author && analysis.classicalAuthor) || !formData.prerequisites?.length) && (
                           <button
                             type="button"
                             onClick={() => {
@@ -3787,13 +3819,16 @@ export default function SanadControlGatePage() {
                                   !prev.slug || prev.slug.startsWith('matn-')
                                     ? analysis.suggestedSlug
                                     : prev.slug,
+                                prerequisites: analysis.pedagogicalPrerequisites?.length ? analysis.pedagogicalPrerequisites : (prev.prerequisites || []),
+                                nextCourses: analysis.suggestedNextCourses?.length ? analysis.suggestedNextCourses : (prev.nextCourses || []),
+                                pedagogicalRole: analysis.rationale || prev.pedagogicalRole,
                               }))
                             }}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-900 px-3.5 py-1.5 text-xs font-bold transition shadow-xs cursor-pointer"
                           >
                             <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                             <span>
-                              اعتماد التوجيه الذكي تلقائياً (مرحلة {analysis.stage} + فن «{analysis.categoryTitle}»)
+                              اعتماد التوجيه الذكي والمتطلبات تلقائياً (مرحلة {analysis.stage} + فن «{analysis.categoryTitle}»)
                             </span>
                           </button>
                         )}
@@ -3896,6 +3931,252 @@ export default function SanadControlGatePage() {
                   />
                 </div>
               </div>
+
+              {/* قسم التدرج المنهجي والمتطلبات السابقة والمتون التالية */}
+              {(() => {
+                const autoMeta = formData.title ? analyzeMatnStage({
+                  title: formData.title,
+                  categorySlug: formData.categorySlug,
+                  author: formData.author,
+                  description: formData.description,
+                }) : null
+
+                return (
+                  <div className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 dark:border-stone-800 dark:bg-stone-800/50">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                        <Compass className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                        <span>التدرج المنهجي والمتطلبات السابقة (لترتيب الأولويات ومنع التشتت)</span>
+                      </label>
+                      {autoMeta && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              prerequisites: autoMeta.pedagogicalPrerequisites || [],
+                              nextCourses: autoMeta.suggestedNextCourses || [],
+                              pedagogicalRole: autoMeta.rationale || prev.pedagogicalRole,
+                            }))
+                          }}
+                          className="text-[11px] font-bold text-amber-700 hover:text-amber-800 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>تطبيق التوصيات الذكية</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {/* حقل المتطلبات السابقة */}
+                      <div className="space-y-1.5 bg-white dark:bg-stone-900 p-3 rounded-xl border border-stone-200 dark:border-stone-700">
+                        <label className="text-[11px] font-bold text-stone-700 dark:text-stone-300 block">
+                          المتطلبات السابقة الموصى بها:
+                        </label>
+                        <div className="flex flex-wrap gap-1 min-h-6">
+                          {(formData.prerequisites && formData.prerequisites.length > 0) ? (
+                            formData.prerequisites.map((p, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300"
+                              >
+                                <span>«{p}»</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      prerequisites: (prev.prerequisites || []).filter((_, i) => i !== idx),
+                                    }))
+                                  }}
+                                  className="text-amber-700 hover:text-rose-600 font-bold cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">
+                              لا توجد متطلبات سابقة (متن تأسيسي مدخلي)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <input
+                            type="text"
+                            placeholder="أضف متطلباً سابقاً..."
+                            id="new-prereq-input"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const input = e.currentTarget
+                                const val = input.value.trim()
+                                if (val && !(formData.prerequisites || []).includes(val)) {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    prerequisites: [...(prev.prerequisites || []), val],
+                                  }))
+                                  input.value = ''
+                                }
+                              }
+                            }}
+                            className="flex-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs text-stone-900 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById('new-prereq-input') as HTMLInputElement
+                              if (input && input.value.trim()) {
+                                const val = input.value.trim()
+                                if (!(formData.prerequisites || []).includes(val)) {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    prerequisites: [...(prev.prerequisites || []), val],
+                                  }))
+                                  input.value = ''
+                                }
+                              }
+                            }}
+                            className="rounded-lg bg-stone-200 px-2.5 py-1 text-xs font-bold text-stone-700 hover:bg-stone-300 dark:bg-stone-700 dark:text-stone-200 cursor-pointer"
+                          >
+                            + إضافة
+                          </button>
+                        </div>
+
+                        {/* مقترحات ذكية سريعة من الذكاء الاصطناعي */}
+                        {autoMeta?.pedagogicalPrerequisites && autoMeta.pedagogicalPrerequisites.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px]">
+                            <span className="text-stone-400">مقترح:</span>
+                            {autoMeta.pedagogicalPrerequisites.map((sug, sIdx) => {
+                              const alreadyIn = (formData.prerequisites || []).includes(sug)
+                              if (alreadyIn) return null
+                              return (
+                                <button
+                                  key={sIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      prerequisites: [...(prev.prerequisites || []), sug],
+                                    }))
+                                  }}
+                                  className="rounded bg-amber-100 hover:bg-amber-200 text-amber-900 px-1.5 py-0.5 font-bold cursor-pointer dark:bg-amber-950 dark:text-amber-300"
+                                >
+                                  + {sug}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* حقل المتون التالية المقترحة */}
+                      <div className="space-y-1.5 bg-white dark:bg-stone-900 p-3 rounded-xl border border-stone-200 dark:border-stone-700">
+                        <label className="text-[11px] font-bold text-stone-700 dark:text-stone-300 block">
+                          المتون التالية المقترحة بعد هذا المتن:
+                        </label>
+                        <div className="flex flex-wrap gap-1 min-h-6">
+                          {(formData.nextCourses && formData.nextCourses.length > 0) ? (
+                            formData.nextCourses.map((n, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 rounded-lg bg-teal-50 border border-teal-300 px-2 py-0.5 text-[10px] font-bold text-teal-900 dark:bg-teal-950 dark:border-teal-800 dark:text-teal-300"
+                              >
+                                <span>«{n}»</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      nextCourses: (prev.nextCourses || []).filter((_, i) => i !== idx),
+                                    }))
+                                  }}
+                                  className="text-teal-700 hover:text-rose-600 font-bold cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">
+                              مرحلة تمكن نهائية أو غير محدد بعد
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <input
+                            type="text"
+                            placeholder="أضف متناً تالياً..."
+                            id="new-next-input"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const input = e.currentTarget
+                                const val = input.value.trim()
+                                if (val && !(formData.nextCourses || []).includes(val)) {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    nextCourses: [...(prev.nextCourses || []), val],
+                                  }))
+                                  input.value = ''
+                                }
+                              }
+                            }}
+                            className="flex-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs text-stone-900 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById('new-next-input') as HTMLInputElement
+                              if (input && input.value.trim()) {
+                                const val = input.value.trim()
+                                if (!(formData.nextCourses || []).includes(val)) {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    nextCourses: [...(prev.nextCourses || []), val],
+                                  }))
+                                  input.value = ''
+                                }
+                              }
+                            }}
+                            className="rounded-lg bg-stone-200 px-2.5 py-1 text-xs font-bold text-stone-700 hover:bg-stone-300 dark:bg-stone-700 dark:text-stone-200 cursor-pointer"
+                          >
+                            + إضافة
+                          </button>
+                        </div>
+
+                        {/* مقترحات المتون التالية من الذكاء الاصطناعي */}
+                        {autoMeta?.suggestedNextCourses && autoMeta.suggestedNextCourses.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 pt-1 text-[10px]">
+                            <span className="text-stone-400">مقترح:</span>
+                            {autoMeta.suggestedNextCourses.map((sug, sIdx) => {
+                              const alreadyIn = (formData.nextCourses || []).includes(sug)
+                              if (alreadyIn) return null
+                              return (
+                                <button
+                                  key={sIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      nextCourses: [...(prev.nextCourses || []), sug],
+                                    }))
+                                  }}
+                                  className="rounded bg-teal-100 hover:bg-teal-200 text-teal-900 px-1.5 py-0.5 font-bold cursor-pointer dark:bg-teal-950 dark:text-teal-300"
+                                >
+                                  + {sug}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* قسم فيديو المتن: رفع من اللابتوب أو رابط يوتيوب */}
               <div className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 dark:border-stone-800 dark:bg-stone-800/50">

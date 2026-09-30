@@ -49,8 +49,14 @@ import {
   WifiOff,
   DownloadCloud,
   Award,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  ArrowUpRight,
+  GitBranch,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
+import { resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import ScholarlyStationsModal from '@/components/scholarly-stations-modal'
 import VerifiedDigitalIjaza from '@/components/verified-digital-ijaza'
 import { issueCourseCertificateAction } from '@/app/actions/certificate-actions'
@@ -77,6 +83,8 @@ export interface NoteItem {
 interface ClassroomViewProps {
   course: MatnCourse
   relatedCourses?: MatnCourse[]
+  allCourses?: MatnCourse[]
+  completedCourseSlugs?: string[]
   initialNotes?: NoteItem[]
   initialIsCompleted?: boolean
   initialCompletedEpisodes?: number[]
@@ -87,6 +95,8 @@ interface ClassroomViewProps {
 export default function ClassroomView({
   course,
   relatedCourses = [],
+  allCourses = [],
+  completedCourseSlugs = [],
   initialNotes = [],
   initialIsCompleted = false,
   initialCompletedEpisodes = [],
@@ -111,6 +121,16 @@ export default function ClassroomView({
   const [isDirectIjazaOpen, setIsDirectIjazaOpen] = useState(false)
   const [directIjazaCert, setDirectIjazaCert] = useState<VerifiedCertificate | null>(null)
   const [isIssuingDirectIjaza, setIsIssuingDirectIjaza] = useState(false)
+
+  // مسار التدرج المنهجي والمتطلبات السابقة
+  const progression = resolveCourseProgression(currentCourse, allCourses)
+  const hasPrerequisites = Boolean(progression.prerequisites && progression.prerequisites.length > 0)
+  const uncompletedPrerequisites = hasPrerequisites
+    ? progression.prerequisites.filter((p) => !p.slug || !completedCourseSlugs.includes(p.slug))
+    : []
+  const hasUncompletedPrereqs = uncompletedPrerequisites.length > 0
+  const allPrereqsDone = hasPrerequisites && uncompletedPrerequisites.length === 0
+  const [isProgressionOpen, setIsProgressionOpen] = useState(true)
 
   // فحص هل المتن محفوظ أوفلاين
   useEffect(() => {
@@ -897,7 +917,252 @@ export default function ClassroomView({
         </div>
       )}
 
-      {/* 2. منطقة العرض المتجاوبة الكبرى (مشغل الفيديو السينمائي + لوحة الأدوات والكشكول) */}
+      {/* 2. مسار التدرج المنهجي والمتطلبات السابقة للمتن (Methodological Progression & Prerequisites) */}
+      <div className={`overflow-hidden rounded-3xl border transition-all duration-300 ${
+        hasUncompletedPrereqs
+          ? 'border-amber-300/90 bg-linear-to-b from-amber-50/70 via-white to-amber-50/40 dark:border-amber-900/80 dark:from-amber-950/40 dark:via-stone-900 dark:to-stone-900 shadow-sm'
+          : 'border-stone-200/90 bg-linear-to-b from-[#fbf9f4] via-white to-stone-50/40 dark:border-stone-800 dark:from-stone-900/90 dark:via-stone-900 dark:to-stone-900 shadow-xs'
+      }`}>
+        {/* الترويسة القابلة للطي والتوسيع */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 border-b border-stone-200/60 dark:border-stone-800/80">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+              hasUncompletedPrereqs
+                ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
+                : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+            }`}>
+              <Compass className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-stone-900 dark:text-white">
+                  مسار التدرج المنهجي والمتطلبات السابقة
+                </h3>
+                <span className={`rounded-xl px-2.5 py-0.5 text-[11px] font-bold border ${
+                  progression.stage === 1
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800'
+                    : progression.stage === 2
+                    ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
+                    : 'bg-teal-50 text-teal-900 border-teal-300 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800'
+                }`}>
+                  {progression.stageLabel}
+                </span>
+                {hasUncompletedPrereqs && (
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-950 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 animate-pulse">
+                    <AlertCircle className="h-3 w-3 text-amber-600" />
+                    <span>يُنصح بضبط المتطلب السابق أولاً</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium">
+                توجيه منهجي لترتيب الأولويات وضبط التسلسل العلمي دون تشتت في فن {currentCourse.category}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <Link
+              href={`/roadmap?category=${currentCourse.categorySlug || 'hadith'}`}
+              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-stone-700 hover:border-emerald-700 hover:text-emerald-900 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-emerald-400"
+            >
+              <span>خارطة الفن الكاملة</span>
+              <ArrowLeft className="h-3 w-3" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setIsProgressionOpen(!isProgressionOpen)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+              title={isProgressionOpen ? 'طي مسار التدرج' : 'إظهار مسار التدرج'}
+            >
+              {isProgressionOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* محتوى المسار المتسلسل */}
+        {isProgressionOpen && (
+          <div className="p-4 sm:p-5 space-y-4">
+            {/* تنبيه إرشادي إن وُجد متطلب سابق لم يُنجز */}
+            {hasUncompletedPrereqs && (
+              <div className="rounded-2xl border border-amber-300/80 bg-amber-100/60 p-3.5 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">
+                    تنبيه منهجي لطالب العلم:
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-300">
+                    بناءً على السلم التأصيلي المعتمد، يُستحسن أن تضبط متن{' '}
+                    <strong>«{uncompletedPrerequisites.map((p) => p.title).join('، ')}»</strong>{' '}
+                    قبل الشروع في مدارسة هذا المتن؛ لترسيخ الأصول وفهم دقائق مسائله دون عناء أو تشتت.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* بطاقات المسار الثلاث: المتطلب السابق -> المتن الحالي -> المتن التالي */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {/* 1. المتطلب السابق */}
+              <div className="rounded-2xl border p-4 bg-white/80 dark:bg-stone-900/80 border-stone-200/90 dark:border-stone-800 flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-stone-400">1. نقطة الانطلاق والمتطلب:</span>
+                    {hasPrerequisites ? (
+                      allPrereqsDone ? (
+                        <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-bold">
+                          <CheckCircle className="h-3.5 w-3.5" /> تم الضبط ✓
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-400 font-bold">
+                          يُنصح بضبطه أولاً
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                        نقطة بداية
+                      </span>
+                    )}
+                  </div>
+
+                  {hasPrerequisites ? (
+                    <div className="space-y-2 pt-1">
+                      {progression.prerequisites.map((prereq, idx) => {
+                        const isDone = prereq.slug && completedCourseSlugs.includes(prereq.slug)
+                        return (
+                          <div key={idx} className="rounded-xl border border-stone-100 dark:border-stone-800 p-2.5 bg-stone-50/70 dark:bg-stone-800/50 space-y-1.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <h4 className="text-xs font-black text-stone-900 dark:text-white leading-snug">
+                                «{prereq.title}»
+                              </h4>
+                              {isDone ? (
+                                <span className="rounded-md bg-emerald-100 text-emerald-900 px-1.5 py-0.5 text-[9px] font-bold dark:bg-emerald-950 dark:text-emerald-300">
+                                  منجز ✓
+                                </span>
+                              ) : (
+                                <span className="rounded-md bg-amber-100 text-amber-900 px-1.5 py-0.5 text-[9px] font-bold dark:bg-amber-950 dark:text-amber-300">
+                                  مطلوب
+                                </span>
+                              )}
+                            </div>
+                            {prereq.isHostedOnPlatform && prereq.slug ? (
+                              <Link
+                                href={`/courses/${prereq.slug}`}
+                                className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
+                                  isDone
+                                    ? 'text-stone-500 hover:text-emerald-800 dark:text-stone-400 dark:hover:text-emerald-300'
+                                    : 'text-amber-800 hover:text-amber-950 underline font-black dark:text-amber-400'
+                                }`}
+                              >
+                                <span>{isDone ? 'مراجعة المتن ↗' : 'الانتقال لمدارسة المتن أولاً ←'}</span>
+                              </Link>
+                            ) : (
+                              <span className="text-[10px] text-stone-400">
+                                متن معتمد خارج المنصة
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-2 space-y-1">
+                      <p className="text-xs font-black text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                        <span>متن تأسيسي مدخلي</span>
+                      </p>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed font-medium">
+                        هذا المتن هو عتبة البداية المعتمدة في هذا الفن، ولا يتطلب مدارسة سابقة. ابدأ مستعيناً بالله!
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. المتن الحالي قيد المدارسة */}
+              <div className="rounded-2xl border-2 border-emerald-600/80 bg-linear-to-b from-emerald-50/60 to-white dark:from-emerald-950/40 dark:to-stone-900 p-4 shadow-2xs flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
+                    <span className="flex items-center gap-1 font-mono font-black">
+                      <span>2. موقعك الآن:</span>
+                    </span>
+                    <span className="rounded-md bg-emerald-700 text-white px-2 py-0.5 text-[10px] font-black">
+                      {isCompleted ? 'تم ضبطه ✓' : 'قيد المدارسة'}
+                    </span>
+                  </div>
+
+                  <div className="pt-1">
+                    <h4 className="text-sm font-black text-stone-900 dark:text-white leading-snug">
+                      «{currentCourse.title}»
+                    </h4>
+                    <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-1 font-medium leading-relaxed">
+                      {progression.pedagogicalRole || currentCourse.description || 'متن معتمد في السلم التأصيلي.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/60 flex items-center justify-between text-[11px]">
+                  <span className="text-stone-500 dark:text-stone-400 truncate max-w-[150px]">
+                    {currentCourse.instructor ? `الشارح: ${currentCourse.instructor}` : currentCourse.category}
+                  </span>
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                    المرحلة {progression.stage}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. المتن التالي المقترح بعد هذا المتن */}
+              <div className="rounded-2xl border p-4 bg-white/80 dark:bg-stone-900/80 border-stone-200/90 dark:border-stone-800 flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-stone-400">3. المتن التالي في السلم:</span>
+                    <span className="text-teal-700 dark:text-teal-400 font-bold">
+                      الترقية القادمة
+                    </span>
+                  </div>
+
+                  {progression.nextCourses && progression.nextCourses.length > 0 ? (
+                    <div className="space-y-2 pt-1">
+                      {progression.nextCourses.map((nextCourse, idx) => (
+                        <div key={idx} className="rounded-xl border border-stone-100 dark:border-stone-800 p-2.5 bg-stone-50/70 dark:bg-stone-800/50 space-y-1.5">
+                          <h4 className="text-xs font-black text-stone-900 dark:text-white leading-snug">
+                            «{nextCourse.title}»
+                          </h4>
+                          <p className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">
+                            خطوتك المنهجية التالية بعد استكمال وضبط هذا المتن
+                          </p>
+                          {nextCourse.isHostedOnPlatform && nextCourse.slug ? (
+                            <Link
+                              href={`/courses/${nextCourse.slug}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-black text-teal-800 hover:text-teal-950 transition dark:text-teal-400"
+                            >
+                              <span>معاينة المتن التالي ←</span>
+                            </Link>
+                          ) : (
+                            <span className="text-[10px] text-stone-400">
+                              متن تخصصي معتمد
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-2 space-y-1">
+                      <p className="text-xs font-black text-teal-900 dark:text-teal-300 flex items-center gap-1.5">
+                        <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                        <span>رتبة التمكن والرسوخ</span>
+                      </p>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed font-medium">
+                        هذا المتن من أمهات المتون الموسوعية في هذا الفن؛ بإتقانه تستكمل الركائز التخصصية العالية.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. منطقة العرض المتجاوبة الكبرى (مشغل الفيديو السينمائي + لوحة الأدوات والكشكول) */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         {/* الحاوية الرئيسية للمشغل التعليمي (تتوسع إلى 12 عمود في نمط المسرح) */}
         <div className={`space-y-4 transition-all duration-300 ${isTheaterExpanded ? 'lg:col-span-12' : 'lg:col-span-8'}`}>

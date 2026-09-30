@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Circle, ArrowLeft, Layers, Search, BookOpen, Video, ListVideo } from 'lucide-react'
+import { CheckCircle2, Circle, ArrowLeft, Layers, Search, BookOpen, Video, ListVideo, Sparkles } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
+import { resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import { toggleCourseCompletion } from '@/app/courses/[slug]/actions'
 
 export interface BoardCategory {
@@ -246,6 +247,7 @@ export default function CurriculumBoard({
               <div className="mt-3 divide-y divide-stone-100 dark:divide-stone-800 flex-1">
                 {categoryCourses.map((course) => {
                   const isDone = completedSlugs.has(course.slug)
+                  const progression = resolveCourseProgression(course, displayCourses)
 
                   return (
                     <div
@@ -292,7 +294,8 @@ export default function CurriculumBoard({
                               </span>
                             )}
                           </Link>
-                          <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-400 dark:text-stone-400">
+
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-stone-400 dark:text-stone-400">
                             <span className="inline-flex items-center gap-0.5 text-stone-400">
                               {course.isPlaylist ? (
                                 <>
@@ -306,6 +309,33 @@ export default function CurriculumBoard({
                                 </>
                               )}
                             </span>
+
+                            {/* شارة المتطلب السابق والتوجيه المنهجي */}
+                            {progression.prerequisites && progression.prerequisites.length > 0 ? (
+                              <span className="inline-flex items-center gap-1 font-bold text-[10px]">
+                                <span className="text-stone-400">المتطلب:</span>
+                                {progression.prerequisites.map((p, pIdx) => {
+                                  const isPrereqDone = p.slug && completedSlugs.has(p.slug)
+                                  return (
+                                    <span
+                                      key={pIdx}
+                                      className={`rounded-md px-1.5 py-0.5 border ${
+                                        isPrereqDone
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                          : 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300'
+                                      }`}
+                                    >
+                                      {p.title} {isPrereqDone ? '✓' : ''}
+                                    </span>
+                                  )
+                                })}
+                              </span>
+                            ) : (course.stage || 1) === 1 ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                <span>نقطة انطلاق</span>
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </div>

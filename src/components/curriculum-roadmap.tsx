@@ -21,7 +21,7 @@ import {
   Trophy,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
-import { analyzeMatnStage } from '@/lib/curriculum-intelligence'
+import { analyzeMatnStage, resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import ScholarlyStationsModal from '@/components/scholarly-stations-modal'
 
 interface RoadmapProps {
@@ -496,6 +496,7 @@ export default function CurriculumRoadmap({
                   const isDone = completedSet.has(course.slug)
                   const baseOffset = info.stage === 1 ? 0 : info.stage === 2 ? stage1Courses.length : (stage1Courses.length + stage2Courses.length)
                   const nodeNumber = baseOffset + idx + 1
+                  const progression = resolveCourseProgression(course, courses)
 
                   return (
                     <Link
@@ -537,6 +538,37 @@ export default function CurriculumRoadmap({
                             «{course.title}»
                           </h3>
                         </div>
+
+                        {/* إشارة المتطلب السابق والتدرج المنهجي */}
+                        {progression.prerequisites && progression.prerequisites.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5 text-[10px]">
+                            <span className="text-stone-400 font-bold shrink-0">المتطلب:</span>
+                            {progression.prerequisites.map((p, pIdx) => {
+                              const isPComplete = p.slug && completedSet.has(p.slug)
+                              return (
+                                <span
+                                  key={pIdx}
+                                  className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-bold border ${
+                                    isPComplete
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                                      : 'bg-amber-50 text-amber-900 border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                                  }`}
+                                  title={isPComplete ? 'تم ضبط هذا المتطلب مسبقاً' : 'يُنصح بإتقان هذا المتطلب أولاً'}
+                                >
+                                  <span>«{p.title}»</span>
+                                  <span>{isPComplete ? '✓' : '⚠️'}</span>
+                                </span>
+                              )
+                            })}
+                          </div>
+                        ) : (course.stage || 1) === 1 ? (
+                          <div className="pt-0.5">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-1.5 py-0.5 text-[10px] font-bold dark:bg-emerald-950/60 dark:text-emerald-300">
+                              <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                              <span>متن مدخلي (نقطة انطلاق)</span>
+                            </span>
+                          </div>
+                        ) : null}
 
                         {/* المؤلف والشارح */}
                         <div className="space-y-1 text-[11px] text-stone-600 dark:text-stone-300">
