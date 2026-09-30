@@ -902,12 +902,12 @@ export default function SanadControlGatePage() {
   // دوال إدارة وتفريع مجالس المتن وروابطها الفردية
   const handleOpenEpisodesModal = (course: MatnCourse) => {
     setEditingEpisodesCourse(course)
-    const cleaned = (course.episodes && course.episodes.length > 0 ? JSON.parse(JSON.stringify(course.episodes)) : []).map((ep: MatnEpisode) => ({
+    const episodes = (course.episodes && course.episodes.length > 0 ? JSON.parse(JSON.stringify(course.episodes)) : []).map((ep: MatnEpisode) => ({
       ...ep,
-      title: cleanVideoTitle(ep.title || ''),
-      description: cleanEpisodeDescription(ep.description || ''),
+      title: ep.title || '',
+      description: ep.description || '',
     }))
-    setCourseEpisodesList(cleaned)
+    setCourseEpisodesList(episodes)
     setEpisodesSavedSuccess(false)
   }
 
@@ -932,8 +932,8 @@ export default function SanadControlGatePage() {
       if (existing) {
         list.push({
           ...existing,
-          title: cleanVideoTitle(existing.title || ''),
-          description: cleanEpisodeDescription(existing.description || ''),
+          title: existing.title || '',
+          description: existing.description || '',
         })
       } else {
         list.push({
@@ -976,17 +976,17 @@ export default function SanadControlGatePage() {
       const updated = [...prev]
       if (!updated[index]) return prev
       const currentTitle = updated[index].title?.trim() || ''
-      const newTitle = (!currentTitle || /^المجلس\s*\d+$/i.test(currentTitle)) && fileName
-        ? cleanVideoTitle(fileName)
-        : cleanVideoTitle(currentTitle)
+      // إذا كان للمجلس عنوان مكتوب مسبقاً، نحافظ عليه كما هو دون أي تغيير
+      const newTitle = currentTitle && !/^المجلس\s*\d+$/i.test(currentTitle)
+        ? currentTitle
+        : (fileName ? cleanVideoTitle(fileName) : currentTitle)
+
       updated[index] = {
         ...updated[index],
         youtubeUrl: cleanUrl,
         videoUrl: cleanUrl,
         title: newTitle,
-        description: updated[index].description
-          ? cleanEpisodeDescription(updated[index].description)
-          : (fileName ? cleanEpisodeDescription(`فيديو مرفوع: ${cleanVideoTitle(fileName)}`) : ''),
+        description: updated[index].description || (fileName ? `فيديو مرفوع: ${cleanVideoTitle(fileName)}` : ''),
       }
       return updated
     })
@@ -1102,11 +1102,11 @@ export default function SanadControlGatePage() {
 
     const newGeneratedEpisodes: MatnEpisode[] = items.map((item, idx) => ({
       episodeNum: baseOffset + idx + 1,
-      title: cleanVideoTitle(item.title),
+      title: item.title,
       youtubeUrl: '',
       videoUrl: '',
       audioUrl: '',
-      description: cleanEpisodeDescription(`فيديو مرفوع من المجلد: ${item.file.name}`),
+      description: item.file.name ? `فيديو مرفوع من المجلد: ${cleanVideoTitle(item.file.name)}` : '',
     }))
 
     const initialCombined = [...existingList, ...newGeneratedEpisodes]
@@ -1215,8 +1215,8 @@ export default function SanadControlGatePage() {
     setIsSavingEpisodes(true)
     const sanitizedEpisodes = courseEpisodesList.map((ep) => ({
       ...ep,
-      title: cleanVideoTitle(ep.title || ''),
-      description: cleanEpisodeDescription(ep.description || ''),
+      title: ep.title ? ep.title.trim() : '',
+      description: ep.description ? ep.description.trim() : '',
       youtubeUrl: (ep.youtubeUrl || '').trim().replace(/[\/\\]+$/, ''),
       videoUrl: (ep.videoUrl || ep.youtubeUrl || '').trim().replace(/[\/\\]+$/, ''),
     }))

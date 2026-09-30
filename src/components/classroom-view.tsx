@@ -945,7 +945,7 @@ export default function ClassroomView({
                     ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
                     : 'bg-teal-50 text-teal-900 border-teal-300 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800'
                 }`}>
-                  {progression.stageLabel}
+                  {progression.stageName}
                 </span>
                 {hasUncompletedPrereqs && (
                   <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-950 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 animate-pulse">
@@ -1043,7 +1043,7 @@ export default function ClassroomView({
                                 </span>
                               )}
                             </div>
-                            {prereq.isHostedOnPlatform && prereq.slug ? (
+                            {prereq.isAvailableOnPlatform && prereq.slug ? (
                               <Link
                                 href={`/courses/${prereq.slug}`}
                                 className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
@@ -1094,7 +1094,7 @@ export default function ClassroomView({
                       «{currentCourse.title}»
                     </h4>
                     <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-1 font-medium leading-relaxed">
-                      {progression.pedagogicalRole || currentCourse.description || 'متن معتمد في السلم التأصيلي.'}
+                      {currentCourse.pedagogicalRole || currentCourse.description || 'متن معتمد في السلم التأصيلي.'}
                     </p>
                   </div>
                 </div>
@@ -1129,7 +1129,7 @@ export default function ClassroomView({
                           <p className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">
                             خطوتك المنهجية التالية بعد استكمال وضبط هذا المتن
                           </p>
-                          {nextCourse.isHostedOnPlatform && nextCourse.slug ? (
+                          {nextCourse.isAvailableOnPlatform && nextCourse.slug ? (
                             <Link
                               href={`/courses/${nextCourse.slug}`}
                               className="inline-flex items-center gap-1 text-[11px] font-black text-teal-800 hover:text-teal-950 transition dark:text-teal-400"

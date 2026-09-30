@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "hadith",
+    "title": "أصول الحديث"
+  },
+  {
+    "slug": "aqeedah",
+    "title": "العقيدة"
+  },
+  {
+    "slug": "usul-al-fiqh",
+    "title": "أصول الفقه"
+  },
+  {
+    "slug": "fiqh-rules",
+    "title": "القواعد الفقهية"
+  },
+  {
+    "slug": "fiqh",
+    "title": "الفقه"
+  },
+  {
+    "slug": "manners",
+    "title": "الآداب والأخلاق الإسلامية"
+  },
+  {
+    "slug": "seerah-history",
+    "title": "السيرة النبوية والتاريخ"
+  },
+  {
+    "slug": "arabic-language",
+    "title": "علوم الآلة (اللغة العربية)"
+  },
+  {
+    "slug": "quran-sciences",
+    "title": "علوم القرآن والتفسير"
+  },
+  {
+    "slug": "hadith1",
+    "title": "الحديث النبوي"
+  }
+]

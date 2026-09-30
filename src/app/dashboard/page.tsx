@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { CheckCircle, Flame, Bookmark, ArrowLeft, Sparkles, BookOpen, Layers, Mail, Phone, ShieldCheck } from 'lucide-react'
+import { CheckCircle, Flame, Bookmark, ArrowLeft, Sparkles, BookOpen, Layers, Mail, Phone, ShieldCheck, Compass } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-list'
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
@@ -10,6 +10,7 @@ import { getStudentProfileData, getScholarlyLeaderboardData, getStudentLocalNote
 import { getUnreadCount } from '@/lib/messages-service'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
+import { getRecommendedCoursesForStudent } from '@/lib/curriculum-intelligence'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,7 @@ export default async function DashboardPage() {
 
   const allCourses = getActiveCourses()
   const completedCourses = allCourses.filter((c) => completedSlugs.includes(c.slug))
+  const recommendedStudies = getRecommendedCoursesForStudent(completedSlugs, allCourses)
 
   // 3. جلب كافة الفوائد المقيدة في كشكول الطالب (السجل المحلي الفوري + سحابة Supabase إن وُجدت)
   let formattedNotes: DashboardNoteItem[] = []
@@ -329,6 +331,68 @@ export default async function DashboardPage() {
                   )}
                 </div>
                 <ArrowLeft className="h-4 w-4 text-stone-300 group-hover:text-emerald-800 shrink-0 transition dark:group-hover:text-emerald-400" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* التوجيه المنهجي: المتون المقترحة كخطوة تالية بناءً على المتطلبات السابقة */}
+      {recommendedStudies.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
+                <Compass className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <span>وجهتك التالية وفق السلم المنهجي</span>
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium">
+                متون مقترحة لترتيب الأولويات وضمان دراسة كل متن بعد متطلبه السابق دون تشتت
+              </p>
+            </div>
+            <Link
+              href="/roadmap"
+              className="text-xs font-bold text-emerald-800 hover:text-emerald-900 flex items-center gap-1 dark:text-emerald-400 self-start sm:self-auto"
+            >
+              <span>استكشاف خرائط التأصيل الكاملة</span>
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+            {recommendedStudies.map((rec) => (
+              <Link
+                key={rec.course.slug}
+                href={`/courses/${rec.course.slug}`}
+                className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/90 bg-white p-4.5 shadow-2xs hover:border-emerald-700/80 hover:shadow-md transition-all duration-300 dark:border-stone-800 dark:bg-stone-900"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-1 text-[11px]">
+                    <span className="rounded-lg bg-stone-100 px-2 py-0.5 font-bold text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                      {rec.course.category}
+                    </span>
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold border ${
+                      (rec.course.stage || 1) === 1
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300'
+                    }`}>
+                      {(rec.course.stage || 1) === 1 ? 'مرحلة 1: تأسيس' : 'مرحلة 2: بناء'}
+                    </span>
+                  </div>
+
+                  <h4 className="font-black text-sm text-stone-900 group-hover:text-emerald-800 transition dark:text-white dark:group-hover:text-emerald-400 leading-snug">
+                    «{rec.course.title}»
+                  </h4>
+
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 leading-relaxed font-medium">
+                    {rec.reason}
+                  </p>
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs font-bold text-emerald-800 group-hover:text-emerald-900 dark:text-emerald-400">
+                  <span>الشروع في المدارسة</span>
+                  <ArrowLeft className="h-3.5 w-3.5 transition group-hover:-translate-x-1" />
+                </div>
               </Link>
             ))}
           </div>

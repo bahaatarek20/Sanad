@@ -62,45 +62,59 @@ export function getActiveCourses(): MatnCourse[] {
         const fallbackMap = new Map<string, MatnCourse>()
         ALL_COURSES.forEach((c) => fallbackMap.set(c.slug, c))
 
-        let hadQualityOrPrefixChanges = false
+        let hadRepairs = false
 
-        const cleanedCourses = parsed.map((customCourse) => {
+        const courses = parsed.map((customCourse) => {
           const fallback = fallbackMap.get(customCourse.slug)
           const baseCourse = fallback ? { ...fallback, ...customCourse } : customCourse
+
+          // استعادة العنوان الأصلي السليم من قاعدة المتون المعتمدة إذا كانت المسافات قد حُذفت سابقاً
+          let resolvedTitle = customCourse.title || fallback?.title || ''
+          if (fallback && resolvedTitle.replace(/\s+/g, '') === fallback.title.replace(/\s+/g, '')) {
+            if (resolvedTitle !== fallback.title) {
+              resolvedTitle = fallback.title
+              hadRepairs = true
+            }
+          }
 
           const rawEpisodes = (customCourse.episodes && customCourse.episodes.length > 0)
             ? customCourse.episodes
             : (fallback?.episodes || [])
 
-          const cleanedEpisodes = rawEpisodes.map((ep) => {
-            const cleanT = cleanVideoTitle(ep.title || '')
-            const cleanD = cleanEpisodeDescription(ep.description)
-            if (cleanT !== (ep.title || '') || cleanD !== (ep.description || '')) {
-              hadQualityOrPrefixChanges = true
+          const episodes = rawEpisodes.map((ep) => {
+            let epTitle = ep.title ? ep.title.trim() : ''
+            // استعادة المسافات للألقاب مثل "المجلس1"
+            const majlisMatch = epTitle.match(/^(المجلس|الدرس)(\d+)$/)
+            if (majlisMatch) {
+              epTitle = `${majlisMatch[1]} ${majlisMatch[2]}`
+              hadRepairs = true
+            }
+            // استعادة الاسم الأصلي من وصف المجلد إن وُجد
+            if (ep.description && ep.description.startsWith('فيديو مرفوع من المجلد:')) {
+              const fromDesc = ep.description.replace(/^فيديو مرفوع من المجلد:\s*/, '').trim()
+              if (fromDesc && epTitle.replace(/\s+/g, '') === fromDesc.replace(/\s+/g, '')) {
+                if (epTitle !== fromDesc) {
+                  epTitle = fromDesc
+                  hadRepairs = true
+                }
+              }
             }
             return {
               ...ep,
-              title: cleanT,
-              description: cleanD,
+              title: epTitle,
+              description: ep.description ? ep.description.trim() : '',
             }
           })
 
-          const cleanTitle = cleanVideoTitle(customCourse.title || fallback?.title || '')
-          const cleanDesc = cleanEpisodeDescription(customCourse.description || fallback?.description || '')
-
-          if (cleanTitle !== customCourse.title || cleanDesc !== (customCourse.description || '')) {
-            hadQualityOrPrefixChanges = true
-          }
-
-          const resolvedTotalLessons = cleanedEpisodes.length > 0
-            ? cleanedEpisodes.length
+          const resolvedTotalLessons = episodes.length > 0
+            ? episodes.length
             : (customCourse.totalLessons !== undefined && customCourse.totalLessons > 0)
             ? customCourse.totalLessons
             : (fallback?.totalLessons || 1)
 
           return {
             ...baseCourse,
-            title: cleanTitle,
+            title: resolvedTitle,
             category: customCourse.category || fallback?.category || 'عام',
             categorySlug: customCourse.categorySlug || fallback?.categorySlug || 'hadith',
             stage: (customCourse.stage as 1 | 2 | 3) || (fallback?.stage as 1 | 2 | 3) || 1,
@@ -110,8 +124,8 @@ export function getActiveCourses(): MatnCourse[] {
             youtubeId: customCourse.youtubeId || fallback?.youtubeId,
             pdfUrl: customCourse.pdfUrl || fallback?.pdfUrl,
             audioUrl: customCourse.audioUrl || fallback?.audioUrl,
-            description: cleanDesc,
-            episodes: cleanedEpisodes,
+            description: customCourse.description || fallback?.description || '',
+            episodes: episodes,
             totalLessons: resolvedTotalLessons,
             prerequisites: customCourse.prerequisites || fallback?.prerequisites || undefined,
             nextCourses: customCourse.nextCourses || fallback?.nextCourses || undefined,
@@ -119,16 +133,14 @@ export function getActiveCourses(): MatnCourse[] {
           }
         })
 
-        // إذا وُجدت أي عناوين تحتوي على دلالات جودة أو سوابق مكررة، حفظ النسخة المنظفة في الملف تلقائياً
-        if (hadQualityOrPrefixChanges) {
+        // إذا تم إصلاح أي عناوين استُرجعت مسافاتها، حفظ التحديث في الملف فوراً
+        if (hadRepairs) {
           try {
-            fs.writeFileSync(COURSES_FILE, JSON.stringify(cleanedCourses, null, 2), 'utf8')
-          } catch (writeErr) {
-            console.error('Error auto-cleaning courses file:', writeErr)
-          }
+            fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+          } catch {}
         }
 
-        return cleanedCourses
+        return courses
       }
     }
   } catch (err) {
@@ -155,11 +167,11 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
   const targetSlug = oldSlug || course.slug
   const existingIdx = courses.findIndex((c) => c.slug === targetSlug || c.slug === course.slug)
 
-  // تنظيف مجالس المتن وعنوانه من أي جودة أو سوابق مكررة
+  // حفظ مجالس المتن وعنوانه تماماً كما كتبها المستخدم دون أي تعديل على النص العربي
   const cleanedEpisodes = (course.episodes || []).map((ep) => ({
     ...ep,
-    title: cleanVideoTitle(ep.title || ''),
-    description: cleanEpisodeDescription(ep.description),
+    title: ep.title ? ep.title.trim() : '',
+    description: ep.description ? ep.description.trim() : '',
   }))
 
   const resolvedTotalLessons = cleanedEpisodes.length > 0
@@ -168,8 +180,8 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
 
   const updatedCourseItem: MatnCourse = {
     ...course,
-    title: cleanVideoTitle(course.title),
-    description: cleanEpisodeDescription(course.description),
+    title: course.title ? course.title.trim() : '',
+    description: course.description ? course.description.trim() : '',
     episodes: cleanedEpisodes,
     totalLessons: resolvedTotalLessons,
     stage: (course.stage as 1 | 2 | 3) || 1,

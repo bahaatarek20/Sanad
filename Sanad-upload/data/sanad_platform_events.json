@@ -1,0 +1,82 @@
+[
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "bhaaljml480",
+    "description": "استمع إلى المجلس (1) من متن «نخبة الفكر في مصطلح أهل الأثر»",
+    "id": "ev_1790684262309_7ei6",
+    "timestamp": "2026-09-29T12:17:42.309Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "استمع إلى المجلس (1) من متن «الأربعين النووية (الشيخ صالح العصيمي - مجلسان)»",
+    "id": "ev_1790681841509_199k",
+    "timestamp": "2026-09-29T11:37:21.509Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "المهندس بهاء طارق",
+    "description": "استمع إلى المجلس (2) من متن «نخبة الفكر في مصطلح أهل الأثر»",
+    "id": "ev_1790647528974_bj1l",
+    "timestamp": "2026-09-29T02:05:28.974Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "المهندس بهاء طارق",
+    "description": "استمع إلى المجلس (1) من متن «الأربعين النووية (الشيخ صالح العصيمي - مجلسان)»",
+    "id": "ev_1790646563760_depv",
+    "timestamp": "2026-09-29T01:49:23.760Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "المهندس بهاء طارق",
+    "description": "استمع إلى المجلس (1) من متن «الأربعين النووية»",
+    "id": "ev_1790645915678_0qfv",
+    "timestamp": "2026-09-29T01:38:35.678Z"
+  },
+  {
+    "type": "unban",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "فك الحظر واستعادة حساب الطالب [Bahaa Tarek] [SND-1001] بنجاح",
+    "id": "ev_1790635473252_nwc3",
+    "timestamp": "2026-09-28T22:44:33.252Z"
+  },
+  {
+    "type": "ban",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "حظر حساب الطالب [Bahaa Tarek] [SND-1001] إدارياً (حظر إداري بقرار من المشرف العام)",
+    "id": "ev_1790635456173_bcag",
+    "timestamp": "2026-09-28T22:44:16.173Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "استمع إلى المجلس (1) من متن «بداية المتفقه»",
+    "id": "ev_1790474099975_51q7",
+    "timestamp": "2026-09-27T01:54:59.976Z"
+  },
+  {
+    "type": "register",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "انضمام طالب جديد إلى المنصة وتأكيد بريده الإلكتروني",
+    "id": "ev_1790473248085_04d8",
+    "timestamp": "2026-09-27T01:40:48.085Z"
+  },
+  {
+    "type": "register",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "bhaaljml480",
+    "description": "انضمام طالب جديد إلى المنصة وتأكيد بريده الإلكتروني",
+    "id": "ev_1790470821807_lcj0",
+    "timestamp": "2026-09-27T01:00:21.807Z"
+  }
+]
