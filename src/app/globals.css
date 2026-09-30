@@ -1,0 +1,245 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-noto-naskh), 'Amiri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-amiri: var(--font-amiri), 'Amiri', 'Traditional Arabic', serif;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  --sand-base: #fcf9f2;
+  --emerald-deep: #064e3b;
+  --gold-warm: #d97706;
+  --card-bg: rgba(255, 255, 255, 0.95);
+  --border-color: rgba(214, 205, 192, 0.8);
+  --text-main: #1c1917;
+  --text-muted: #78716c;
+}
+
+.dark {
+  color-scheme: dark;
+  --sand-base: #1c1917;
+  --emerald-deep: #10b981;
+  --gold-warm: #f59e0b;
+  --card-bg: #262220;
+  --border-color: #44403c;
+  --text-main: #fafaf9;
+  --text-muted: #d6d3d1;
+}
+
+body {
+  font-family: var(--font-noto-naskh), 'Amiri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text-main);
+  background-color: var(--sand-base);
+  /* نقش هندسي إسلامي دافئ وأصيل بشفافية خافتة لا تشتت العين */
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(6, 78, 59, 0.04) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(217, 119, 6, 0.05) 0px, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23064e3b' fill-opacity='0.02' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0l40 40-40 40L0 40zm10 0l30-30 30 30-30 30-30-30zm10 0l20-20 20 20-20 20-20-20zm10 0l10-10 10 10-10 10-10-10z'/%3E%3C/g%3E%3C/svg%3E");
+  background-attachment: fixed;
+  font-feature-settings: "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* العناوين والرموز العلمية بالخط الأميري الفخم — عزة واعتزاز بأصالة الحرف العربي مع سلامة التشكيل وعدم بتر الحروف */
+h1, h2, h3, h4, .font-amiri, .scholarly-heading {
+  font-family: var(--font-amiri), 'Amiri', 'Traditional Arabic', serif;
+  font-feature-settings: "liga" 1;
+  text-rendering: optimizeLegibility;
+  line-height: 1.45;
+  overflow: visible;
+}
+
+.dark body {
+  background-color: #1c1917 !important;
+  color: #fafaf9 !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.07) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.05) 0px, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23fafaf9' fill-opacity='0.015' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0l40 40-40 40L0 40zm10 0l30-30 30 30-30 30-30-30zm10 0l20-20 20 20-20 20-20-20zm10 0l10-10 10 10-10 10-10-10z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* تناسق ووضوح حقول الإدخال في الوضع الليلي */
+.dark input:not([type="checkbox"]):not([type="radio"]), 
+.dark textarea, 
+.dark select {
+  background-color: #23201d;
+  color: #fafaf9;
+  border-color: #44403c;
+}
+
+.dark input:focus, 
+.dark textarea:focus, 
+.dark select:focus {
+  background-color: #181614;
+  color: #fafaf9;
+  border-color: #10b981;
+}
+
+.dark input::placeholder, 
+.dark textarea::placeholder {
+  color: #78716c;
+}
+
+/* عمق ثلاثي الأبعاد 3D للمكونات التفاعلية */
+.card-3d {
+  transform-style: preserve-3d;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    0 10px 25px -5px rgba(6, 78, 59, 0.05),
+    0 8px 10px -6px rgba(6, 78, 59, 0.05),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.card-3d:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 
+    0 20px 35px -5px rgba(6, 78, 59, 0.12),
+    0 12px 15px -6px rgba(217, 119, 6, 0.08),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dark .card-3d {
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.5),
+    0 8px 10px -6px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dark .card-3d:hover {
+  box-shadow: 
+    0 20px 35px -5px rgba(16, 185, 129, 0.2),
+    0 12px 15px -6px rgba(245, 158, 11, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* شريط تمرير تراثي أنيق */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f4ece1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c5b59f;
+  border-radius: 9999px;
+  border: 2px solid #f4ece1;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #064e3b;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1c1917;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #57534e;
+  border: 2px solid #1c1917;
+}
+
+/* تنسيق الطباعة التراثية للكشكول */
+@media print {
+  /* إخفاء عناصر الواجهة */
+  header, footer, nav, .no-print, button:not([data-print-include]), .sticky {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12pt;
+    line-height: 1.8;
+    background-image: none !important;
+  }
+
+  main { padding: 0 !important; }
+  .container { max-width: 100% !important; padding: 0 !important; }
+
+  * {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* كروت الملاحظات */
+  .print-note-card {
+    border: 1px solid #ccc !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .print-note-title {
+    font-size: 14pt;
+    font-weight: bold;
+    color: #064e3b !important;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+
+  .print-note-content {
+    font-size: 12pt;
+    line-height: 2;
+    color: #1c1917 !important;
+    white-space: pre-wrap;
+  }
+
+  .print-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #064e3b;
+  }
+
+  .print-header h1 {
+    font-size: 20pt;
+    font-weight: 900;
+    color: #064e3b !important;
+  }
+
+  .print\\:hidden { display: none !important; }
+
+  .print-book-page {
+    page-break-after: always;
+    font-family: serif;
+  }
+
+  /* طباعة شهادة الإتقان والسند الرسمي */
+  .print-certificate-container {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 32px !important;
+    z-index: 999999 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: 10px double #b45309 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-around !important;
+  }
+}
+
+/* درج القائمة للجوال - خلفية مصمتة مانعة للشفافية والتداخل البصري */
+.sanad-mobile-drawer {
+  background-color: #faf8f5 !important;
+  color: #1c1917 !important;
+}
+
+.dark .sanad-mobile-drawer {
+  background-color: #161412 !important;
+  color: #fafaf9 !important;
+}

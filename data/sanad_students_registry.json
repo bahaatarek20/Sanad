@@ -1,0 +1,94 @@
+[
+  {
+    "id": "student_1790473248076_cpkmr",
+    "scholarlyId": "SND-1001",
+    "email": "bhaaljml48@gmail.com",
+    "name": "Bahaa Tarek",
+    "isBanned": false,
+    "registeredAt": "2026-09-27T01:40:48.076Z",
+    "lastActive": "2026-09-27T02:08:58.202Z",
+    "totalStudyMinutes": 33,
+    "streak": 1,
+    "completedCourses": [],
+    "completedEpisodesMap": {
+      "bidayat-al-mutafaqqih": []
+    },
+    "dailyStudyLog": {
+      "2026-09-27": 33
+    },
+    "listenedSessions": [
+      {
+        "courseSlug": "bidayat-al-mutafaqqih",
+        "courseTitle": "بداية المتفقه",
+        "episodeNum": 1,
+        "timestamp": "2026-09-27T01:54:59.972Z"
+      }
+    ],
+    "notesCount": 0,
+    "passwordHash": "dac48859dd7c54eadec361a8bba3c1e3ac97fa3b54debbdf67df7968d5297876a1da0fab585cbcff9b03e3da8f6d38d7c3fca4f0104885eafdca5eaa3c7c28d3",
+    "passwordSalt": "bd9e68397e4f9c5760bcc8fe62f21339",
+    "lastStudiedDate": "2026-09-27"
+  },
+  {
+    "id": "student_1790470821796_fqawb",
+    "scholarlyId": "SND-1002",
+    "email": "bhaaljml480@gmail.com",
+    "name": "بشمهندس بهاء طارق",
+    "isBanned": false,
+    "registeredAt": "2026-09-27T01:00:21.796Z",
+    "lastActive": "2026-09-30T16:23:54.897Z",
+    "totalStudyMinutes": 708,
+    "streak": 4,
+    "completedCourses": [],
+    "completedEpisodesMap": {
+      "40-hadith-nawawi-1": [],
+      "40-hadith-nawawi-2": [],
+      "nukhbat-al-fikar": []
+    },
+    "dailyStudyLog": {
+      "2026-09-27": 66,
+      "2026-09-28": 167,
+      "2026-09-29": 460,
+      "2026-09-30": 15
+    },
+    "listenedSessions": [
+      {
+        "courseSlug": "nukhbat-al-fikar",
+        "courseTitle": "نخبة الفكر في مصطلح أهل الأثر",
+        "episodeNum": 1,
+        "timestamp": "2026-09-29T12:17:42.305Z"
+      },
+      {
+        "courseSlug": "40-hadith-nawawi-2",
+        "courseTitle": "الأربعين النووية (الشيخ صالح العصيمي - مجلسان)",
+        "episodeNum": 1,
+        "timestamp": "2026-09-29T11:37:21.506Z"
+      },
+      {
+        "courseSlug": "nukhbat-al-fikar",
+        "courseTitle": "نخبة الفكر في مصطلح أهل الأثر",
+        "episodeNum": 2,
+        "timestamp": "2026-09-29T02:05:28.967Z"
+      },
+      {
+        "courseSlug": "40-hadith-nawawi-2",
+        "courseTitle": "الأربعين النووية (الشيخ صالح العصيمي - مجلسان)",
+        "episodeNum": 1,
+        "timestamp": "2026-09-29T01:49:23.753Z"
+      },
+      {
+        "courseSlug": "40-hadith-nawawi-1",
+        "courseTitle": "الأربعين النووية",
+        "episodeNum": 1,
+        "timestamp": "2026-09-29T01:38:35.675Z"
+      }
+    ],
+    "notesCount": 0,
+    "lastStudiedDate": "2026-09-30",
+    "passwordHash": "9f00281e6f8ea02ae9eba5393bb24899ad6140f9c18dc75817828befab6d2412e632ec492d0f5e44bbb7a7d4dfb8b60fbc0ed5b695f582a2a6aff986d0d0c1af",
+    "passwordSalt": "0936ba752134526d993d54c7ff17741d",
+    "authProvider": "google",
+    "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A8%D9%87%D8%A7%D8%A1&background=047857&color=fff&size=128",
+    "phone": "+201012728516"
+  }
+]
