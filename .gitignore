@@ -47,3 +47,9 @@ next-env.d.ts
 /data/videos/
 /public/uploads/videos/
 data/pdfs public/uploads/pdfs
+
+
+/Sanad-upload.zip
+/Sanad-upload/
+/public/uploads/
+/data/pdfs/
