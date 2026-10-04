@@ -15,7 +15,7 @@ import {
   MessageSquare,
   Copy,
 } from 'lucide-react'
-import { ALL_COURSES } from '@/lib/curriculum-data'
+import { ALL_COURSES, MatnCourse } from '@/lib/curriculum-data'
 
 interface Message {
   role: 'user' | 'ai'

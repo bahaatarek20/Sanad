@@ -33,7 +33,8 @@ export const SANAD_AI_SYSTEM_PROMPT = `
 6. **عند الإحباط:** لو حسيت من كلام الطالب إنه متضايق أو بيفقد الهمة، اذكر له مواقف من سير أئمة العلم تشحذ همته — الإمام الشافعي وكان يعيد المسألة عشرات المرات، والإمام أحمد لم يترك الطلب حتى آخر لحظة.
 7. **خارج نطاق التخصص:** إذا سألك أحد عن موضوع ليس له أي صلة بالعلوم الإسلامية أو اللغة العربية (مثل: وصفات الطبخ، البرمجة، الرياضة، الترفيه)، أجبه بلطف: «أنا متخصص في مدارسة متون العلوم الشرعية واللغة العربية يا صديقي — لو عندك سؤال في الفقه أو العقيدة أو النحو أو غيرها من علوم الشريعة، أنا معاك بكل سرور!»
 8. **السرعة والإيجاز:** أجب بسرعة وبشكل مباشر ومركز. لا تُطِل الرد بدون فائدة — طالب العلم وقته ثمين ومحتاج يرجع للمذاكرة.
-9. **ذكر المصادر في نهاية كل إجابة:** اختم ردك بسطر "📖 المرجع:" واذكر فيه المصادر التي اعتمدت عليها في إجابتك.
+9. **ذكر المصادر في نهاية كل إجابة:** اختم ردك بسطر "📖 المرجع:" واذكر فيه المصادر التي اعتمدت عليها في إجابتك إذا كان السؤال في مسألة شرعية أو لغوية.
+10. **التحية والسؤال عن الحال:** لو حيّاك الطالب أو سألك «عامل ايه» أو «ازيك» أو «أخبارك»، رد عليه كصاحب حقيقي وأخ كبير بالبشاشة والدفء والمودة بالعامية المصرية الراقية، واسأله عن مذاكرته وهمته في العلم اليوم وشجعه!
 `
 
 // محرك المعرفة الشرعية الذاتي المتقدم (يغذي المتون والمسائل حتى عند غياب الإنترنت أو نفاد الحصص)
@@ -44,6 +45,24 @@ function generateContextualScholarlyReply(
   instructor?: string
 ): string {
   const q = question.toLowerCase()
+
+  // 0. التحية والسؤال عن الحال والتواصل الأخوي
+  if (
+    q.includes('عامل ايه') ||
+    q.includes('ازيك') ||
+    q.includes('اخبارك') ||
+    q.includes('أخبارك') ||
+    q.includes('كيفك') ||
+    q.includes('السلام عليكم') ||
+    q.includes('مرحبا') ||
+    q.includes('اهلا') ||
+    q.includes('أهلا') ||
+    q.includes('صباح الخير') ||
+    q.includes('مساء الخير')
+  ) {
+    return `الحمد لله يا غالي في نعمة وفضل كبير من ربنا! ماشي مع المتون ومجالس العلم في منصة «سَنَد» ومستمتع بالمدارسة معاك جداً.
+طمني عنك أنت.. عامل إيه في طلب العلم ومذاكرتك النهاردة؟ شادد حيلك وجاهز نفكك أي مسألة فقهية أو عقدية أو نحوية سوا؟`
+  }
 
   // 1. طلب التلخيص العام للمتن
   if (q.includes('لخص') || q.includes('ملخص') || q.includes('أهم مسألة') || q.includes('فكرة عامة')) {
@@ -199,7 +218,7 @@ async function callGemini(
   const isBearer = apiKey.startsWith('ya29.') || apiKey.startsWith('AQ.')
 
   // قائمة سيناريوهات المصادقة حسب نوع المفتاح
-  const authModes = isBearer
+  const authModes: Array<{ name: string; url: string; headers: Record<string, string> }> = isBearer
     ? [
         {
           name: 'Bearer Token (OAuth)',
@@ -310,7 +329,18 @@ export async function POST(req: Request) {
       )
     }
 
-    const apiKey = (body.userApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim()
+    const apiKey = (
+      body.userApiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      ''
+    ).trim()
+
+    if (!apiKey) {
+      return NextResponse.json({
+        reply: 'يا أهلاً بك يا بطل! لتفعيل رفيقك الذكي «صاحبك في الطلب»، يُرجى إضافة مفتاح Gemini API في إعدادات المنصة أو عبر متغيرات البيئة.',
+      })
+    }
 
     // صياغة السياق المنهجي الشامل للمحادثة
     const systemContext = `${SANAD_AI_SYSTEM_PROMPT}
@@ -331,11 +361,11 @@ ${instructor ? `- الشارح المحقق: ${instructor}` : ''}
 
     // النماذج الأحدث المعتمدة في Google Gemini API بالترتيب
     const modelsToTry = [
+      'gemini-3.8-flash',
+      'gemini-2.5-flash',
+      'gemini-3.8-pro',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-pro',
-      'gemini-2.5-flash',
     ]
 
     let liveAiReply: string | null = null

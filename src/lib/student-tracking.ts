@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { saveStudentToCloud, getStudentsFromCloud } from '@/lib/cloud-db'
 
 export interface SessionHistoryItem {
   courseSlug: string
@@ -297,7 +298,15 @@ export function registerOrUpdateStudent(
     students[existingIdx].streak = students[existingIdx].streak || 0
     students[existingIdx].completedEpisodesMap = students[existingIdx].completedEpisodesMap || {}
     students[existingIdx].dailyStudyLog = students[existingIdx].dailyStudyLog || {}
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    } catch (e) {
+      console.warn('Could not write registry file locally (expected on Vercel):', e)
+    }
+
+    // مزامنة سحابية حية مع Cloud Firestore
+    saveStudentToCloud(students[existingIdx]).catch(() => {})
+
     return students[existingIdx]
   } else {
     const scholarlyId = generateScholarlyId(students)
@@ -321,7 +330,15 @@ export function registerOrUpdateStudent(
       isBanned: false,
     }
     students.unshift(newStudent)
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+
+    try {
+      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    } catch (e) {
+      console.warn('Could not write registry file locally (expected on Vercel):', e)
+    }
+
+    // مزامنة سحابية حية مع Cloud Firestore فوراً
+    saveStudentToCloud(newStudent).catch(() => {})
 
     // تحديث إحصائيات الطلاب
     try {
@@ -470,7 +487,12 @@ export function recordStudentEpisodeToggle(
   }
 
   student.lastActive = new Date().toISOString()
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+  if (student) {
+    saveStudentToCloud(student).catch(() => {})
+  }
 
   return student.completedEpisodesMap[courseSlug]
 }
@@ -548,7 +570,12 @@ export function recordStudentListeningSession(
     })
   }
 
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+  if (student) {
+    saveStudentToCloud(student).catch(() => {})
+  }
 
   try {
     const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
@@ -600,7 +627,12 @@ export function recordStudentCourseCompleted(
     student.completedCourses = student.completedCourses.filter((s) => s !== courseSlug)
   }
 
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+  if (student) {
+    saveStudentToCloud(student).catch(() => {})
+  }
 
   // تحديث إجمالي المتون المكتملة على المنصة
   try {
@@ -631,7 +663,12 @@ export function recordStudentNoteAdded(email: string) {
   student.lastActive = now
   student.notesCount = (student.notesCount || 0) + 1
 
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+  if (student) {
+    saveStudentToCloud(student).catch(() => {})
+  }
 
   try {
     const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
@@ -825,6 +862,53 @@ export function getAdminDashboardData(): {
   }
 }
 
+/**
+ * 6.1 جلب كافة بيانات الطلاب المحدثة حياً من Cloud Firestore ودمجها مع السجل المحلي للوحة الإدارة
+ */
+export async function getAdminDashboardDataAsync(): Promise<{
+  students: StudentActivityRecord[]
+  stats: PlatformStats
+  recentEvents: PlatformEvent[]
+}> {
+  const localData = getAdminDashboardData()
+  let mergedStudents = [...localData.students]
+
+  try {
+    const cloudStudents = await getStudentsFromCloud()
+    if (cloudStudents && cloudStudents.length > 0) {
+      const existingEmails = new Set(mergedStudents.map((s) => s.email.toLowerCase()))
+      for (const cs of cloudStudents) {
+        const clean = cs.email.toLowerCase()
+        if (!existingEmails.has(clean)) {
+          mergedStudents.unshift(cs)
+          existingEmails.add(clean)
+        } else {
+          const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === clean)
+          if (idx >= 0 && cs.lastActive && (!mergedStudents[idx].lastActive || cs.lastActive > mergedStudents[idx].lastActive)) {
+            mergedStudents[idx] = { ...mergedStudents[idx], ...cs }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch students from Cloud Firestore:', err)
+  }
+
+  const stats = {
+    ...localData.stats,
+    totalRegisteredStudents: mergedStudents.length,
+    totalCompletedCoursesCount: mergedStudents.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
+    totalStudyMinutes: mergedStudents.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),
+    totalNotesCount: mergedStudents.reduce((acc, s) => acc + (s.notesCount || 0), 0),
+  }
+
+  return {
+    students: mergedStudents,
+    stats,
+    recentEvents: localData.recentEvents,
+  }
+}
+
 // 7. حفظ كلمة مرور مشفرة للطالب محلياً
 export function saveStudentLocalPassword(email: string, password: string, name?: string): boolean {
   try {
@@ -854,7 +938,12 @@ export function saveStudentLocalPassword(email: string, password: string, name?:
       student.name = name.trim()
     }
 
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    } catch {}
+    if (student) {
+      saveStudentToCloud(student).catch(() => {})
+    }
     return true
   } catch (err) {
     console.error('Error saving local student password:', err)

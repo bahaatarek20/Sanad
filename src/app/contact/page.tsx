@@ -19,12 +19,12 @@ export const metadata: Metadata = {
   title: 'تواصل معنا || منصة سَنَد',
   description: 'قنوات التواصل الرسمية مع إدارة منصة سَنَد والمطور المشرف على المنظومة.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/contact',
+    canonical: 'https://sanad-edu1.vercel.app/contact',
   },
   openGraph: {
     title: 'تواصل معنا || منصة سَنَد',
     description: 'قنوات التواصل الرسمية مع إدارة منصة سَنَد والمطور المشرف على المنظومة.',
-    url: 'https://sanad.vercel.app/contact',
+    url: 'https://sanad-edu1.vercel.app/contact',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',

@@ -6,6 +6,7 @@ import CommunityHub, { CommunityPost } from '@/components/community-hub'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 
 import { getLocalCommunityPosts } from '@/lib/community-store'
+import { getCommunityPostsFromCloud } from '@/lib/cloud-db'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,12 +16,12 @@ export const metadata: Metadata = {
   title: 'مجلس المذاكرة العام',
   description: 'فضاء علمي للتذاكر في متون العلوم الشرعية، وتبادل الفوائد والشوارد والمسائل التأصيلية.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/community',
+    canonical: 'https://sanad-edu1.vercel.app/community',
   },
   openGraph: {
     title: 'مجلس المذاكرة العام || منصة سَنَد',
     description: 'فضاء علمي للتذاكر في متون العلوم الشرعية، وتبادل الفوائد والشوارد والمسائل التأصيلية.',
-    url: 'https://sanad.vercel.app/community',
+    url: 'https://sanad-edu1.vercel.app/community',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',
@@ -97,11 +98,44 @@ export default async function CommunityPage() {
   const currentUser = await getCurrentStudentUser()
   const isLoggedIn = Boolean(currentUser)
 
-  // 1. جلب المنشورات من السجل المحلي
+  // 1. نبدأ بالسجل المحلي كقاعدة مبدئية
   const localPosts = getLocalCommunityPosts()
-  let posts: CommunityPost[] = [...localPosts]
+  const postMap = new Map<string, CommunityPost>()
+  for (const lp of localPosts) {
+    postMap.set(lp.id, lp)
+  }
 
-  // 2. جلب المنشورات السحابية من Supabase ودمجها مع منع التكرار
+  // 2. جلب المنشورات السحابية الحية من Cloud Firestore لضمان ظهورها لكافة الأعضاء في العالم
+  try {
+    const cloudPosts = await getCommunityPostsFromCloud()
+    if (cloudPosts && cloudPosts.length > 0) {
+      for (const cp of cloudPosts) {
+        const existing = postMap.get(cp.id)
+        if (existing) {
+          const mergedReplies = [...(existing.replies || [])]
+          const existingReplyIds = new Set(mergedReplies.map((r) => r.id))
+          for (const cr of cp.replies || []) {
+            if (!existingReplyIds.has(cr.id)) {
+              mergedReplies.push(cr)
+              existingReplyIds.add(cr.id)
+            }
+          }
+          postMap.set(cp.id, {
+            ...existing,
+            ...cp,
+            upvotes_count: Math.max(existing.upvotes_count || 0, cp.upvotes_count || 0),
+            replies: mergedReplies,
+          })
+        } else {
+          postMap.set(cp.id, cp)
+        }
+      }
+    }
+  } catch (cErr) {
+    console.warn('Could not fetch community posts from cloud DB:', cErr)
+  }
+
+  // 3. جلب المنشورات السحابية من Supabase كاحتياط إضافي
   try {
     const { data: dbPosts } = await supabase
       .from('community_posts')
@@ -109,12 +143,9 @@ export default async function CommunityPage() {
       .order('created_at', { ascending: false })
 
     if (dbPosts && dbPosts.length > 0) {
-      const existingIds = new Set(posts.map((p) => p.id))
-      const existingContents = new Set(posts.map((p) => p.content.trim()))
-
       for (const p of dbPosts) {
-        if (!existingIds.has(p.id) && !existingContents.has(p.content.trim())) {
-          posts.push({
+        if (!postMap.has(p.id)) {
+          postMap.set(p.id, {
             id: p.id,
             anonymous_alias: p.anonymous_alias,
             course_slug: p.course_slug,
@@ -124,14 +155,14 @@ export default async function CommunityPage() {
             created_at: p.created_at,
             replies: p.replies || [],
           })
-          existingIds.add(p.id)
         }
       }
     }
   } catch {
-    // في حال عدم توفر Supabase يتم الاعتماد كلياً على السجل المحلي
+    // في حال عدم توفر Supabase يتم الاعتماد على Firestore والسجل المحلي
   }
 
+  let posts = Array.from(postMap.values())
   if (posts.length === 0) {
     posts = DEFAULT_SAMPLE_POSTS
   } else {
@@ -150,8 +181,8 @@ export default async function CommunityPage() {
             '@context': 'https://schema.org',
             '@type': 'BreadcrumbList',
             itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad.vercel.app' },
-              { '@type': 'ListItem', position: 2, name: 'مجلس المذاكرة', item: 'https://sanad.vercel.app/community' },
+              { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad-edu1.vercel.app' },
+              { '@type': 'ListItem', position: 2, name: 'مجلس المذاكرة', item: 'https://sanad-edu1.vercel.app/community' },
             ],
           }),
         }}

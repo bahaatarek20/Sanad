@@ -100,7 +100,6 @@ export async function GET(
 
     // دفق عالي السرعة بمخزن مؤقت 1 ميجابايت (1MB Buffer) للاستجابة الفورية
     const fileStream = fs.createReadStream(targetPath, { highWaterMark: 1024 * 1024 })
-    // @ts-expect-error Readable.toWeb exists in modern Node.js
     const webStream = Readable.toWeb(fileStream)
 
     return new Response(webStream as BodyInit, {

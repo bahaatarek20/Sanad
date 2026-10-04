@@ -9,18 +9,16 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true)
-    const stored = localStorage.getItem('sanad_theme')
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
     if (stored === 'dark') {
       setIsDark(true)
       document.documentElement.classList.add('dark')
-    } else if (stored === 'light') {
+    } else {
+      // الوضع الافتراضي الحتمي هو الوضع النهاري
       setIsDark(false)
       document.documentElement.classList.remove('dark')
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      if (prefersDark) {
-        setIsDark(true)
-        document.documentElement.classList.add('dark')
+      if (!stored && typeof window !== 'undefined') {
+        localStorage.setItem('sanad_theme', 'light')
       }
     }
   }, [])

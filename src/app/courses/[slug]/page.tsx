@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: CoursePageProps) {
 
   const title = `مدارسة ${course.title}`
   const description = course.description || `مدارسة متن ${course.title} مع أمهر المشايخ على منصة سَنَد للعلوم الشرعية.`
-  const courseUrl = `https://sanad.vercel.app/courses/${slug}`
+  const courseUrl = `https://sanad-edu1.vercel.app/courses/${slug}`
 
   return {
     title,
@@ -85,8 +85,12 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
     (c) => c.categorySlug === course.categorySlug
   )
 
-  const supabase = await createClient()
-  const user = await getCurrentStudentUser()
+  let user = null
+  try {
+    user = await getCurrentStudentUser()
+  } catch (err) {
+    console.warn('Failed to fetch student user in course SSR:', err)
+  }
 
   let initialNotes: NoteItem[] = []
   let initialIsCompleted = false
@@ -95,31 +99,37 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
   if (user) {
     // 1. مزامنة بيانات حساب الطالب والفوائد من سجل الخادم الدائم
     if (user.email) {
-      const studentProfile = getStudentProfileData(user.email)
-      if (studentProfile) {
-        if (studentProfile.completedCourses.includes(slug)) {
-          initialIsCompleted = true
+      try {
+        const studentProfile = getStudentProfileData(user.email)
+        if (studentProfile) {
+          if (studentProfile.completedCourses.includes(slug)) {
+            initialIsCompleted = true
+          }
+          if (studentProfile.completedEpisodesMap?.[slug]) {
+            initialCompletedEpisodes = studentProfile.completedEpisodesMap[slug]
+          }
         }
-        if (studentProfile.completedEpisodesMap?.[slug]) {
-          initialCompletedEpisodes = studentProfile.completedEpisodesMap[slug]
-        }
-      }
 
-      const localNotes = getStudentLocalNotes(user.email, slug)
-      if (localNotes && localNotes.length > 0) {
-        initialNotes = localNotes.map((n) => ({
-          id: n.id,
-          title: n.title,
-          content: n.content,
-          tag: n.tag,
-          created_at: n.created_at,
-        }))
+        const localNotes = getStudentLocalNotes(user.email, slug)
+        if (localNotes && localNotes.length > 0) {
+          initialNotes = localNotes.map((n) => ({
+            id: n.id,
+            title: n.title,
+            content: n.content,
+            tag: n.tag,
+            created_at: n.created_at,
+          }))
+        }
+      } catch (err) {
+        console.warn('Failed to sync student local notes:', err)
       }
     }
 
-    // 2. جلب البيانات من Supabase فقط إذا كان الحساب سحابياً
-    if (!user.id.startsWith('student-')) {
+    // 2. جلب البيانات من Supabase فقط إذا كان الحساب سحابياً بمعرف UUID صحيح
+    const isSupabaseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id || '')
+    if (isSupabaseUuid) {
       try {
+        const supabase = await createClient()
         const [{ data: notesData }, { data: progressData }] = await Promise.all([
           supabase
             .from('student_notes')
@@ -172,22 +182,22 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad.vercel.app' },
-          { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad.vercel.app/courses' },
-          { '@type': 'ListItem', position: 3, name: course.title, item: `https://sanad.vercel.app/courses/${course.slug}` },
+          { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad-edu1.vercel.app' },
+          { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad-edu1.vercel.app/courses' },
+          { '@type': 'ListItem', position: 3, name: course.title, item: `https://sanad-edu1.vercel.app/courses/${course.slug}` },
         ],
       },
       {
         '@type': 'Course',
-        '@id': `https://sanad.vercel.app/courses/${course.slug}#course`,
+        '@id': `https://sanad-edu1.vercel.app/courses/${course.slug}#course`,
         name: `مدارسة ${course.title}`,
         description: course.description || `مدارسة وشرح متن ${course.title} في فن ${course.category} على منصة سَنَد.`,
         provider: {
           '@type': 'Organization',
           name: 'منصة سَنَد للتعليم الشرعي والتأصيل المنهجي',
-          url: 'https://sanad.vercel.app',
+          url: 'https://sanad-edu1.vercel.app',
         },
-        educationalLevel: course.difficulty || 'تأصيلي',
+        educationalLevel: (course as any).difficulty || (course.stage === 1 ? 'تأسيس' : course.stage === 2 ? 'بناء' : 'تمكن'),
         inLanguage: 'ar',
         isAccessibleForFree: true,
         ...(course.instructor

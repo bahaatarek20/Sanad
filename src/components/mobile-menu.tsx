@@ -22,6 +22,7 @@ import {
   Sun,
   ShieldCheck,
   Mail,
+  Smartphone,
 } from 'lucide-react'
 
 interface MobileMenuProps {
@@ -45,17 +46,17 @@ export default function MobileMenu({
   const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
 
-  // تزامن حالة النمط الليلي
+  // تزامن حالة النمط النهاري والليلي (افتراضياً النهاري دائماً للزوار الجدد)
   useEffect(() => {
     setMounted(true)
-    const stored = localStorage.getItem('sanad_theme')
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
     if (stored === 'dark') {
       setIsDark(true)
-    } else if (stored === 'light') {
-      setIsDark(false)
     } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setIsDark(prefersDark)
+      setIsDark(false)
+      if (!stored && typeof window !== 'undefined') {
+        localStorage.setItem('sanad_theme', 'light')
+      }
     }
   }, [])
 
@@ -141,6 +142,12 @@ export default function MobileMenu({
       label: 'بريد سَنَد العلمي',
       sub: 'الرسائل ورموز الأمان (Gmail)',
       icon: Mail,
+    },
+    {
+      href: '/download',
+      label: 'تحميل تطبيق سَنَد',
+      sub: 'تثبيت على الهاتف كأي تطبيق (📱 App)',
+      icon: Smartphone,
     },
   ]
 

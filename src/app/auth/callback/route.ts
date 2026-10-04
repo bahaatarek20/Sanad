@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       if (!error && data?.user?.email) {
         const user = data.user
-        const email = user.email.toLowerCase().trim()
+        const email = user.email!.toLowerCase().trim()
         const fullName =
           user.user_metadata?.full_name ||
           user.user_metadata?.name ||

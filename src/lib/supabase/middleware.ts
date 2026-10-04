@@ -13,9 +13,23 @@ function attachSecurityHeaders(response: NextResponse): NextResponse {
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  // 1. استثناء مسارات الدخول وملفات النظام
+  // 1. استثناء مسارات الدخول والصفحات العامة وملفات النظام
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isApi = pathname.startsWith('/api')
+  const isPublicPage =
+    pathname.startsWith('/verify-ijaza') ||
+    pathname.startsWith('/download') ||
+    pathname.startsWith('/app') ||
+    pathname === '/offline' ||
+    pathname === '/about' ||
+    pathname === '/contact'
+  const isStaticFile =
+    pathname === '/sw.js' ||
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/favicon.ico' ||
+    pathname === '/icon.svg' ||
+    pathname.includes('.')
 
   let supabaseResponse = NextResponse.next({
     request,
@@ -72,9 +86,14 @@ export async function updateSession(request: NextRequest) {
 
     if (hasSbCookie) {
       try {
+        const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zzsgeyqyhfmfqglcowkd.supabase.co'
+        const sbKey =
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6c2dleXF5aGZtZnFnbGNvd2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2NDk4NzMsImV4cCI6MjA1ODIyNTg3M30.jIndrHU_Uwvj60IkMICZkjb426s1bt7wn-k_fXk'
+
         const supabase = createServerClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          sbUrl,
+          sbKey,
           {
             cookies: {
               getAll() {
@@ -103,8 +122,8 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // إذا لم يكن مسجلاً وحاول فتح المنصة، يتم إلزامه بصفحة الدخول
-  if (!hasUser && !isAuthRoute && !isApi) {
+  // إذا لم يكن مسجلاً وحاول فتح مسار مقيد، يتم إلزامه بصفحة الدخول والتسجيل
+  if (!hasUser && !isAuthRoute && !isApi && !isPublicPage && !isStaticFile) {
     const loginUrl = new URL('/login', request.url)
     return attachSecurityHeaders(NextResponse.redirect(loginUrl))
   }

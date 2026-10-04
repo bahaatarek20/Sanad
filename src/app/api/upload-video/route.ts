@@ -116,7 +116,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         url: fileUrl,
-        staticUrl,
+        staticUrl: fileUrl,
         fileName: safeFileName,
         originalName,
         size: finalSize,
@@ -202,7 +202,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       url: fileUrl,
-      staticUrl,
+      staticUrl: fileUrl,
       fileName: safeFileName,
       originalName,
       size: finalSize,

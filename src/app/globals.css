@@ -1,7 +1,9 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
 @theme {
-  --font-sans: var(--font-noto-naskh), 'Amiri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-cairo), 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-cairo: var(--font-cairo), 'Cairo', sans-serif;
   --font-amiri: var(--font-amiri), 'Amiri', 'Traditional Arabic', serif;
 }
 
@@ -28,29 +30,52 @@
   --text-muted: #d6d3d1;
 }
 
-body {
-  font-family: var(--font-noto-naskh), 'Amiri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+/* ضبط الخطوط والمسافات لمنع تلاصق الحروف العربية كلياً وضمان قراءة مريحة وعصرية */
+html, body, [dir="rtl"] {
+  font-family: var(--font-cairo), 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--text-main);
   background-color: var(--sand-base);
-  /* نقش هندسي إسلامي دافئ وأصيل بشفافية خافتة لا تشتت العين */
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(6, 78, 59, 0.04) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(217, 119, 6, 0.05) 0px, transparent 50%),
-    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23064e3b' fill-opacity='0.02' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0l40 40-40 40L0 40zm10 0l30-30 30 30-30 30-30-30zm10 0l20-20 20 20-20 20-20-20zm10 0l10-10 10 10-10 10-10-10z'/%3E%3C/g%3E%3C/svg%3E");
-  background-attachment: fixed;
-  font-feature-settings: "liga" 1;
+  letter-spacing: normal !important;
+  word-spacing: 0.04em;
+  line-height: 1.75;
+  font-feature-settings: "liga" 1, "calt" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* العناوين والرموز العلمية بالخط الأميري الفخم — عزة واعتزاز بأصالة الحرف العربي مع سلامة التشكيل وعدم بتر الحروف */
+body {
+  /* نقش هندسي إسلامي دافئ وأصيل بشفافية خافتة لا تشتت العين */
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(6, 78, 59, 0.04) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(217, 119, 6, 0.05) 0px, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23064e3b' fill-opacity='0.02' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0l40 40-40 40L0 40zm10 0l30-30 30 30-30 30-30-30zm10 0l20-20 20 20-20 20-20-20zm10 0l10-10 10 10-10 10-10-10z'/%3E%3C/g%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+
+/* إلغاء تتبع المسافات السالبة (tracking) على النصوص العربية لمنع تكسر وتلاصق الحروف */
+[dir="rtl"] .tracking-tight,
+[dir="rtl"] .tracking-tighter,
+[dir="rtl"] .tracking-wide,
+[dir="rtl"] .tracking-wider,
+[dir="rtl"] .tracking-widest {
+  letter-spacing: normal !important;
+}
+
+/* استثناء حقول الأكواد الرقمية الإنجليزية فقط */
+[dir="rtl"] input[name="otpCode"],
+[dir="rtl"] .font-mono.tracking-widest,
+[dir="rtl"] .tracking-code {
+  letter-spacing: 0.35em !important;
+}
+
+/* العناوين والرموز العلمية بالخط الأميري الفخم مع سلامة التشكيل وعدم بتر الحروف */
 h1, h2, h3, h4, .font-amiri, .scholarly-heading {
   font-family: var(--font-amiri), 'Amiri', 'Traditional Arabic', serif;
   font-feature-settings: "liga" 1;
   text-rendering: optimizeLegibility;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow: visible;
 }
 

@@ -298,7 +298,7 @@ export default async function DashboardPage() {
       />
 
       {/* 4. ميدان التنافس وسباق أهل الهمم (وفي ذلك فليتنافس المتنافسون) */}
-      <ScholarlyLeaderboard data={leaderboardData} />
+      {leaderboardData && <ScholarlyLeaderboard data={leaderboardData} />}
 
       {/* 3. المتون المنجزة مؤخراً */}
       {completedCourses.length > 0 && (

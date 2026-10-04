@@ -156,3 +156,32 @@ export function upvoteLocalCommunityPost(postId: string): boolean {
     return false
   }
 }
+
+export function deleteLocalCommunityPost(postId: string): boolean {
+  ensureCommunityFile()
+  let posts = getLocalCommunityPosts()
+  posts = posts.filter((p) => p.id !== postId)
+
+  try {
+    fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2), 'utf8')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function deleteLocalCommunityReply(postId: string, replyId: string): boolean {
+  ensureCommunityFile()
+  const posts = getLocalCommunityPosts()
+  const post = posts.find((p) => p.id === postId)
+  if (!post || !Array.isArray(post.replies)) return false
+
+  post.replies = post.replies.filter((r) => r.id !== replyId)
+
+  try {
+    fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2), 'utf8')
+    return true
+  } catch {
+    return false
+  }
+}

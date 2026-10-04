@@ -19,12 +19,12 @@ export const metadata: Metadata = {
   title: 'عن منصة سَنَد || الرؤية والمنهج ورسالة التأصيل',
   description: 'تعرّف على منصة سَنَد، بيئة علمية رصينة صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/about',
+    canonical: 'https://sanad-edu1.vercel.app/about',
   },
   openGraph: {
     title: 'عن منصة سَنَد || الرؤية والمنهج ورسالة التأصيل',
     description: 'تعرّف على منصة سَنَد، بيئة علمية رصينة صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
-    url: 'https://sanad.vercel.app/about',
+    url: 'https://sanad-edu1.vercel.app/about',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',

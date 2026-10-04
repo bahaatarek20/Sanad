@@ -14,12 +14,12 @@ export const metadata: Metadata = {
   title: 'خرائط العلوم والمتون التأصيلية',
   description: 'فهرس شامل للمتون الشرعية التأصيلية في 9 فنون مباركة بالتوازي وبلا قيود مع المشايخ المتقنين.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/courses',
+    canonical: 'https://sanad-edu1.vercel.app/courses',
   },
   openGraph: {
     title: 'خرائط العلوم والمتون التأصيلية || منصة سَنَد',
     description: 'فهرس شامل للمتون الشرعية التأصيلية في 9 فنون مباركة بالتوازي وبلا قيود.',
-    url: 'https://sanad.vercel.app/courses',
+    url: 'https://sanad-edu1.vercel.app/courses',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',
@@ -153,8 +153,8 @@ export default async function CoursesCatalogPage() {
               {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                  { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad.vercel.app' },
-                  { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad.vercel.app/courses' },
+                  { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad-edu1.vercel.app' },
+                  { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad-edu1.vercel.app/courses' },
                 ],
               },
               {
@@ -163,7 +163,7 @@ export default async function CoursesCatalogPage() {
                 itemListElement: courses.slice(0, 30).map((c, idx) => ({
                   '@type': 'ListItem',
                   position: idx + 1,
-                  url: `https://sanad.vercel.app/courses/${c.slug}`,
+                  url: `https://sanad-edu1.vercel.app/courses/${c.slug}`,
                   name: c.title,
                 })),
               },

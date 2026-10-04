@@ -7,7 +7,15 @@ import {
   saveLocalCommunityPost,
   addLocalCommunityReply,
   upvoteLocalCommunityPost,
+  getLocalCommunityPosts,
 } from '@/lib/community-store'
+import {
+  saveCommunityPostToCloud,
+  getCommunityPostsFromCloud,
+  addCommunityReplyToCloud,
+  upvoteCommunityPostInCloud,
+} from '@/lib/cloud-db'
+import type { CommunityPost } from '@/components/community-hub'
 
 function generateAnonymousAlias(): string {
   const titles = [
@@ -24,16 +32,13 @@ function generateAnonymousAlias(): string {
   return `${randomTitle} #${randomNumber}`
 }
 
-// إنشاء منشور جديد في مجلس المذاكرة
+// إنشاء منشور جديد في مجلس المذاكرة (الرسايل التشاركية)
 export async function createCommunityPost(formData: FormData) {
   try {
     const studentUser = await getCurrentStudentUser()
     if (!studentUser) {
       return { success: false, error: 'غير مصرح بالنشر؛ يرجى تسجيل الدخول بحساب نشط وغير معلّق إدارياً.' }
     }
-
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
     const content = formData.get('content') as string
     const courseSlug = formData.get('courseSlug') as string
@@ -45,7 +50,7 @@ export async function createCommunityPost(formData: FormData) {
 
     const anonymousAlias = generateAnonymousAlias()
 
-    // 1. الحفظ الدائم في السجل المحلي لضمان عدم ضياع المنشور
+    // 1. الحفظ في السجل المحلي
     const localPost = saveLocalCommunityPost({
       anonymous_alias: anonymousAlias,
       course_slug: courseSlug || null,
@@ -53,9 +58,18 @@ export async function createCommunityPost(formData: FormData) {
       content: content.trim(),
     })
 
-    // 2. الحفظ في سحابة Supabase إن كان المستخدم مسجلاً بها
-    if (user) {
-      try {
+    // 2. الحفظ السحابي في Cloud Firestore ليظهر فوراً لجميع أعضاء المنصة
+    try {
+      await saveCommunityPostToCloud(localPost)
+    } catch (cErr) {
+      console.warn('Could not save post to cloud DB:', cErr)
+    }
+
+    // 3. الحفظ في سحابة Supabase كنسخة احتياطية إضافية إن توفرت
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
         await supabase
           .from('community_posts')
           .insert({
@@ -66,10 +80,8 @@ export async function createCommunityPost(formData: FormData) {
             content: content.trim(),
             upvotes_count: 0,
           })
-      } catch (err) {
-        console.error('Error creating post in db:', err)
       }
-    }
+    } catch {}
 
     revalidatePath('/community')
     return {
@@ -88,15 +100,19 @@ export async function upvotePost(postId: string) {
     // 1. تحديث الإعجاب محلياً
     upvoteLocalCommunityPost(postId)
 
-    // 2. تحديث الإعجاب في Supabase
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // 2. تحديث الإعجاب في Cloud Firestore
+    try {
+      await upvoteCommunityPostInCloud(postId)
+    } catch {}
 
-    if (user) {
-      try {
+    // 3. تحديث الإعجاب في Supabase
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
         await supabase.rpc('increment_post_upvotes', { post_id_arg: postId })
-      } catch {}
-    }
+      }
+    } catch {}
 
     revalidatePath('/community')
     return { success: true }
@@ -113,9 +129,6 @@ export async function addCommunityReply(postId: string, content: string) {
       return { success: false, error: 'غير مصرح بالتعليق؛ يرجى تسجيل الدخول بحساب نشط وغير معلّق إدارياً.' }
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
     if (!content.trim()) return { success: false, error: 'محتوى الرد مطلوب' }
 
     const anonymousAlias = generateAnonymousAlias()
@@ -126,30 +139,83 @@ export async function addCommunityReply(postId: string, content: string) {
       content: content.trim(),
     })
 
-    // 2. حفظ الرد في Supabase إن أمكن
-    if (user) {
-      try {
+    const replyData = localReply || {
+      id: String(Date.now()),
+      post_id: postId,
+      anonymous_alias: anonymousAlias,
+      content: content.trim(),
+      created_at: new Date().toISOString(),
+    }
+
+    // 2. حفظ الرد في Cloud Firestore ليظهر فوراً لجميع أعضاء المنصة
+    try {
+      await addCommunityReplyToCloud(postId, replyData)
+    } catch (cErr) {
+      console.warn('Could not save reply to cloud DB:', cErr)
+    }
+
+    // 3. حفظ الرد في Supabase إن أمكن
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
         await supabase.from('community_replies').insert({
           post_id: postId,
           user_id: user.id,
           anonymous_alias: anonymousAlias,
           content: content.trim(),
         })
-      } catch {}
-    }
+      }
+    } catch {}
 
     revalidatePath('/community')
     return {
       success: true,
-      reply: localReply || {
-        id: String(Date.now()),
-        post_id: postId,
-        anonymous_alias: anonymousAlias,
-        content: content.trim(),
-        created_at: new Date().toISOString(),
-      },
+      reply: replyData,
     }
   } catch {
     return { success: false, error: 'تعذر إضافة الرد' }
   }
 }
+
+// 4. جلب وتحديث المنشورات التشاركية الحية من السحابة والسجل المحلي
+export async function getLatestCommunityPostsAction(): Promise<CommunityPost[]> {
+  const localPosts = getLocalCommunityPosts()
+  const postMap = new Map<string, CommunityPost>()
+
+  for (const lp of localPosts) {
+    postMap.set(lp.id, lp)
+  }
+
+  try {
+    const cloudPosts = await getCommunityPostsFromCloud()
+    for (const cp of cloudPosts) {
+      const existing = postMap.get(cp.id)
+      if (existing) {
+        const mergedReplies = [...(existing.replies || [])]
+        const existingReplyIds = new Set(mergedReplies.map((r) => r.id))
+        for (const cr of cp.replies || []) {
+          if (!existingReplyIds.has(cr.id)) {
+            mergedReplies.push(cr)
+            existingReplyIds.add(cr.id)
+          }
+        }
+        postMap.set(cp.id, {
+          ...existing,
+          ...cp,
+          upvotes_count: Math.max(existing.upvotes_count || 0, cp.upvotes_count || 0),
+          replies: mergedReplies,
+        })
+      } else {
+        postMap.set(cp.id, cp)
+      }
+    }
+  } catch (cErr) {
+    console.warn('Could not fetch cloud community posts:', cErr)
+  }
+
+  const posts = Array.from(postMap.values())
+  posts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  return posts
+}
+

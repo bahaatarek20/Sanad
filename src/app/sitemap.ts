@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sanad.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sanad-edu1.vercel.app'
   const courses = getActiveCourses()
   const categories = getActiveCategories()
 

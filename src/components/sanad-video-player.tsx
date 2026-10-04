@@ -130,7 +130,16 @@ export default function SanadVideoPlayer({
   const [playbackErrorMessage, setPlaybackErrorMessage] = useState<string | null>(null)
   const [autoFallbackCountdown, setAutoFallbackCountdown] = useState<number | null>(null)
 
-  const cleanSrc = (src || '').replace(/^[\/\\]+|[\/\\]+$/g, '').trim()
+  const rawSrc = (src || '').trim()
+  const cleanSrc =
+    rawSrc.startsWith('http://') ||
+    rawSrc.startsWith('https://') ||
+    rawSrc.startsWith('blob:') ||
+    rawSrc.startsWith('data:')
+      ? rawSrc
+      : rawSrc
+      ? `/${rawSrc.replace(/^[\/\\]+/, '')}`
+      : ''
 
   useEffect(() => {
     if (hasPlaybackError && (onSwitchToYoutube || fallbackYoutubeUrl)) {
@@ -868,12 +877,17 @@ export default function SanadVideoPlayer({
             setAutoFallbackCountdown(null)
           }}
           onError={() => {
+            console.warn('SanadVideoPlayer: Direct video playback failed for:', cleanSrc)
+            if (onSwitchToYoutube) {
+              onSwitchToYoutube()
+              return
+            }
             setHasPlaybackError(true)
             const err = videoRef.current?.error
-            if (onSwitchToYoutube || fallbackYoutubeUrl) {
+            if (fallbackYoutubeUrl) {
               setPlaybackErrorMessage('الملف غير مكتمل أو ترميزه غير مدعوم في المتصفح. يتوفر بث YouTube المباشر لهذا المجلس.')
             } else if (err?.code === 4) {
-              setPlaybackErrorMessage('الملف غير مكتمل أو صيغته وترميزه غير مدعومين في المتصفح. قد يكون حجمه تجاوز حد الرفع القديم.')
+              setPlaybackErrorMessage('الملف غير متوفر على هذا الخادم أو صيغته غير مدعومة.')
             } else {
               setPlaybackErrorMessage('تعذر تشغيل هذا المقطع مباشرة في المتصفح.')
             }

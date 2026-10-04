@@ -229,7 +229,6 @@ export async function GET(
       const chunkSize = end - start + 1
       // دفق سريع جداً بمخزن مؤقت 1 ميجابايت (1MB Buffer)
       const fileStream = fs.createReadStream(targetPath, { start, end, highWaterMark: 1024 * 1024 })
-      // @ts-expect-error Readable.toWeb exists in modern Node.js
       const webStream = Readable.toWeb(fileStream)
 
       return new Response(webStream as BodyInit, {
@@ -246,7 +245,6 @@ export async function GET(
       })
     } else {
       const fileStream = fs.createReadStream(targetPath, { highWaterMark: 1024 * 1024 })
-      // @ts-expect-error Readable.toWeb exists in modern Node.js
       const webStream = Readable.toWeb(fileStream)
 
       return new Response(webStream as BodyInit, {

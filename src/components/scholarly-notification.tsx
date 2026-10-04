@@ -228,23 +228,29 @@ export default function ScholarlyNotification() {
 
   useEffect(() => {
     let isCancelled = false
+    let autoHideTimer: NodeJS.Timeout | null = null
 
-    // 1. فحص الإعلان الإداري الحي من الخادم مباشرة
+    // 1. فحص الإعلان الإداري الحي من الخادم مباشرة (يظهر فقط إذا كان جديداً وغير معروض من قبل)
     const checkLiveBroadcast = async () => {
       try {
         const res = await fetch('/api/broadcast', { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
           if (!isCancelled && data?.notice?.active && data.notice.message) {
-            setCurrentNotification({
-              type: 'broadcast',
-              speaker: data.notice.sender || 'إدارة منصة سَنَد',
-              quote: data.notice.message,
-              encouragement: data.notice.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
-            })
-            setIsVisible(true)
-            playNotificationChime()
-            return
+            const broadcastId = data.notice.timestamp || data.notice.message
+            const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
+            if (lastSeen !== broadcastId) {
+              setCurrentNotification({
+                type: 'broadcast',
+                speaker: data.notice.sender || 'إدارة منصة سَنَد',
+                quote: data.notice.message,
+                encouragement: data.notice.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
+              })
+              setIsVisible(true)
+              playNotificationChime()
+              localStorage.setItem('sanad_last_broadcast_seen', broadcastId)
+              return
+            }
           }
         }
       } catch {
@@ -254,40 +260,64 @@ export default function ScholarlyNotification() {
           if (localRaw) {
             const b = JSON.parse(localRaw)
             if (b && b.active && b.message && !isCancelled) {
-              setCurrentNotification({
-                type: 'broadcast',
-                speaker: b.sender || 'إدارة منصة سَنَد',
-                quote: b.message,
-                encouragement: b.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
-              })
-              setIsVisible(true)
-              playNotificationChime()
-              return
+              const broadcastId = b.timestamp || b.message
+              const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
+              if (lastSeen !== broadcastId) {
+                setCurrentNotification({
+                  type: 'broadcast',
+                  speaker: b.sender || 'إدارة منصة سَنَد',
+                  quote: b.message,
+                  encouragement: b.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
+                })
+                setIsVisible(true)
+                playNotificationChime()
+                localStorage.setItem('sanad_last_broadcast_seen', broadcastId)
+                return
+              }
             }
           }
         } catch {}
       }
 
-      // 2. إذا لم يكن هناك إعلان إداري نشط، إظهار حكمة شحذة همة عشوائية بعد 3.5 ثوانٍ
-      if (!isCancelled) {
-        setTimeout(() => {
+      // 2. إشعارات شحذة الهمة: فاصل زمني هادئ ومريح جداً (15 دقيقة على الأقل)
+      try {
+        const lastQuoteTime = parseInt(localStorage.getItem('sanad_last_quote_time') || '0', 10)
+        const now = Date.now()
+        const COOLDOWN_MS = 15 * 60 * 1000 // 15 دقيقة كاملة بين كل إشعار وآخر
+
+        if (now - lastQuoteTime < COOLDOWN_MS) {
+          return // لا تزعج الطالب، الوقت لم يحن بعد
+        }
+
+        // إظهار حكمة تشجيعية بهدوء بعد 60 ثانية من القراءة الرصينة
+        const timer = setTimeout(() => {
           if (!isCancelled) {
             const randomIndex = Math.floor(Math.random() * SCHOLARLY_QUOTES.length)
             const selected = SCHOLARLY_QUOTES[randomIndex]
             if (selected) {
               setCurrentNotification(selected)
               setIsVisible(true)
-              playNotificationChime()
+              localStorage.setItem('sanad_last_quote_time', Date.now().toString())
+
+              // اختفاء تلقائي هادئ بعد 8 ثوانٍ دون إجبار الطالب على إغلاقه يدوياً
+              autoHideTimer = setTimeout(() => {
+                if (!isCancelled) {
+                  setIsVisible(false)
+                }
+              }, 8000)
             }
           }
-        }, 3500)
-      }
+        }, 60000)
+
+        return () => clearTimeout(timer)
+      } catch {}
     }
 
     checkLiveBroadcast()
 
     return () => {
       isCancelled = true
+      if (autoHideTimer) clearTimeout(autoHideTimer)
     }
   }, [])
 

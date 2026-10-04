@@ -53,6 +53,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   GripVertical,
+  Compass,
 } from 'lucide-react'
 import { ALL_COURSES, CATEGORIES_LIST, MatnCourse, MatnEpisode } from '@/lib/curriculum-data'
 import {
@@ -570,7 +571,7 @@ export default function SanadControlGatePage() {
   const refreshDashboardData = async () => {
     try {
       const res = await getAdminDashboardAction()
-      if (res.success && res.students && res.stats) {
+      if (res.success && 'students' in res && res.students && res.stats) {
         setIsAuthenticated(true)
         setStudents(res.students)
         setStats(res.stats)
@@ -692,7 +693,7 @@ export default function SanadControlGatePage() {
       startTransition(async () => {
         const res = await resetVisitorCountAdminAction(0)
         if (res.success) {
-          setStats((prev) => ({ ...prev, totalVisitors: res.totalVisitors }))
+          setStats((prev) => ({ ...prev, totalVisitors: res.totalVisitors ?? prev.totalVisitors ?? 0 }))
         }
       })
     }
@@ -804,7 +805,7 @@ export default function SanadControlGatePage() {
     } else if (cleanYoutubeId.includes('youtu.be/')) {
       const m = cleanYoutubeId.match(/youtu\.be\/([a-zA-Z0-9_-]+)/)
       if (m) cleanYoutubeId = m[1]
-    } else if (cleanYoutubeId.includes('watch?v=' || cleanYoutubeId.includes('v='))) {
+    } else if (cleanYoutubeId.includes('watch?v=') || cleanYoutubeId.includes('v=')) {
       const m = cleanYoutubeId.match(/[?&]v=([a-zA-Z0-9_-]+)/)
       if (m) cleanYoutubeId = m[1]
     }
@@ -1961,7 +1962,9 @@ export default function SanadControlGatePage() {
                                     محظور
                                   </span>
                                 ) : (
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" title="بريد إلكتروني مؤكد" />
+                                  <span title="بريد إلكتروني مؤكد">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                  </span>
                                 )}
                               </div>
                               <div className="font-mono text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1 mt-0.5">

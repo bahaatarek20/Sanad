@@ -8,6 +8,8 @@ const PRECACHE_ASSETS = [
   '/offline',
   '/courses',
   '/favicon.ico',
+  '/icon.svg',
+  '/manifest.json',
   '/manifest.webmanifest',
 ]
 

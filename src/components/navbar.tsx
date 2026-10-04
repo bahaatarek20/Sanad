@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, Compass, Flame, User, LogOut, Users, FileText, LogIn, ShieldCheck, Map, GitFork } from 'lucide-react'
+import { BookOpen, Compass, Flame, User, LogOut, Users, FileText, LogIn, ShieldCheck, Map, GitFork, Smartphone } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { signOutAction } from '@/app/login/actions'
 import ThemeToggle from '@/components/theme-toggle'
@@ -49,6 +49,10 @@ export default async function Navbar() {
             <Link href="/community" className="flex items-center gap-1 rounded-lg px-2.5 py-1 transition hover:text-emerald-900 hover:bg-stone-100/80 dark:hover:text-emerald-400 dark:hover:bg-stone-800/60">
               <Users className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
               <span>مجلس المذاكرة</span>
+            </Link>
+            <Link href="/download" className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-emerald-900 bg-emerald-50/80 border border-emerald-200/70 transition hover:bg-emerald-100/80 hover:border-emerald-300 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800/60 font-bold">
+              <Smartphone className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+              <span>تطبيق سَنَد</span>
             </Link>
           </nav>
         </div>

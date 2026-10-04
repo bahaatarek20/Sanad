@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   Users,
   MessageSquare,
@@ -13,10 +14,17 @@ import {
   ShieldCheck,
   Filter,
   CheckCircle2,
-  FileText
+  FileText,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
-import { createCommunityPost, upvotePost, addCommunityReply } from '@/app/community/actions'
+import {
+  createCommunityPost,
+  upvotePost,
+  addCommunityReply,
+  getLatestCommunityPostsAction,
+} from '@/app/community/actions'
 
 export interface CommunityReply {
   id: string
@@ -51,12 +59,45 @@ export default function CommunityHub({
   const [posts, setPosts] = useState<CommunityPost[]>(initialPosts)
   const [activeFilter, setActiveFilter] = useState<'all' | 'question' | 'summary' | 'benefit'>('all')
   const [isPosting, setIsPosting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [postError, setPostError] = useState<string | null>(null)
+  const [postSuccess, setPostSuccess] = useState<string | null>(null)
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({})
   const [postContent, setPostContent] = useState('')
   const [postType, setPostType] = useState<'question' | 'summary' | 'benefit'>('benefit')
   const [selectedCourseSlug, setSelectedCourseSlug] = useState<string>('')
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set())
+
+  // المزامنة الدورية الخلفية كل 45 ثانية لجلب أي مشاركات جديدة للطلاب تلقائياً
+  useEffect(() => {
+    const timer = setInterval(() => {
+      getLatestCommunityPostsAction()
+        .then((updated) => {
+          if (updated && updated.length > 0) {
+            setPosts(updated)
+          }
+        })
+        .catch(() => {})
+    }, 45000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // تحديث يدوي للمجلس
+  const handleRefreshPosts = async () => {
+    setIsRefreshing(true)
+    try {
+      const updated = await getLatestCommunityPostsAction()
+      if (updated && updated.length > 0) {
+        setPosts(updated)
+      }
+    } catch (err) {
+      console.error('Refresh error:', err)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // تصفية المنشورات
   const filteredPosts = posts.filter(
@@ -66,6 +107,14 @@ export default function CommunityHub({
   // إرسال منشور جديد
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
+    setPostError(null)
+    setPostSuccess(null)
+
+    if (!isLoggedIn) {
+      setPostError('يرجى تسجيل الدخول بحساب طالب لتتمكن من مشاركة المسائل والفوائد في المجلس.')
+      return
+    }
+
     if (!postContent.trim() || isPosting) return
 
     setIsPosting(true)
@@ -86,6 +135,10 @@ export default function CommunityHub({
       setPosts([newPost, ...posts])
       setPostContent('')
       setSelectedCourseSlug('')
+      setPostSuccess('تم نشر مسألتك بنجاح في المجلس وستظهر لكافة إخوانك الطلاب!')
+      setTimeout(() => setPostSuccess(null), 6000)
+    } else {
+      setPostError(res.error || 'تعذر نشر المسألة، يرجى المحاولة مرة أخرى.')
     }
     setIsPosting(false)
   }
@@ -106,6 +159,13 @@ export default function CommunityHub({
 
   // إضافة رد مجهول
   const handleAddReply = async (postId: string) => {
+    setReplyErrors((prev) => ({ ...prev, [postId]: '' }))
+
+    if (!isLoggedIn) {
+      setReplyErrors((prev) => ({ ...prev, [postId]: 'يرجى تسجيل الدخول بحساب طالب لتتمكن من إضافة رد.' }))
+      return
+    }
+
     const text = (replyInputs[postId] || '').trim()
     if (!text) return
 
@@ -124,6 +184,8 @@ export default function CommunityHub({
           return p
         })
       )
+    } else {
+      setReplyErrors((prev) => ({ ...prev, [postId]: res.error || 'تعذر إضافة الرد.' }))
     }
   }
 
@@ -170,9 +232,42 @@ export default function CommunityHub({
         </div>
       </div>
 
+      {/* تنبيه تسجيل الدخول للمشاركة */}
+      {!isLoggedIn && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-amber-500/10 border border-amber-500/25 text-amber-950 dark:text-amber-200 text-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-medium">
+              للمشاركة في مجلس المذاكرة وطرح المسائل أو كتابة الردود، يلزم تسجيل الدخول بحساب طالب مسجل.
+            </span>
+          </div>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-700 px-4 py-2 font-bold text-white hover:bg-amber-800 transition shrink-0 shadow-2xs"
+          >
+            <span>تسجيل الدخول / إنشاء حساب</span>
+          </Link>
+        </div>
+      )}
+
       {/* 2. نموذج طرح مسألة أو فائدة في المجلس */}
       <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900/95">
         <form onSubmit={handleCreatePost} className="space-y-4">
+          {/* رسائل التنبيه والنجاح */}
+          {postError && (
+            <div className="flex items-center gap-2 rounded-2xl bg-rose-50 p-3 text-xs font-medium text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+              <span>{postError}</span>
+            </div>
+          )}
+
+          {postSuccess && (
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-xs font-medium text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>{postSuccess}</span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs font-bold text-stone-900 dark:text-white">
               شارك المجلس مسألة أو فائدة:
@@ -264,9 +359,21 @@ export default function CommunityHub({
             </button>
           ))}
         </div>
-        <span className="text-xs text-stone-500 font-bold dark:text-stone-400">
-          {filteredPosts.length} مشاركة
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefreshPosts}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-600 hover:bg-stone-50 hover:text-emerald-900 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-emerald-400 cursor-pointer disabled:opacity-50 shadow-2xs"
+            title="تحديث المنشورات وجلب الجديد فوراً"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
+            <span>{isRefreshing ? 'جارٍ التحديث...' : 'تحديث المجلس'}</span>
+          </button>
+          <span className="text-xs text-stone-500 font-bold dark:text-stone-400">
+            {filteredPosts.length} مشاركة
+          </span>
+        </div>
       </div>
 
       {/* 4. قائمة المنشورات في المجلس */}
@@ -389,6 +496,14 @@ export default function CommunityHub({
                         ))
                       )}
                     </div>
+
+                    {/* رسالة الخطأ للرد إن وجدت */}
+                    {replyErrors[post.id] && (
+                      <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-2.5 text-[11px] font-medium text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        <span>{replyErrors[post.id]}</span>
+                      </div>
+                    )}
 
                     {/* حقل إضافة رد */}
                     <div className="flex items-center gap-2 pt-2">

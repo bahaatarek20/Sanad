@@ -14,12 +14,12 @@ export const metadata: Metadata = {
   title: 'سَنَد || رفيقك ومُعينك في طريق طلب العلم والتأصيل المنهجي',
   description: 'منصة سَنَد: بيئة علمية رصينة لمدارسة المتون الشرعية وضبط الفنون التسعة بالتدرج مع كبار مشايخ أهل السنة بلا مشتتات.',
   alternates: {
-    canonical: 'https://sanad.vercel.app',
+    canonical: 'https://sanad-edu1.vercel.app',
   },
   openGraph: {
     title: 'سَنَد || رفيقك ومُعينك في طريق طلب العلم والتأصيل المنهجي',
     description: 'بيئة علمية رصينة لمدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
-    url: 'https://sanad.vercel.app',
+    url: 'https://sanad-edu1.vercel.app',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',
@@ -75,8 +75,9 @@ export default async function HomePage() {
       }
     }
 
-    // 2. مزامنة مع Supabase فقط إذا كان المستخدم مسجلاً في سحابة Supabase
-    if (!user.id.startsWith('student-')) {
+    // 2. مزامنة مع Supabase فقط إذا كان المستخدم مسجلاً في سحابة Supabase بمعرف UUID صالح
+    const isSupabaseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id || '')
+    if (isSupabaseUuid) {
       try {
         const { data: progress } = await supabase
           .from('student_progress')

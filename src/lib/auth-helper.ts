@@ -124,7 +124,7 @@ export async function setStudentSessionCookie(
   cookieStore.set('sanad_student_user', JSON.stringify(studentData), {
     path: '/',
     maxAge: 60 * 60 * 24 * 365, // سنة كاملة
-    httpOnly: true,
+    httpOnly: false, // متاح للعميل لضمان حفظ الجلسة محلياً والمزامنة التلقائية
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   })

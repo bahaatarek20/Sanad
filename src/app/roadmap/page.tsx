@@ -12,12 +12,12 @@ export const metadata: Metadata = {
   title: 'خارطة الطريق لطلب العلم والتأصيل الشرعي',
   description: 'خارطة طريق بصرية متسلسلة للمتون والعلوم الشرعية ترتب لك البداية من المبادئ إلى التمكن في 9 فنون مباركة.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/roadmap',
+    canonical: 'https://sanad-edu1.vercel.app/roadmap',
   },
   openGraph: {
     title: 'خارطة الطريق لطلب العلم والتأصيل الشرعي || منصة سَنَد',
     description: 'خارطة طريق بصرية متسلسلة للمتون والعلوم الشرعية ترتب لك البداية من المبادئ إلى التمكن.',
-    url: 'https://sanad.vercel.app/roadmap',
+    url: 'https://sanad-edu1.vercel.app/roadmap',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',
@@ -84,8 +84,8 @@ export default async function RoadmapPage() {
             '@context': 'https://schema.org',
             '@type': 'BreadcrumbList',
             itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad.vercel.app' },
-              { '@type': 'ListItem', position: 2, name: 'خارطة الطريق', item: 'https://sanad.vercel.app/roadmap' },
+              { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad-edu1.vercel.app' },
+              { '@type': 'ListItem', position: 2, name: 'خارطة الطريق', item: 'https://sanad-edu1.vercel.app/roadmap' },
             ],
           }),
         }}

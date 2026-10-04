@@ -1,12 +1,108 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="sanadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- خلفية خضراء زمردية ملكية متدرجة -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#064e3b" />
-      <stop offset="100%" stop-color="#022c22" />
+      <stop offset="40%" stop-color="#043c2e" />
+      <stop offset="100%" stop-color="#02241b" />
     </linearGradient>
+
+    <!-- تدرج الذهب الملكي للعناصر والزخارف -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <!-- توهج ذهبي ناعم للمصحف الشريف -->
+    <radialGradient id="glowGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.45" />
+      <stop offset="60%" stop-color="#d97706" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#064e3b" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- ظل أسفل الأيقونة -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.35" />
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="128" fill="url(#sanadGrad)" />
-  <circle cx="256" cy="256" r="210" fill="none" stroke="#d97706" stroke-width="4" stroke-dasharray="8 6" opacity="0.4" />
-  <text x="50%" y="54%" font-family="Traditional Arabic, 'Noto Naskh Arabic', serif" font-size="190" font-weight="bold" fill="#fef3c7" text-anchor="middle" dominant-baseline="middle">سَنَد</text>
-  <circle cx="256" cy="400" r="10" fill="#f59e0b" />
+
+  <!-- خلفية الأيقونة: Squircle بحواف ناعمة تشبه أيقونات iOS و Android -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" />
+
+  <!-- إطار إسلامي هندسي داخلي مذهب -->
+  <rect x="36" y="36" width="440" height="440" rx="96" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.85" />
+  <rect x="48" y="48" width="416" height="416" rx="86" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="8 6" stroke-opacity="0.6" />
+
+  <!-- زخارف الأركان الأربعة -->
+  <g stroke="url(#goldGrad)" stroke-width="2.5" fill="none" opacity="0.8">
+    <!-- أعلى يمين -->
+    <path d="M420 72 L392 72 Q380 72 380 84 L380 112" />
+    <!-- أعلى يسار -->
+    <path d="M92 72 L120 72 Q132 72 132 84 L132 112" />
+    <!-- أسفل يمين -->
+    <path d="M420 440 L392 440 Q380 440 380 428 L380 400" />
+    <!-- أسفل يسار -->
+    <path d="M92 440 L120 440 Q132 440 132 428 L132 400" />
+  </g>
+
+  <!-- هالة النور في الوسط -->
+  <circle cx="256" cy="205" r="140" fill="url(#glowGrad)" />
+
+  <!-- رسم المصحف / المتن المفتوح برمزية التأصيل والضبط -->
+  <g filter="url(#shadow)">
+    <!-- حامل المصحف الخشبي التراثي (الرحلة) -->
+    <path d="M220 270 L256 295 L292 270 L275 305 L256 315 L237 305 Z" fill="#92400e" opacity="0.8" />
+
+    <!-- الصفحة اليسرى للمتن -->
+    <path d="M256 260 C210 248 150 240 118 245 C112 246 108 240 110 234 L126 142 C127 136 132 132 138 132 C175 135 224 146 256 168 Z" 
+          fill="url(#goldGrad)" stroke="#78350f" stroke-width="2" />
+    
+    <!-- خطوط أسطر الصفحة اليسرى -->
+    <path d="M142 160 C175 162 215 172 242 188" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <path d="M138 182 C172 184 212 194 242 208" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <path d="M134 204 C168 206 210 216 242 228" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+
+    <!-- الصفحة اليمنى للمتن -->
+    <path d="M256 260 C302 248 362 240 394 245 C400 246 404 240 402 234 L386 142 C385 136 380 132 374 132 C337 135 288 146 256 168 Z" 
+          fill="url(#goldGrad)" stroke="#78350f" stroke-width="2" />
+
+    <!-- خطوط أسطر الصفحة اليمنى -->
+    <path d="M370 160 C337 162 297 172 270 188" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <path d="M374 182 C340 184 300 194 270 208" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <path d="M378 204 C344 206 302 216 270 228" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+
+    <!-- وسط طيّة الكتاب وحبل العلامة المذهب -->
+    <path d="M256 166 L256 264" stroke="#78350f" stroke-width="4" stroke-linecap="round" />
+    <path d="M256 264 Q262 290 268 310" stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round" fill="none" />
+  </g>
+
+  <!-- كلمة «سَنَد» بالخط العربي المذهب الفخم في الأسفل -->
+  <g id="sanad-text" filter="url(#shadow)">
+    <!-- نص سند كخط عربي محفور ومذهب -->
+    <text x="256" y="405" 
+          text-anchor="middle" 
+          font-family="'Amiri', 'Traditional Arabic', 'Scheherazade New', serif" 
+          font-size="94" 
+          font-weight="bold" 
+          fill="url(#goldGrad)"
+          stroke="#451a03"
+          stroke-width="1.5"
+          letter-spacing="2">
+      سَنَد
+    </text>
+
+    <!-- شارة التأصيل والعلوم الشرعية -->
+    <text x="256" y="442" 
+          text-anchor="middle" 
+          font-family="system-ui, -apple-system, sans-serif" 
+          font-size="16" 
+          font-weight="600" 
+          fill="#fef08a" 
+          letter-spacing="4"
+          opacity="0.9">
+      التأصيل المنهجي
+    </text>
+  </g>
 </svg>

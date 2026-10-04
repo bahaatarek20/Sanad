@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from 'next'
-import { Amiri, Noto_Naskh_Arabic } from 'next/font/google'
+import { Amiri, Cairo } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import ScholarlyNotification from '@/components/scholarly-notification'
 import GlobalAiTutor from '@/components/global-ai-tutor'
 import VisitorTracker from '@/components/visitor-tracker'
-import PwaOfflineCompanion from '@/components/pwa-offline-companion'
+import SessionStorageSync from '@/components/session-storage-sync'
+import { getCurrentStudentUser } from '@/lib/auth-helper'
 
 // الخط الأميري الأصيل — رمز فخامة التراث والمطبعة الأميرية الكلاسيكية
 const amiri = Amiri({
@@ -16,15 +17,15 @@ const amiri = Amiri({
   display: 'swap',
 })
 
-// خط النسخ العربي المتقن — وضوح فائق واعتزاز بجماليات رسم الحروف
-const notoNaskh = Noto_Naskh_Arabic({
+// خط كايرو العربي الفخم الواضح — حروف متباعدة مريحة للعين تمنع أي تلاصق
+const cairo = Cairo({
   subsets: ['arabic', 'latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-noto-naskh',
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-cairo',
   display: 'swap',
 })
 
-const siteUrl = 'https://sanad.vercel.app'
+const siteUrl = 'https://sanad-edu1.vercel.app'
 
 export const viewport: Viewport = {
   themeColor: [
@@ -49,11 +50,17 @@ export const metadata: Metadata = {
     canonical: siteUrl,
   },
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
     shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico' },
+    ],
   },
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   openGraph: {
     type: 'website',
     locale: 'ar_SA',
@@ -120,21 +127,44 @@ const jsonLdData = {
   ],
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const user = await getCurrentStudentUser()
+
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+          rel="stylesheet"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              try {
+                var theme = localStorage.getItem('sanad_theme');
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                  if (!theme) localStorage.setItem('sanad_theme', 'light');
+                }
+              } catch (e) {}
+            })();`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
         />
       </head>
       <body
-        className={`${notoNaskh.variable} ${amiri.variable} ${notoNaskh.className} min-h-screen flex flex-col antialiased selection:bg-amber-400/30 selection:text-emerald-950 transition-colors duration-300 font-sans`}
+        className={`${cairo.variable} ${amiri.variable} ${cairo.className} min-h-screen flex flex-col antialiased selection:bg-amber-400/30 selection:text-emerald-950 transition-colors duration-300 font-sans`}
       >
         <Navbar />
         <main className="flex-1">{children}</main>
@@ -142,7 +172,19 @@ export default function RootLayout({
         <ScholarlyNotification />
         <GlobalAiTutor />
         <VisitorTracker />
-        <PwaOfflineCompanion />
+        <SessionStorageSync
+          user={
+            user
+              ? {
+                  email: user.email,
+                  fullName: user.user_metadata?.full_name,
+                  phone: user.phone,
+                  authProvider: user.authProvider,
+                  avatarUrl: user.avatarUrl,
+                }
+              : null
+          }
+        />
       </body>
     </html>
   )

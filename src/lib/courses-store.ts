@@ -112,6 +112,16 @@ export function getActiveCourses(): MatnCourse[] {
             ? customCourse.totalLessons
             : (fallback?.totalLessons || 1)
 
+          const resolvedYoutubeId =
+            customCourse.youtubeId && !customCourse.youtubeId.startsWith('/api/video/')
+              ? customCourse.youtubeId
+              : fallback?.youtubeId || customCourse.youtubeId || ''
+
+          const resolvedIsPlaylist =
+            customCourse.isPlaylist !== undefined
+              ? customCourse.isPlaylist
+              : (fallback?.isPlaylist ?? Boolean(resolvedYoutubeId && (resolvedYoutubeId.startsWith('PL') || resolvedYoutubeId.includes('list='))))
+
           return {
             ...baseCourse,
             title: resolvedTitle,
@@ -121,7 +131,9 @@ export function getActiveCourses(): MatnCourse[] {
             author: customCourse.author || fallback?.author,
             instructor: customCourse.instructor || fallback?.instructor,
             videoUrl: customCourse.videoUrl || fallback?.videoUrl,
-            youtubeId: customCourse.youtubeId || fallback?.youtubeId,
+            youtubeId: resolvedYoutubeId,
+            isPlaylist: resolvedIsPlaylist,
+            videoList: customCourse.videoList && customCourse.videoList.length > 0 ? customCourse.videoList : fallback?.videoList,
             pdfUrl: customCourse.pdfUrl || fallback?.pdfUrl,
             audioUrl: customCourse.audioUrl || fallback?.audioUrl,
             description: customCourse.description || fallback?.description || '',
@@ -140,7 +152,10 @@ export function getActiveCourses(): MatnCourse[] {
           } catch {}
         }
 
-        return courses
+        // دمج أي متون تأصيلية كبرى لم تكن موجودة في ملف التخصيص
+        const customSlugs = new Set(parsed.map((c) => c.slug))
+        const missingCanonicalCourses = ALL_COURSES.filter((c) => !customSlugs.has(c.slug))
+        return [...courses, ...missingCanonicalCourses]
       }
     }
   } catch (err) {
@@ -150,11 +165,13 @@ export function getActiveCourses(): MatnCourse[] {
 }
 
 /**
- * جلب متن معين بالمعرف (Slug)
+ * جلب متن معين بالمعرف (Slug) مع تأمين البحث المزدوج
  */
 export function getActiveCourseBySlug(slug: string): MatnCourse | undefined {
   const courses = getActiveCourses()
-  return courses.find((c) => c.slug === slug)
+  const found = courses.find((c) => c.slug === slug)
+  if (found) return found
+  return ALL_COURSES.find((c) => c.slug === slug)
 }
 
 /**
