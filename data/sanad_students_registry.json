@@ -36,9 +36,9 @@
     "name": "بشمهندس بهاء طارق",
     "isBanned": false,
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-03T21:12:53.162Z",
-    "totalStudyMinutes": 708,
-    "streak": 4,
+    "lastActive": "2026-10-04T16:57:51.804Z",
+    "totalStudyMinutes": 732,
+    "streak": 1,
     "completedCourses": [],
     "completedEpisodesMap": {
       "40-hadith-nawawi-1": [],
@@ -49,7 +49,8 @@
       "2026-09-27": 66,
       "2026-09-28": 167,
       "2026-09-29": 460,
-      "2026-09-30": 15
+      "2026-09-30": 15,
+      "2026-10-04": 24
     },
     "listenedSessions": [
       {
@@ -84,10 +85,10 @@
       }
     ],
     "notesCount": 0,
-    "lastStudiedDate": "2026-09-30",
+    "lastStudiedDate": "2026-10-04",
     "passwordHash": "9f00281e6f8ea02ae9eba5393bb24899ad6140f9c18dc75817828befab6d2412e632ec492d0f5e44bbb7a7d4dfb8b60fbc0ed5b695f582a2a6aff986d0d0c1af",
     "passwordSalt": "0936ba752134526d993d54c7ff17741d",
-    "authProvider": "google",
+    "authProvider": "email",
     "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A8%D9%87%D8%A7%D8%A1&background=047857&color=fff&size=128",
     "phone": "+201012728516"
   }

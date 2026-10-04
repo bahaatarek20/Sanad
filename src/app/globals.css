@@ -76,7 +76,17 @@ h1, h2, h3, h4, .font-amiri, .scholarly-heading {
   font-feature-settings: "liga" 1;
   text-rendering: optimizeLegibility;
   line-height: 1.5;
-  overflow: visible;
+}
+
+/* ضمان فاعلية التشذيب والتخلص التام من أي تداخل نصوص في العناوين والبطاقات */
+.truncate, [class*="truncate"] {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+[class*="line-clamp-"] {
+  overflow: hidden !important;
 }
 
 .dark body {
