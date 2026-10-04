@@ -138,7 +138,7 @@ export default function GlobalAiTutor() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
-      text: 'يا أهلاً بيك يا بطل! أنا «صاحبك في الطلب» رفيقك ومعينك في منصة سَنَد.. اسألني عن أي لفظ في المتون مش واضح، أو مسألة فقهية أو عقدية كلكعت معاك، أو قولي محتار تبدأ منين وهنرتبها سوا!',
+      text: 'أهلاً بك في منصة سَنَد. أنا «رفيق المدارسة»، جاهز لمعاونتك في تفكيك ألفاظ المتون، وضبط المسائل الفقهية والعقدية والنحوية، وترتيب خطتك الدراسية. تفضل بطرح سؤالك أو استشكالك.',
     },
   ])
   const [input, setInput] = useState('')
@@ -235,12 +235,12 @@ export default function GlobalAiTutor() {
       })
 
       const data = await res.json()
-      const aiReply = data?.reply || 'يا بطل حصل عطل سريع في الاتصال، جرب تسألني تاني كده!'
+      const aiReply = data?.reply || 'حدث انقطاع مؤقت في الاتصال، يرجى إعادة إرسال السؤال وسأجيبك فوراً.'
       setMessages((prev) => [...prev, { role: 'ai', text: aiReply }])
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: 'معلش يا صديقي، النت علّق لحظة معايا، اسألني تاني كده وركز معايا!' },
+        { role: 'ai', text: 'تعذر الاتصال بالخادم مؤقتاً، يرجى المحاولة مجدداً وسأكون معك مباشرة.' },
       ])
     } finally {
       setIsLoading(false)
