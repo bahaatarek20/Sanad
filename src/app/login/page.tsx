@@ -15,6 +15,8 @@ import {
   Lock,
   Sparkles,
   Inbox,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { auth, googleProvider } from '@/lib/firebase/config'
 import { signInWithPopup } from 'firebase/auth'
@@ -51,6 +53,11 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const [authTab, setAuthTab] = useState<'password' | 'otp'>('password')
   const [isSignup, setIsSignup] = useState<boolean>(!isExplicitLogin)
   const [isForgot, setIsForgot] = useState<boolean>(params.mode === 'forgot')
+
+  // حالات إظهار/إخفاء كلمة المرور للتحقق البصري
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // حالات Firebase Auth للتحقق والمصادقة
   const [firebaseLoading, setFirebaseLoading] = useState(false)
@@ -141,7 +148,11 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
       if (fbErr.code === 'auth/popup-closed-by-user') {
-        setFirebaseError('تم إغلاق نافذة تسجيل الدخول بـ Google.')
+        setFirebaseError('تم إغلاق نافذة تسجيل الدخول بـ Google قبل اكتمال العملية.')
+      } else if (fbErr.code === 'auth/unauthorized-domain') {
+        setFirebaseError(
+          'النطاق غير مصرح به في Firebase (auth/unauthorized-domain). يرجى إضافة رابط الموقع في Firebase Console (Authentication -> Settings -> Authorized domains).'
+        )
       } else if (
         fbErr.code === 'auth/configuration-not-found' ||
         fbErr.code === 'auth/operation-not-allowed'
@@ -149,6 +160,8 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         setFirebaseError(
           'يرجى التأكد من تفعيل Google في Firebase Console (Authentication -> Sign-in method).'
         )
+      } else if (fbErr.code === 'auth/popup-blocked') {
+        setFirebaseError('المتصفح حظر النافذة المنبثقة، يرجى السماح بالنوافذ المنبثقة والمحاولة مجدداً.')
       } else {
         setFirebaseError(fbErr.message || 'تعذر تسجيل الدخول بحساب Google')
       }
@@ -494,14 +507,27 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                     </label>
                     <div className="relative">
                       <input
-                        type="password"
+                        type={showNewPassword ? 'text' : 'password'}
                         name="newPassword"
                         required
                         minLength={6}
                         placeholder="••••••••"
-                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 pl-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                       />
-                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
+                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400 pointer-events-none" />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute left-3 top-2.5 rounded-lg p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 dark:hover:text-stone-200 dark:hover:bg-stone-700/50 transition cursor-pointer"
+                        title={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        aria-label={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -511,14 +537,27 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                     </label>
                     <div className="relative">
                       <input
-                        type="password"
+                        type={showConfirmPassword ? 'text' : 'password'}
                         name="confirmPassword"
                         required
                         minLength={6}
                         placeholder="••••••••"
-                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 pl-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                       />
-                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
+                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400 pointer-events-none" />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute left-3 top-2.5 rounded-lg p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 dark:hover:text-stone-200 dark:hover:bg-stone-700/50 transition cursor-pointer"
+                        title={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        aria-label={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -602,14 +641,27 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                     </div>
                     <div className="relative">
                       <input
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         name="password"
                         required
                         minLength={6}
                         placeholder="••••••••"
-                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 pl-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                       />
-                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
+                      <KeyRound className="absolute right-3.5 top-3 h-4 w-4 text-stone-400 pointer-events-none" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute left-3 top-2.5 rounded-lg p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 dark:hover:text-stone-200 dark:hover:bg-stone-700/50 transition cursor-pointer"
+                        title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
