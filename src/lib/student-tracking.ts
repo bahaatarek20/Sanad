@@ -1033,7 +1033,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
   }> = [
     {
       id: 'peer_1',
-      name: 'أحمد بن عبد الرحمن (باحث تأصيلي)',
+      name: 'أحمد بن عبد الرحمن',
       email: 'ahmed.taseel@sanad.edu',
       totalStudyMinutes: 720,
       streak: 14,
@@ -1042,7 +1042,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     },
     {
       id: 'peer_2',
-      name: 'أبو عبد الله الأندلسي (طالب علم)',
+      name: 'أبو عبد الله الأندلسي',
       email: 'andalusi@sanad.edu',
       totalStudyMinutes: 540,
       streak: 11,
@@ -1051,7 +1051,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     },
     {
       id: 'peer_3',
-      name: 'أم سلمة البغدادية (مقرئة ودارسة)',
+      name: 'أم سلمة البغدادية',
       email: 'ummsalamah@sanad.edu',
       totalStudyMinutes: 420,
       streak: 9,
@@ -1060,7 +1060,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     },
     {
       id: 'peer_4',
-      name: 'أنس بن مالك البصري (شغوف بالحديث)',
+      name: 'أنس بن مالك البصري',
       email: 'anas.basri@sanad.edu',
       totalStudyMinutes: 320,
       streak: 7,
@@ -1069,7 +1069,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     },
     {
       id: 'peer_5',
-      name: 'يحيى بن يحيى الليثي (دارس الفقه)',
+      name: 'يحيى بن يحيى الليثي',
       email: 'yahya.laythi@sanad.edu',
       totalStudyMinutes: 240,
       streak: 5,
@@ -1078,7 +1078,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     },
     {
       id: 'peer_6',
-      name: 'معاذ الشامي (مبادر بالمدارسة)',
+      name: 'معاذ الشامي',
       email: 'muadh.shami@sanad.edu',
       totalStudyMinutes: 150,
       streak: 4,

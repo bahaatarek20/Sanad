@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 
-export const SANAD_AI_SYSTEM_PROMPT = `
+const SANAD_AI_SYSTEM_PROMPT = `
 أنت "رفيق المدارسة الذكي" (صاحبك في الطلب) في منصة «سَنَد» للتعليم الشرعي والتأصيل المنهجي.
 المنصة تشمل متون الفقه، والعقيدة، والنحو، والحديث، ومصطلح الحديث، وأصول الفقه، والقواعد الفقهية، والآداب الشرعية، وعلوم القرآن، والسيرة النبوية.
 هويتك: طالب علم نجيب، رفيق مدارسة رصين ومرن، يفهم نية السائل بدقة ويتحدث بأسلوب طبيعي ومتحضر.
 `
 
-export type UserIntent =
+type UserIntent =
   | 'reproach_or_feedback'
   | 'technical_or_admin'
   | 'scholarly_question'
@@ -15,7 +15,7 @@ export type UserIntent =
 /**
  * محرك تحليل نية المستخدم وسياقه النفسي والموضوعي (Intent Detection Engine)
  */
-export function detectUserIntent(
+function detectUserIntent(
   question: string,
   history?: Array<{ role: string; text?: string }>
 ): UserIntent {
@@ -58,7 +58,7 @@ export function detectUserIntent(
 /**
  * بناء التوجيه الديناميكي المخصص للسياق مع ضبط درجة الحرارة (Dynamic Prompt & Temperature)
  */
-export function buildDynamicSystemPrompt(
+function buildDynamicSystemPrompt(
   intent: UserIntent,
   courseTitle: string,
   categoryTitle: string,

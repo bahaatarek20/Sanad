@@ -57,7 +57,8 @@
         "title": "المجلس 6",
         "youtubeUrl": "",
         "audioUrl": "",
-        "description": ""
+        "description": "",
+        "videoUrl": ""
       },
       {
         "episodeNum": 7,
@@ -975,7 +976,7 @@
     "episodes": [
       {
         "episodeNum": 1,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس الأول",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس الأول",
         "youtubeUrl": "/api/video/sanad_vid_mum0zhrz_l0h7_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum0zhrz_l0h7_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",
@@ -983,7 +984,7 @@
       },
       {
         "episodeNum": 2,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس الثاني",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس الثاني",
         "youtubeUrl": "/api/video/sanad_vid_mum1acwc_vlbr_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum1acwc_vlbr_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",
@@ -991,7 +992,7 @@
       },
       {
         "episodeNum": 3,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس الثالث",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس الثالث",
         "youtubeUrl": "/api/video/sanad_vid_mum16j93_leeo_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum16j93_leeo_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",
@@ -999,7 +1000,7 @@
       },
       {
         "episodeNum": 4,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس الرابع",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس الرابع",
         "youtubeUrl": "/api/video/sanad_vid_mum109ng_nitt_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum109ng_nitt_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",
@@ -1007,7 +1008,7 @@
       },
       {
         "episodeNum": 5,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس الخامس",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس الخامس",
         "youtubeUrl": "/api/video/sanad_vid_mum10m1u_2ap1_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum10m1u_2ap1_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",
@@ -1015,7 +1016,7 @@
       },
       {
         "episodeNum": 6,
-        "title": "شرح نخبة الفكر  | الشيخ: د. عبد العزيز الشايع | الدرس السادس",
+        "title": "شرح نخبة الفكر | الشيخ: د. عبد العزيز الشايع | الدرس السادس",
         "youtubeUrl": "/api/video/sanad_vid_mum10w6q_ckgm_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "videoUrl": "/api/video/sanad_vid_mum10w6q_ckgm_%D8%B4%D8%B1%D8%AD_%D9%86%D8%AE%D8%A8%D8%A9_%D8%A7%D9%84%D9%81%D9%90%D9%83%D8%B1___%D8%A7%D9%84%D8%B4%D9%8A%D8%AE___%D8%AF_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2_%D8%A7%D9%84%D8%B4%D8%A7%D9%8A%D8%B9_.mp4",
         "audioUrl": "",

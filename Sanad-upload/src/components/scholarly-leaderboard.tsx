@@ -198,26 +198,29 @@ export default function ScholarlyLeaderboard({
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-rose-900 font-black text-lg dark:bg-rose-950 dark:text-rose-300">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-900 font-black text-lg dark:bg-rose-950 dark:text-rose-300">
               {data.topStreakLeader.streak}
             </div>
-            <div>
-              <h4 className="font-bold text-sm text-stone-900 dark:text-white line-clamp-1">
+            <div className="min-w-0 flex-1">
+              <h4
+                className="font-bold text-sm text-stone-900 dark:text-white truncate block"
+                title={data.topStreakLeader.name}
+              >
                 {data.topStreakLeader.name}
               </h4>
-              <p className="text-xs text-rose-700 dark:text-rose-400 font-bold">
+              <p className="mt-0.5 text-xs text-rose-700 dark:text-rose-400 font-bold truncate">
                 {data.topStreakLeader.streak} يوماً بلا انقطاع 🔥
               </p>
             </div>
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-rose-100 pt-3 dark:border-stone-800">
-            <span className="text-[11px] text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
               {data.topStreakLeader.levelTitle}
             </span>
             <button
               onClick={() => handleBlessStudent(data.topStreakLeader.id, data.topStreakLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 dark:text-rose-400 transition"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 dark:text-rose-400 transition shrink-0"
               title="بارك الله في همتك"
             >
               <Heart className="h-3.5 w-3.5 text-rose-500" />
@@ -239,26 +242,29 @@ export default function ScholarlyLeaderboard({
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-900 font-black text-sm dark:bg-amber-950 dark:text-amber-300">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900 font-black text-sm dark:bg-amber-950 dark:text-amber-300">
               {Math.floor(data.topHoursLeader.totalStudyMinutes / 60)} س
             </div>
-            <div>
-              <h4 className="font-bold text-sm text-stone-900 dark:text-white line-clamp-1">
+            <div className="min-w-0 flex-1">
+              <h4
+                className="font-bold text-sm text-stone-900 dark:text-white truncate block"
+                title={data.topHoursLeader.name}
+              >
                 {data.topHoursLeader.name}
               </h4>
-              <p className="text-xs text-amber-800 dark:text-amber-400 font-bold">
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-400 font-bold truncate">
                 {formatHoursAndMinutes(data.topHoursLeader.totalStudyMinutes)} حضور
               </p>
             </div>
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-amber-100 pt-3 dark:border-stone-800">
-            <span className="text-[11px] text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
               {data.topHoursLeader.levelTitle}
             </span>
             <button
               onClick={() => handleBlessStudent(data.topHoursLeader.id, data.topHoursLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 dark:text-amber-400 transition"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 dark:text-amber-400 transition shrink-0"
               title="بارك الله في همتك"
             >
               <Heart className="h-3.5 w-3.5 text-amber-600" />
@@ -280,26 +286,29 @@ export default function ScholarlyLeaderboard({
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-900 font-black text-lg dark:bg-emerald-950 dark:text-emerald-300">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-900 font-black text-lg dark:bg-emerald-950 dark:text-emerald-300">
               {data.topCoursesLeader.completedCoursesCount}
             </div>
-            <div>
-              <h4 className="font-bold text-sm text-stone-900 dark:text-white line-clamp-1">
+            <div className="min-w-0 flex-1">
+              <h4
+                className="font-bold text-sm text-stone-900 dark:text-white truncate block"
+                title={data.topCoursesLeader.name}
+              >
                 {data.topCoursesLeader.name}
               </h4>
-              <p className="text-xs text-emerald-800 dark:text-emerald-400 font-bold">
+              <p className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-400 font-bold truncate">
                 {data.topCoursesLeader.completedCoursesCount} متون مضبوطة بالسند
               </p>
             </div>
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-emerald-100 pt-3 dark:border-stone-800">
-            <span className="text-[11px] text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
               {data.topCoursesLeader.levelTitle}
             </span>
             <button
               onClick={() => handleBlessStudent(data.topCoursesLeader.id, data.topCoursesLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 dark:text-emerald-400 transition"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 dark:text-emerald-400 transition shrink-0"
               title="بارك الله في همتك"
             >
               <Heart className="h-3.5 w-3.5 text-emerald-600" />
@@ -321,14 +330,17 @@ export default function ScholarlyLeaderboard({
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 text-indigo-900 font-black text-lg dark:bg-indigo-950 dark:text-indigo-300">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-900 font-black text-lg dark:bg-indigo-950 dark:text-indigo-300">
               {data.topNotesLeader.notesCount}
             </div>
-            <div>
-              <h4 className="font-bold text-sm text-stone-900 dark:text-white line-clamp-1">
+            <div className="min-w-0 flex-1">
+              <h4
+                className="font-bold text-sm text-stone-900 dark:text-white truncate block"
+                title={data.topNotesLeader.name}
+              >
                 {data.topNotesLeader.name}
               </h4>
-              <p className="text-xs text-indigo-800 dark:text-indigo-400 font-bold">
+              <p className="mt-0.5 text-xs text-indigo-800 dark:text-indigo-400 font-bold truncate">
                 {data.topNotesLeader.notesCount} فائدة مقيدة بالكشكول
               </p>
             </div>

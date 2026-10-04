@@ -418,11 +418,11 @@ export default function ScholarlyStationsModal({
                           {badge.icon}
                         </div>
 
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-bold text-stone-400 block">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-stone-400 block truncate">
                             {badge.categoryLabel}
                           </span>
-                          <h5 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white line-clamp-1">
+                          <h5 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white truncate block">
                             {badge.title}
                           </h5>
                           <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">

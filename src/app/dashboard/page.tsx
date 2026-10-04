@@ -317,11 +317,11 @@ export default async function DashboardPage() {
                 href={`/courses/${course.slug}`}
                 className="group flex items-center justify-between rounded-2xl border border-stone-200/90 bg-white p-4 shadow-2xs hover:border-emerald-800 transition dark:border-stone-800 dark:bg-stone-900/95"
               >
-                <div className="min-w-0 pr-2">
+                <div className="min-w-0 flex-1 pr-2">
                   <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md dark:bg-amber-950 dark:text-amber-300">
                     {course.category}
                   </span>
-                  <h4 className="mt-1 font-bold text-xs sm:text-sm text-stone-900 group-hover:text-emerald-900 line-clamp-1 dark:text-white dark:group-hover:text-emerald-400">
+                  <h4 className="mt-1 font-bold text-xs sm:text-sm text-stone-900 group-hover:text-emerald-900 truncate block dark:text-white dark:group-hover:text-emerald-400">
                     {course.title}
                   </h4>
                   {course.instructor && (
