@@ -50,6 +50,30 @@ function ensureStoreFiles() {
 }
 
 /**
+ * دالة ذكية لفصل الحروف والكلمات الملتصقة واستعادة المسافات الطبيعية في اللغة العربية
+ */
+export function normalizeArabicSpaces(str: string): string {
+  if (!str || typeof str !== 'string') return ''
+  return str
+    .replace(/([^\s(])\(/g, '$1 (')
+    .replace(/\)([^\s)])/g, ') $1')
+    .replace(/(:|،)(?=[^\s])/g, '$1 ')
+    .replace(/كتابالبداية/g, 'كتاب البداية')
+    .replace(/فيعلمالعقيدة/g, 'في علم العقيدة')
+    .replace(/الشيخوحيدبالي/g, 'الشيخ وحيد بالي')
+    .replace(/الشيخصالحالعصيميمجلسان/g, 'الشيخ صالح العصيمي - مجلسان')
+    .replace(/الأربعينالنووية/g, 'الأربعين النووية')
+    .replace(/التأهيلالفقهيأصولالفقه/g, 'التأهيل الفقهي: أصول الفقه')
+    .replace(/الكفايةفيشرحالبدايةأصولالفقه/g, 'الكفاية في شرح البداية: أصول الفقه')
+    .replace(/الدروسالتأصيليةشرحمتنالآجرومية/g, 'الدروس التأصيلية: شرح متن الآجرومية')
+    .replace(/شرحكتاببدايةالمتفقه\((\d+)\)للشيخنورشعلان/g, 'شرح كتاب بداية المتفقه ($1) - للشيخ نور شعلان')
+    .replace(/برنامجغريبالحديثدمحمدحمدالعتيبي/g, ' - برنامج غريب الحديث - د. محمد حمد العتيبي')
+    .replace(/شرحالبيقونيةللشيخعبدالكريمالخضيربرنامجاجتماعالنقط/g, 'شرح المنظومة البيقونية - الشيخ عبد الكريم الخضير - ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
  * جلب كافة المتون المعتمدة والنشطة على مستوى المنصة (Server Source of Truth)
  */
 export function getActiveCourses(): MatnCourse[] {
@@ -69,7 +93,7 @@ export function getActiveCourses(): MatnCourse[] {
           const baseCourse = fallback ? { ...fallback, ...customCourse } : customCourse
 
           // استعادة العنوان الأصلي السليم من قاعدة المتون المعتمدة إذا كانت المسافات قد حُذفت سابقاً
-          let resolvedTitle = customCourse.title || fallback?.title || ''
+          let resolvedTitle = normalizeArabicSpaces(customCourse.title || fallback?.title || '')
           if (fallback && resolvedTitle.replace(/\s+/g, '') === fallback.title.replace(/\s+/g, '')) {
             if (resolvedTitle !== fallback.title) {
               resolvedTitle = fallback.title
@@ -82,7 +106,7 @@ export function getActiveCourses(): MatnCourse[] {
             : (fallback?.episodes || [])
 
           const episodes = rawEpisodes.map((ep) => {
-            let epTitle = ep.title ? ep.title.trim() : ''
+            let epTitle = normalizeArabicSpaces(ep.title ? ep.title.trim() : '')
             // استعادة المسافات للألقاب مثل "المجلس1"
             const majlisMatch = epTitle.match(/^(المجلس|الدرس)(\d+)$/)
             if (majlisMatch) {

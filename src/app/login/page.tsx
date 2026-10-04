@@ -36,8 +36,6 @@ interface LoginPageProps {
     message?: string
     mode?: string
     email?: string
-    phone?: string
-    countryCode?: string
   }>
 }
 
@@ -368,7 +366,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           </form>
         ) : (
           /* ========================================================
-             الحالة العامة: زر Google المباشر + التبويبات الثلاثية
+             الحالة العامة: زر Google المباشر + التبويبات الثنائية
              ======================================================== */
           <>
             {/* زر تسجيل الدخول المباشر عبر Google (Firebase Auth) */}
@@ -417,7 +415,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               </div>
             </div>
 
-            {/* أزرار التبديل الثلاثية النظيفة */}
+            {/* أزرار التبديل الثنائية النظيفة */}
             <div className="flex rounded-2xl border border-stone-200 bg-stone-100/70 p-1 text-[11px] sm:text-xs font-bold dark:border-stone-700 dark:bg-stone-800">
               <button
                 type="button"
