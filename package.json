@@ -7,7 +7,8 @@
     "dev:turbo": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backup:test": "node scripts/backup-and-restore.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

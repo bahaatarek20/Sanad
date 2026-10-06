@@ -54,3 +54,5 @@ data/pdfs public/uploads/pdfs
 /Sanad-upload/
 /public/uploads/
 /data/pdfs/
+/backups/
+/.restore_test_sandbox/

@@ -1325,10 +1325,40 @@ export default function SanadControlGatePage() {
     })
   }
 
-  const handleExportCoursesJSON = () => {
-    const jsonStr = JSON.stringify(courses, null, 2)
-    navigator.clipboard.writeText(jsonStr)
-    alert('تم نسخ مصفوفة المتون كاملة (JSON) إلى الحافظة بنجاح!')
+  const handleExportCoursesJSON = async () => {
+    try {
+      const res = await fetch('/api/admin/export-content?download=true')
+      if (!res.ok) {
+        const dateStr = new Date().toISOString().split('T')[0]
+        const fallbackBlob = new Blob([JSON.stringify(courses, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(fallbackBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `sanad-courses-backup-${dateStr}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        alert('تم تحميل النسخة الاحتياطية للمتون كملف JSON بنجاح!')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().split('T')[0]
+      a.download = `sanad-waqf-archive-${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      navigator.clipboard.writeText(JSON.stringify(courses, null, 2))
+      alert('تم تحميل الأرشيف الوقفي الكامل للمنصة (JSON) ونسخ المحتوى للحافظة بنجاح!')
+    } catch {
+      const jsonStr = JSON.stringify(courses, null, 2)
+      navigator.clipboard.writeText(jsonStr)
+      alert('تم نسخ مصفوفة المتون كاملة (JSON) إلى الحافظة بنجاح!')
+    }
   }
 
   // حفظ الإعلان الإداري وبثه لجميع الطلاب فوراً
