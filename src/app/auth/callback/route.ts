@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent } from '@/lib/student-tracking'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
 
   if (code) {
     try {
+      const clientTelemetry = extractClientTelemetry(request.headers)
       const supabase = await createClient()
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       if (!error && data?.user?.email) {
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
           user.user_metadata?.picture ||
           undefined
 
-        // حفظ الجلسة محلياً والمزامنة مع سجل المنصة
+        // حفظ الجلسة محلياً والمزامنة مع سجل المنصة مع البيانات الجغرافية
         await setStudentSessionCookie(fullName, email, {
           authProvider: 'google',
           avatarUrl,
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
         registerOrUpdateStudent(email, fullName, {
           authProvider: 'google',
           avatarUrl,
+          ...clientTelemetry,
         })
 
         // إيداع رسائل الترحيب والأمان في صندوق سَنَد (Gmail-like inbox)

@@ -54,7 +54,7 @@
       },
       {
         "episodeNum": 6,
-        "title": "حلية طالب العلم 6 ـ أدب الزمالة وآداب الطالب في حياته العلمية ـ الشيخ أحمد نبيل",
+        "title": "المجلس 6",
         "youtubeUrl": "/api/video/sanad_vid_mux3u75y_mp4l_%D8%AD%D9%84%D9%8A%D8%A9_%D8%B7%D8%A7%D9%84%D8%A8_%D8%A7%D9%84%D8%B9%D9%84%D9%85_6_%D9%80_%D8%A3%D8%AF%D8%A8_%D8%A7%D9%84%D8%B2%D9%85%D8%A7%D9%84%D8%A9_%D9%88%D8%A2%D8%AF%D8%A7%D8%A8_%D8%A7%D9%84%D8%B7%D8%A7%D9%84%D8%A8_.mp4",
         "audioUrl": "",
         "description": "فيديو مرفوع: حلية طالب العلم 6 ـ أدب الزمالة وآداب الطالب في حياته العلمية ـ الشيخ أحمد نبيل",
@@ -858,20 +858,6 @@
     "isPlaylist": true,
     "totalLessons": 15,
     "description": "مبادئ علم الأصول وقواعد الاستنباط والأدلة المتفق عليها والمختلف فيها.",
-    "episodes": []
-  },
-  {
-    "slug": "al-taheel-al-usuli",
-    "title": "التأهيل الفقهي: أصول الفقه",
-    "author": "كتاب التأهيل الفقهي على مذهب الإمام أحمد",
-    "stage": 1,
-    "category": "أصول الفقه",
-    "categorySlug": "usul-al-fiqh",
-    "instructor": "د. عامر بهجت",
-    "youtubeId": "PLsf2FZwVKc8j2YHdgn8e_9kzs9-RqCYLb",
-    "isPlaylist": true,
-    "totalLessons": 18,
-    "description": "بناء الملكة الأصولية وتدريب الطالب على استخراج دلالات الألفاظ والعلل.",
     "episodes": []
   },
   {

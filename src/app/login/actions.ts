@@ -8,6 +8,7 @@ import { setStudentSessionCookie, clearStudentSession } from '@/lib/auth-helper'
 import { sendOtpToEmail, verifyOtpCode } from '@/lib/otp-service'
 import { sendOtpToPhone, verifyPhoneOtp } from '@/lib/phone-auth-service'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 import {
   registerOrUpdateStudent,
   saveStudentLocalPassword,
@@ -83,6 +84,9 @@ export async function verifyOtpAction(formData: FormData) {
     )
   }
 
+  const clientTelemetry = extractClientTelemetry(await headers())
+  registerOrUpdateStudent(email, undefined, { ...clientTelemetry })
+
   revalidatePath('/', 'layout')
   redirect('/courses')
 }
@@ -110,6 +114,8 @@ export async function loginWithPassword(formData: FormData) {
   let errorMessage: string | null = null
 
   try {
+    const headerList = await headers()
+    const clientTelemetry = extractClientTelemetry(headerList)
     const supabase = await createClient()
 
     // 1. محاولة تسجيل الدخول عبر Supabase
@@ -124,7 +130,7 @@ export async function loginWithPassword(formData: FormData) {
         supabaseSuccess = true
         const fullName = data.user.user_metadata?.full_name || cleanEmail.split('@')[0]
         await setStudentSessionCookie(fullName, cleanEmail)
-        registerOrUpdateStudent(cleanEmail, fullName)
+        registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
         saveStudentLocalPassword(cleanEmail, password, fullName)
         redirectTo = '/courses'
       }
@@ -139,7 +145,7 @@ export async function loginWithPassword(formData: FormData) {
         const student = getStudentProfileData(cleanEmail)
         const fullName = student?.name || cleanEmail.split('@')[0]
         await setStudentSessionCookie(fullName, cleanEmail)
-        registerOrUpdateStudent(cleanEmail, fullName)
+        registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
         redirectTo = '/courses'
       } else {
         errorMessage = 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.'
@@ -188,11 +194,13 @@ export async function signupWithPassword(formData: FormData) {
 
   try {
     const cleanEmail = email.toLowerCase().trim()
+    const headerList = await headers()
+    const clientTelemetry = extractClientTelemetry(headerList)
 
     // 1. تسجيل الحساب محلياً فوراً لحفظ تقدم الطالب وكشكوله ومنع أي تعطل خارجي
     saveStudentLocalPassword(cleanEmail, password, fullName)
     await setStudentSessionCookie(fullName, cleanEmail)
-    registerOrUpdateStudent(cleanEmail, fullName)
+    registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
 
     // 2. المزامنة السحابية في Supabase
     try {
@@ -260,13 +268,15 @@ export async function resetPasswordAction(formData: FormData) {
 
   try {
     const cleanEmail = email.toLowerCase().trim()
+    const headerList = await headers()
+    const clientTelemetry = extractClientTelemetry(headerList)
     const student = getStudentProfileData(cleanEmail)
     const fullName = student?.name || cleanEmail.split('@')[0]
 
     // 1. تحديث كلمة المرور في السجل المحلي فوراً
     saveStudentLocalPassword(cleanEmail, newPassword, fullName)
     await setStudentSessionCookie(fullName, cleanEmail)
-    registerOrUpdateStudent(cleanEmail, fullName)
+    registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
 
     // 2. محاولة المزامنة مع سوبابيز
     try {
@@ -361,6 +371,7 @@ export async function quickGoogleDirectLoginAction(formData: FormData) {
   }
 
   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(googleName)}&background=047857&color=fff&size=128`
+  const clientTelemetry = extractClientTelemetry(await headers())
 
   await setStudentSessionCookie(googleName, googleEmail, {
     authProvider: 'google',
@@ -369,6 +380,7 @@ export async function quickGoogleDirectLoginAction(formData: FormData) {
   registerOrUpdateStudent(googleEmail, googleName, {
     authProvider: 'google',
     avatarUrl,
+    ...clientTelemetry,
   })
 
   // إيداع رسائل الترحيب والأمان في صندوق سَنَد
@@ -429,6 +441,16 @@ export async function verifyPhoneOtpAction(formData: FormData) {
       `/login?mode=verify-phone-otp&phone=${encodeURIComponent(phone)}&countryCode=${encodeURIComponent(countryCode)}&error=${encodeURIComponent(result.message)}`
     )
   }
+
+  const clientTelemetry = extractClientTelemetry(await headers())
+  const formattedPhone = (result as any).formattedPhone || phone
+  const studentEmail = `${formattedPhone.replace(/[^0-9]/g, '')}@student.sanad.edu`
+
+  registerOrUpdateStudent(studentEmail, `طالب (${formattedPhone})`, {
+    phone: formattedPhone,
+    authProvider: 'phone',
+    ...clientTelemetry,
+  })
 
   revalidatePath('/', 'layout')
   redirect('/courses')

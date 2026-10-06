@@ -83,23 +83,48 @@ export default function CommunityHub({
     } catch {}
   }, [])
 
-  // المزامنة الدورية الخلفية كل 45 ثانية لجلب أي مشاركات جديدة للطلاب تلقائياً
+  // المزامنة الدورية الخلفية كل 8 ثوانٍ لجلب أي مشاركات جديدة للطلاب تلقائياً ولحظياً
   useEffect(() => {
-    const timer = setInterval(() => {
-      getLatestCommunityPostsAction()
-        .then((updated) => {
-          if (updated && updated.length > 0) {
-            setPosts(updated)
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch('/api/community/posts', { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data?.success && Array.isArray(data.posts) && data.posts.length > 0) {
+            setPosts(data.posts)
+            return
           }
-        })
-        .catch(() => {})
-    }, 45000)
+        }
+      } catch {}
+
+      try {
+        const updated = await getLatestCommunityPostsAction()
+        if (updated && updated.length > 0) {
+          setPosts(updated)
+        }
+      } catch {}
+    }
+
+    fetchLatest()
+    const timer = setInterval(fetchLatest, 8000)
     return () => clearInterval(timer)
   }, [])
 
   // تحديث يدوي للمجلس
   const handleRefreshPosts = async () => {
     setIsRefreshing(true)
+    try {
+      const res = await fetch('/api/community/posts', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.success && Array.isArray(data.posts) && data.posts.length > 0) {
+          setPosts(data.posts)
+          setIsRefreshing(false)
+          return
+        }
+      }
+    } catch {}
+
     try {
       const updated = await getLatestCommunityPostsAction()
       if (updated && updated.length > 0) {
@@ -123,14 +148,41 @@ export default function CommunityHub({
     setPostError(null)
     setPostSuccess(null)
 
-    if (!isLoggedIn) {
-      setPostError('يرجى تسجيل الدخول بحساب طالب لتتمكن من مشاركة المسائل والفوائد في المجلس.')
-      return
-    }
-
     if (!postContent.trim() || isPosting) return
 
     setIsPosting(true)
+
+    // 1. محاولة الإرسال الفوري عبر الـ API
+    try {
+      const apiRes = await fetch('/api/community/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: postContent.trim(),
+          postType,
+          courseSlug: selectedCourseSlug || null,
+        }),
+      })
+      if (apiRes.ok) {
+        const apiData = await apiRes.json()
+        if (apiData?.success && apiData.post) {
+          const newPost: CommunityPost = {
+            ...apiData.post,
+            post_type: apiData.post.post_type as 'question' | 'summary' | 'benefit',
+            replies: [],
+          }
+          setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)])
+          setPostContent('')
+          setSelectedCourseSlug('')
+          setPostSuccess('تم نشر مسألتك بنجاح في المجلس وستظهر لكافة إخوانك الطلاب!')
+          setTimeout(() => setPostSuccess(null), 6000)
+          setIsPosting(false)
+          return
+        }
+      }
+    } catch {}
+
+    // 2. المحاولة عبر Server Action كطبقة بديلة موثوقة
     const formData = new FormData()
     formData.append('content', postContent.trim())
     formData.append('postType', postType)
@@ -145,7 +197,7 @@ export default function CommunityHub({
         post_type: res.post.post_type as 'question' | 'summary' | 'benefit',
         replies: [],
       }
-      setPosts([newPost, ...posts])
+      setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)])
       setPostContent('')
       setSelectedCourseSlug('')
       setPostSuccess('تم نشر مسألتك بنجاح في المجلس وستظهر لكافة إخوانك الطلاب!')
@@ -192,11 +244,6 @@ export default function CommunityHub({
   // إضافة رد مجهول فوري وتفاؤلي (Optimistic UI Update)
   const handleAddReply = async (postId: string) => {
     setReplyErrors((prev) => ({ ...prev, [postId]: '' }))
-
-    if (!isLoggedIn) {
-      setReplyErrors((prev) => ({ ...prev, [postId]: 'يرجى تسجيل الدخول بحساب طالب لتتمكن من إضافة رد.' }))
-      return
-    }
 
     const text = (replyInputs[postId] || '').trim()
     if (!text) return

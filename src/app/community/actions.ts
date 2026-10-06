@@ -29,10 +29,6 @@ function generateAnonymousAlias(scholarlyId?: string): string {
 export async function createCommunityPost(formData: FormData) {
   try {
     const studentUser = await getCurrentStudentUser()
-    if (!studentUser) {
-      return { success: false, error: 'غير مصرح بالنشر؛ يرجى تسجيل الدخول بحساب نشط وغير معلّق إدارياً.' }
-    }
-
     const content = formData.get('content') as string
     const courseSlug = formData.get('courseSlug') as string
     const postType = (formData.get('postType') as string) || 'benefit'
@@ -41,11 +37,14 @@ export async function createCommunityPost(formData: FormData) {
       return { success: false, error: 'محتوى المسألة أو الفائدة مطلوب' }
     }
 
-    const { getStudentProfileData } = await import('@/lib/student-tracking')
-    const studentProfile = studentUser.email ? getStudentProfileData(studentUser.email) : null
-    const anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+    let anonymousAlias = generateAnonymousAlias()
+    if (studentUser && studentUser.email) {
+      const { getStudentProfileData } = await import('@/lib/student-tracking')
+      const studentProfile = getStudentProfileData(studentUser.email)
+      anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+    }
 
-    // 1. الحفظ في السجل المحلي
+    // 1. الحفظ في السجل المحلي والمشترك
     const localPost = saveLocalCommunityPost({
       anonymous_alias: anonymousAlias,
       course_slug: courseSlug || null,
@@ -120,15 +119,14 @@ export async function upvotePost(postId: string) {
 export async function addCommunityReply(postId: string, content: string) {
   try {
     const studentUser = await getCurrentStudentUser()
-    if (!studentUser) {
-      return { success: false, error: 'غير مصرح بالتعليق؛ يرجى تسجيل الدخول بحساب نشط وغير معلّق إدارياً.' }
-    }
-
     if (!content.trim()) return { success: false, error: 'محتوى الرد مطلوب' }
 
-    const { getStudentProfileData } = await import('@/lib/student-tracking')
-    const studentProfile = studentUser.email ? getStudentProfileData(studentUser.email) : null
-    const anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+    let anonymousAlias = generateAnonymousAlias()
+    if (studentUser && studentUser.email) {
+      const { getStudentProfileData } = await import('@/lib/student-tracking')
+      const studentProfile = getStudentProfileData(studentUser.email)
+      anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+    }
 
     // 1. حفظ الرد محلياً
     const localReply = addLocalCommunityReply(postId, {

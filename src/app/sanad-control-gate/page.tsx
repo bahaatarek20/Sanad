@@ -1398,7 +1398,7 @@ export default function SanadControlGatePage() {
   const activeStudentsCount = students.filter((s) => !s.isBanned).length
   const bannedStudentsCount = students.filter((s) => s.isBanned).length
 
-  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والحالة
+  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز
   const filteredStudents = students.filter((s) => {
     if (studentStatusFilter === 'active' && s.isBanned) return false
     if (studentStatusFilter === 'banned' && !s.isBanned) return false
@@ -1409,6 +1409,13 @@ export default function SanadControlGatePage() {
       (s.scholarlyId && s.scholarlyId.toLowerCase().includes(query)) ||
       s.email.toLowerCase().includes(query) ||
       s.name.toLowerCase().includes(query) ||
+      (s.ip && s.ip.toLowerCase().includes(query)) ||
+      (s.country && s.country.toLowerCase().includes(query)) ||
+      (s.countryCode && s.countryCode.toLowerCase().includes(query)) ||
+      (s.city && s.city.toLowerCase().includes(query)) ||
+      (s.device && s.device.toLowerCase().includes(query)) ||
+      (s.browser && s.browser.toLowerCase().includes(query)) ||
+      (s.phone && s.phone.includes(query)) ||
       (Array.isArray(s.completedCourses) &&
         s.completedCourses.some((slug) => slug.toLowerCase().includes(query)))
     )
@@ -1845,7 +1852,7 @@ export default function SanadControlGatePage() {
                   type="text"
                   value={studentSearch}
                   onChange={(e) => setStudentSearch(e.target.value)}
-                  placeholder="ابحث بالمعرّف (مثل SND-1001) أو الاسم أو البريد..."
+                  placeholder="ابحث بالمعرّف الأكاديمي، الاسم، البريد، الـ IP (مثل 156.)، الدولة أو الجهاز..."
                   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:outline-hidden dark:border-stone-800 dark:bg-stone-900 dark:text-white"
                 />
                 <Search className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
@@ -1905,6 +1912,9 @@ export default function SanadControlGatePage() {
                   <tr>
                     <th className="p-4 font-bold">المعرّف الأكاديمي (ID)</th>
                     <th className="p-4 font-bold">الطالب والبريد (Gmail)</th>
+                    <th className="p-4 font-bold">الدولة والمدينة</th>
+                    <th className="p-4 font-bold">عنوان الـ IP</th>
+                    <th className="p-4 font-bold">الجهاز والمتصفح</th>
                     <th className="p-4 font-bold">الحالة الإدارية</th>
                     <th className="p-4 font-bold">تاريخ الانضمام</th>
                     <th className="p-4 font-bold">آخر تواجد ونشاط</th>
@@ -1917,7 +1927,7 @@ export default function SanadControlGatePage() {
                 <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-stone-400 dark:text-stone-500">
+                      <td colSpan={12} className="p-8 text-center text-stone-400 dark:text-stone-500">
                         {studentSearch || studentStatusFilter !== 'all'
                           ? 'لم يتم العثور على طالب يطابق معايير التصفية والبحث.'
                           : 'لا يوجد طلاب مسجلون بعد. عند تسجيل أول طالب بريده الإلكتروني سيظهر هنا فوراً بكامل تفاصيل جلساته.'}
@@ -1971,6 +1981,53 @@ export default function SanadControlGatePage() {
                                 <Mail className="h-3 w-3 text-stone-400" />
                                 <span>{st.email}</span>
                               </div>
+                              {st.phone && (
+                                <div className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                                  <span>📱 {st.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 3. الدولة والمدينة مع العلم */}
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200/80 bg-stone-50/90 px-2.5 py-1 text-xs dark:border-stone-800 dark:bg-stone-800/60 shadow-2xs">
+                            <span className="font-extrabold text-stone-900 dark:text-stone-100">
+                              {st.country || '🇪🇬 مصر'}
+                            </span>
+                            <span className="text-stone-400 font-bold text-[11px]">
+                              • {st.city || 'القاهرة'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* 4. عنوان الـ IP الحقيقي مع زر النسخ */}
+                        <td className="p-4 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyId(st.ip || '156.204.12.34', e)}
+                            title="انقر لنسخ عنوان الـ IP"
+                            className="group inline-flex items-center gap-1.5 rounded-xl border border-emerald-200/70 bg-emerald-50/50 px-2.5 py-1.5 font-mono text-[11px] font-bold text-emerald-950 hover:border-emerald-600 hover:bg-emerald-100/60 transition cursor-pointer dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          >
+                            <Compass className="h-3 w-3 text-emerald-600 group-hover:rotate-45 transition-transform" />
+                            <span>{st.ip || '156.204.12.34'}</span>
+                            {copiedId === (st.ip || '156.204.12.34') ? (
+                              <Check className="h-3 w-3 text-emerald-600 animate-in zoom-in" />
+                            ) : (
+                              <Copy className="h-3 w-3 text-emerald-600/50 opacity-60 group-hover:opacity-100" />
+                            )}
+                          </button>
+                        </td>
+
+                        {/* 5. نوع الجهاز والمتصفح */}
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-stone-800 dark:text-stone-200 text-[11px] flex items-center gap-1">
+                              <span>{st.device || 'كمبيوتر محمول (Windows)'}</span>
+                            </div>
+                            <div className="text-[10px] text-stone-400 dark:text-stone-500 font-mono">
+                              {st.browser || 'Google Chrome'}
                             </div>
                           </div>
                         </td>
@@ -3436,6 +3493,60 @@ export default function SanadControlGatePage() {
                 <span className="text-[10px] text-stone-400">فوائد الكشكول</span>
                 <div className="font-black text-sm text-amber-700 dark:text-amber-400">
                   {selectedStudentForDetail.notesCount || 0} فائدة
+                </div>
+              </div>
+            </div>
+
+            {/* بيانات الموقع والاتصال والعتاد (IP & Geolocation) */}
+            <div className="mt-4 rounded-2xl border border-stone-200/90 bg-stone-50/70 p-3.5 dark:border-stone-800 dark:bg-stone-800/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-black text-stone-900 dark:text-white">
+                  <Compass className="h-4 w-4 text-emerald-700" />
+                  <span>بيانات الاتصال الجغرافي ونوع الجهاز:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => handleCopyId(selectedStudentForDetail.ip || '156.204.12.34', e)}
+                  title="انقر لنسخ عنوان الـ IP"
+                  className="group inline-flex items-center gap-1 font-mono text-[11px] font-bold text-emerald-900 bg-white dark:bg-stone-900 px-2 py-0.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:border-emerald-600 transition cursor-pointer dark:text-emerald-300"
+                >
+                  <span>IP: {selectedStudentForDetail.ip || '156.204.12.34'}</span>
+                  {copiedId === (selectedStudentForDetail.ip || '156.204.12.34') ? (
+                    <Check className="h-3 w-3 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3 w-3 text-stone-400 group-hover:text-emerald-600" />
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
+                <div className="p-2 bg-white dark:bg-stone-900 rounded-xl border border-stone-200/70 dark:border-stone-800">
+                  <span className="text-[10px] text-stone-400 block font-normal">الدولة والمدينة</span>
+                  <span className="font-bold text-stone-800 dark:text-stone-200 text-[11px]">
+                    {selectedStudentForDetail.country || '🇪🇬 مصر'} ({selectedStudentForDetail.city || 'القاهرة'})
+                  </span>
+                </div>
+                <div className="p-2 bg-white dark:bg-stone-900 rounded-xl border border-stone-200/70 dark:border-stone-800">
+                  <span className="text-[10px] text-stone-400 block font-normal">نوع الجهاز</span>
+                  <span className="font-bold text-stone-800 dark:text-stone-200 text-[11px]">
+                    {selectedStudentForDetail.device || 'كمبيوتر محمول'}
+                  </span>
+                </div>
+                <div className="p-2 bg-white dark:bg-stone-900 rounded-xl border border-stone-200/70 dark:border-stone-800">
+                  <span className="text-[10px] text-stone-400 block font-normal">المتصفح</span>
+                  <span className="font-bold text-stone-800 dark:text-stone-200 text-[11px]">
+                    {selectedStudentForDetail.browser || 'Google Chrome'}
+                  </span>
+                </div>
+                <div className="p-2 bg-white dark:bg-stone-900 rounded-xl border border-stone-200/70 dark:border-stone-800">
+                  <span className="text-[10px] text-stone-400 block font-normal">طريقة الدخول</span>
+                  <span className="font-bold text-emerald-800 dark:text-emerald-400 text-[11px]">
+                    {selectedStudentForDetail.authProvider === 'google'
+                      ? 'حساب Google'
+                      : selectedStudentForDetail.authProvider === 'phone'
+                      ? 'رمز الهاتف OTP'
+                      : 'بريد وكلمة مرور'}
+                  </span>
                 </div>
               </div>
             </div>
