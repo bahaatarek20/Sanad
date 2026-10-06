@@ -7,9 +7,9 @@ import {
   SCHOLARS_QUOTES,
   QuoteItem,
 } from '@/lib/quotes-data'
-import { RefreshCw, Sparkles, Pause, Play } from 'lucide-react'
+import { RefreshCw, Sparkles, Pause, Play, ChevronRight, ChevronLeft } from 'lucide-react'
 
-const ROTATION_INTERVAL_SECONDS = 12
+const ROTATION_INTERVAL_SECONDS = 25
 
 export default function DynamicQuotesBanner() {
   const [revIndex, setRevIndex] = useState(0)
@@ -26,6 +26,18 @@ export default function DynamicQuotesBanner() {
     setRevIndex(Math.floor(Math.random() * REVELATION_QUOTES.length))
     setSalafIndex(Math.floor(Math.random() * SALAF_QUOTES.length))
     setScholarsIndex(Math.floor(Math.random() * SCHOLARS_QUOTES.length))
+  }, [])
+
+  // الانتقال إلى المقولات السابقة
+  const prevQuotes = useCallback(() => {
+    setIsFading(true)
+    setTimeout(() => {
+      setRevIndex((prev) => (prev - 1 + REVELATION_QUOTES.length) % REVELATION_QUOTES.length)
+      setSalafIndex((prev) => (prev - 1 + SALAF_QUOTES.length) % SALAF_QUOTES.length)
+      setScholarsIndex((prev) => (prev - 1 + SCHOLARS_QUOTES.length) % SCHOLARS_QUOTES.length)
+      setProgress(0)
+      setIsFading(false)
+    }, 280)
   }, [])
 
   // الانتقال إلى المقولات التالية بسلاسة وفخامة
@@ -119,8 +131,17 @@ export default function DynamicQuotesBanner() {
           )}
         </div>
 
-        {/* أزرار التحكم: تحديث يدوي فوري + إيقاف/استئناف */}
-        <div className="flex items-center gap-2">
+        {/* أزرار التحكم: سابق / لاحق + إيقاف/استئناف + تحديث فوري */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={prevQuotes}
+            title="المقولة السابقة"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-emerald-900 hover:bg-stone-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400 dark:hover:text-emerald-300"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
           <button
             type="button"
             onClick={() => setIsPaused((prev) => !prev)}
@@ -133,11 +154,20 @@ export default function DynamicQuotesBanner() {
           <button
             type="button"
             onClick={nextQuotes}
-            title="تبديل إلى مقولات أخرى الآن"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-bold text-stone-700 hover:border-emerald-800 hover:text-emerald-900 hover:bg-stone-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-emerald-400"
+            title="المقولة التالية"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-emerald-900 hover:bg-stone-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400 dark:hover:text-emerald-300"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={nextQuotes}
+            title="تبديل عشوائي لدرر أخرى"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-bold text-stone-700 hover:border-emerald-800 hover:text-emerald-900 hover:bg-stone-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-emerald-400"
           >
             <RefreshCw className={`h-3 w-3 ${isFading ? 'animate-spin' : ''}`} />
-            <span>درر أخرى</span>
+            <span className="hidden sm:inline">درر أخرى</span>
           </button>
         </div>
       </div>

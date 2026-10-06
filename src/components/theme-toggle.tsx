@@ -35,23 +35,25 @@ export default function ThemeToggle() {
     }
   }
 
-  if (!mounted) {
-    return (
-      <div className="h-8 w-8 rounded-xl border border-stone-200/60 bg-white/60 dark:border-stone-800 dark:bg-stone-800" />
-    )
-  }
-
   return (
     <button
       onClick={toggleTheme}
       type="button"
-      title={isDark ? 'التبديل إلى نمط الرقاع النهاري' : 'التبديل إلى نمط القراءة الليلية التراثي'}
-      className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-300/80 bg-white text-stone-700 shadow-2xs hover:border-emerald-700 hover:text-emerald-800 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+      aria-label="تبديل مظهر المنصة"
+      title={isDark ? 'التبديل إلى الوضع النهاري' : 'التبديل إلى الوضع الليلي'}
+      className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-stone-300/80 bg-white text-stone-700 shadow-2xs hover:border-emerald-700 hover:text-emerald-800 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
     >
-      {isDark ? (
-        <Sun className="h-4 w-4 text-amber-400" />
+      {mounted ? (
+        isDark ? (
+          <Sun className="h-4 w-4 text-amber-500" />
+        ) : (
+          <Moon className="h-4 w-4 text-stone-700" />
+        )
       ) : (
-        <Moon className="h-4 w-4 text-stone-600" />
+        <>
+          <Moon className="h-4 w-4 text-stone-700 dark:hidden" />
+          <Sun className="h-4 w-4 text-amber-500 hidden dark:block" />
+        </>
       )}
     </button>
   )

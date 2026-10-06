@@ -4,6 +4,7 @@ import { getStudentProfileData } from '@/lib/student-tracking'
 import { updateProfileAction, changePasswordAction, updatePhoneAction } from './actions'
 import { User, Lock, Sparkles, ArrowLeft, Phone, Mail, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
+import AvatarSelector from '@/components/avatar-selector'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +72,13 @@ export default async function SettingsPage({
           </Link>
         </div>
       </div>
+
+      {/* قسم الصورة الرمزية والشخصية */}
+      <AvatarSelector
+        currentAvatarUrl={studentProfile?.avatarUrl || user.user_metadata?.avatar_url || user.avatarUrl}
+        studentEmail={user.email || ''}
+        studentName={user.user_metadata?.full_name || 'طالب العلم'}
+      />
 
       {/* قسم تعديل الاسم */}
       <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/95 space-y-5">

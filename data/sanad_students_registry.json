@@ -36,8 +36,8 @@
     "name": "بشمهندس بهاء طارق",
     "isBanned": false,
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-04T18:26:31.849Z",
-    "totalStudyMinutes": 754,
+    "lastActive": "2026-10-06T19:59:26.602Z",
+    "totalStudyMinutes": 755,
     "streak": 1,
     "completedCourses": [],
     "completedEpisodesMap": {
@@ -50,7 +50,8 @@
       "2026-09-28": 167,
       "2026-09-29": 460,
       "2026-09-30": 15,
-      "2026-10-04": 46
+      "2026-10-04": 46,
+      "2026-10-06": 1
     },
     "listenedSessions": [
       {
@@ -85,7 +86,7 @@
       }
     ],
     "notesCount": 0,
-    "lastStudiedDate": "2026-10-04",
+    "lastStudiedDate": "2026-10-06",
     "passwordHash": "9f00281e6f8ea02ae9eba5393bb24899ad6140f9c18dc75817828befab6d2412e632ec492d0f5e44bbb7a7d4dfb8b60fbc0ed5b695f582a2a6aff986d0d0c1af",
     "passwordSalt": "0936ba752134526d993d54c7ff17741d",
     "authProvider": "email",

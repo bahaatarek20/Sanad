@@ -54,11 +54,11 @@
       },
       {
         "episodeNum": 6,
-        "title": "المجلس 6",
-        "youtubeUrl": "",
+        "title": "حلية طالب العلم 6 ـ أدب الزمالة وآداب الطالب في حياته العلمية ـ الشيخ أحمد نبيل",
+        "youtubeUrl": "/api/video/sanad_vid_mux3u75y_mp4l_%D8%AD%D9%84%D9%8A%D8%A9_%D8%B7%D8%A7%D9%84%D8%A8_%D8%A7%D9%84%D8%B9%D9%84%D9%85_6_%D9%80_%D8%A3%D8%AF%D8%A8_%D8%A7%D9%84%D8%B2%D9%85%D8%A7%D9%84%D8%A9_%D9%88%D8%A2%D8%AF%D8%A7%D8%A8_%D8%A7%D9%84%D8%B7%D8%A7%D9%84%D8%A8_.mp4",
         "audioUrl": "",
-        "description": "",
-        "videoUrl": ""
+        "description": "فيديو مرفوع: حلية طالب العلم 6 ـ أدب الزمالة وآداب الطالب في حياته العلمية ـ الشيخ أحمد نبيل",
+        "videoUrl": "/api/video/sanad_vid_mux3u75y_mp4l_%D8%AD%D9%84%D9%8A%D8%A9_%D8%B7%D8%A7%D9%84%D8%A8_%D8%A7%D9%84%D8%B9%D9%84%D9%85_6_%D9%80_%D8%A3%D8%AF%D8%A8_%D8%A7%D9%84%D8%B2%D9%85%D8%A7%D9%84%D8%A9_%D9%88%D8%A2%D8%AF%D8%A7%D8%A8_%D8%A7%D9%84%D8%B7%D8%A7%D9%84%D8%A8_.mp4"
       },
       {
         "episodeNum": 7,
@@ -629,9 +629,122 @@
     "instructor": "د. مطلق الجاسر",
     "youtubeId": "PLjpZThbHfMTXZBfxbXILruw_4L-nu129x",
     "isPlaylist": true,
-    "totalLessons": 10,
+    "totalLessons": 14,
     "description": "معرفة العبد ربه ودينه ونبيه محمد ﷺ بالبراهين الجلية من القرآن والسنة.",
-    "episodes": [],
+    "episodes": [
+      {
+        "episodeNum": 1,
+        "title": "البداية في العقيدة - الباب الأول - مقدمات هامة لدراسة العقيدة - شرح مصطف",
+        "youtubeUrl": "/api/video/sanad_vid_mux4cv0x_afrb_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_1_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D9%85%D9%82%D8%AF%D9%85%D8%A7%D8%AA_%D9%87.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4cv0x_afrb_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_1_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D9%85%D9%82%D8%AF%D9%85%D8%A7%D8%AA_%D9%87.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 1 - الباب الأول - مقدمات هامة لدراسة العقيدة - شرح مصطف"
+      },
+      {
+        "episodeNum": 2,
+        "title": "البداية في العقيدة - الباب الأول - توحيد الألوهية والأسماء والصفات - شرح م",
+        "youtubeUrl": "/api/video/sanad_vid_mux4d0nl_qjr6_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_3_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%AA%D9%88%D8%AD%D9%8A%D8%AF_%D8%A7%D9%84.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4d0nl_qjr6_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_3_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%AA%D9%88%D8%AD%D9%8A%D8%AF_%D8%A7%D9%84.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 3 - الباب الأول - توحيد الألوهية والأسماء والصفات - شرح م"
+      },
+      {
+        "episodeNum": 3,
+        "title": "البداية في العقيدة - الباب الأول - أقسام العبادات وأقسام التوسل - شرح مصطف",
+        "youtubeUrl": "/api/video/sanad_vid_mux4djhs_pqtj_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_4_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A3%D9%82%D8%B3%D8%A7%D9%85_%D8%A7%D9%84.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4djhs_pqtj_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_4_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A3%D9%82%D8%B3%D8%A7%D9%85_%D8%A7%D9%84.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 4 - الباب الأول - أقسام العبادات وأقسام التوسل - شرح مصطف"
+      },
+      {
+        "episodeNum": 4,
+        "title": "البداية في العقيدة - الباب الأول - أصول الشرك (السحر والكهانة والتطير) - ش",
+        "youtubeUrl": "/api/video/sanad_vid_mux4dnkx_q13c_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_5_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A3%D8%B5%D9%88%D9%84_%D8%A7%D9%84%D8%B4.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4dnkx_q13c_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_5_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A3%D8%B5%D9%88%D9%84_%D8%A7%D9%84%D8%B4.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 5 - الباب الأول - أصول الشرك (السحر والكهانة والتطير) - ش"
+      },
+      {
+        "episodeNum": 5,
+        "title": "البداية في العقيدة - الباب الأول - الذبح والنذر والاستعاذة ودعاء غير الله",
+        "youtubeUrl": "/api/video/sanad_vid_mux4dsxu_zc48_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_6_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A7%D9%84%D8%B0%D8%A8%D8%AD_%D9%88%D8%A7.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4dsxu_zc48_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_6_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84_-_%D8%A7%D9%84%D8%B0%D8%A8%D8%AD_%D9%88%D8%A7.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 6 - الباب الأول - الذبح والنذر والاستعاذة ودعاء غير الله"
+      },
+      {
+        "episodeNum": 6,
+        "title": "البداية في العقيدة - الباب الثاني - الإيمان بالملائكة - شرح مصطفى زهر (360P",
+        "youtubeUrl": "/api/video/sanad_vid_mux4dwby_zrdy_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_7_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4dwby_zrdy_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_7_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 7 - الباب الثاني - الإيمان بالملائكة - شرح مصطفى زهر(360P"
+      },
+      {
+        "episodeNum": 7,
+        "title": "البداية في العقيدة - الباب الثالث - الإيمان بالكتب - شرح مصطفى زهر",
+        "youtubeUrl": "/api/video/sanad_vid_mux4e13s_zwsc_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_8_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4e13s_zwsc_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_8_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 8 - الباب الثالث - الإيمان بالكتب - شرح مصطفى زهر"
+      },
+      {
+        "episodeNum": 8,
+        "title": "البداية في العقيدة - الباب الرابع - الإيمان بالرسل ومعجزات الأنبياء - شرح",
+        "youtubeUrl": "/api/video/sanad_vid_mux4eear_umx9_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_9_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4eear_umx9_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_9_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7%D9%86.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 9 - الباب الرابع - الإيمان بالرسل ومعجزات الأنبياء - شرح"
+      },
+      {
+        "episodeNum": 9,
+        "title": "البداية في العقيدة - الباب الرابع - خصائص الأنبياء وكرامات الأولياء وحقوق",
+        "youtubeUrl": "/api/video/sanad_vid_mux4eux6_seon_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_10_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9_-_%D8%AE%D8%B5%D8%A7%D8%A6%D8%B5_.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4eux6_seon_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_10_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9_-_%D8%AE%D8%B5%D8%A7%D8%A6%D8%B5_.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 10 - الباب الرابع - خصائص الأنبياء وكرامات الأولياء وحقوق"
+      },
+      {
+        "episodeNum": 10,
+        "title": "البداية في العقيدة - الباب الخامس - علامات الساعة الكبرى 1 - شرح مصطفى زه",
+        "youtubeUrl": "/api/video/sanad_vid_mux4f2cb_7hv9_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_11_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%B9%D9%84%D8%A7%D9%85%D8%A7%D8%AA.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4f2cb_7hv9_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_11_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%B9%D9%84%D8%A7%D9%85%D8%A7%D8%AA.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 11 - الباب الخامس - علامات الساعة الكبرى 1 - شرح مصطفى زه"
+      },
+      {
+        "episodeNum": 11,
+        "title": "البداية في العقيدة - الباب الخامس - علامات الساعة الكبرى 2 وفتنة القبر -",
+        "youtubeUrl": "/api/video/sanad_vid_mux4fe8y_1wex_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_12_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%B9%D9%84%D8%A7%D9%85%D8%A7%D8%AA.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4fe8y_1wex_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_12_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%B9%D9%84%D8%A7%D9%85%D8%A7%D8%AA.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 12 - الباب الخامس - علامات الساعة الكبرى 2 وفتنة القبر -"
+      },
+      {
+        "episodeNum": 12,
+        "title": "البداية في العقيدة - الباب الخامس - الحوض والميزان والشفاعة والمُصِرّ على",
+        "youtubeUrl": "/api/video/sanad_vid_mux4fpzw_t6om_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_13_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%A7%D9%84%D8%AD%D9%88%D8%B6_.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4fpzw_t6om_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_13_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3_-_%D8%A7%D9%84%D8%AD%D9%88%D8%B6_.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 13 - الباب الخامس - الحوض والميزان والشفاعة والمُصِرّ على"
+      },
+      {
+        "episodeNum": 13,
+        "title": "البداية في العقيدة - الباب السادس - الإيمان بالقضاء والقدر - شرح مصطفى زه",
+        "youtubeUrl": "/api/video/sanad_vid_mux4g79l_cr48_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_14_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B3%D8%A7%D8%AF%D8%B3_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4g79l_cr48_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_14_-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B3%D8%A7%D8%AF%D8%B3_-_%D8%A7%D9%84%D8%A5%D9%8A%D9%85%D8%A7.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 14 - الباب السادس - الإيمان بالقضاء والقدر - شرح مصطفى زه"
+      },
+      {
+        "episodeNum": 14,
+        "title": "البداية في العقيدة (الأخيرة) - الباب السادس - مسائل مهمة في القضاء والقدر",
+        "youtubeUrl": "/api/video/sanad_vid_mux4ggr5_wjuu_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_15__%D8%A7%D9%84%D8%A3%D8%AE%D9%8A%D8%B1%D8%A9__-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B3%D8%A7%D8%AF.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux4ggr5_wjuu_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%82%D9%8A%D8%AF%D8%A9_15__%D8%A7%D9%84%D8%A3%D8%AE%D9%8A%D8%B1%D8%A9__-_%D8%A7%D9%84%D8%A8%D8%A7%D8%A8_%D8%A7%D9%84%D8%B3%D8%A7%D8%AF.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: البداية في العقيدة 15 (الأخيرة) - الباب السادس - مسائل مهمة في القضاء والقدر"
+      }
+    ],
     "reversePlaylist": false,
     "pdfUrl": "/api/pdf/sanad_mulxzaiw_gf94_Noor-Book.com__%D8%AB%D9%84%D8%A7%D8%AB%D8%A9_%D8%A7%D9%84%D8%A3%D8%B5%D9%88%D9%84_%D9%88%D8%A3%D8%AF%D9%84%D8%AA%D9%87%D8%A7_2___1_.pdf"
   },
@@ -799,23 +912,56 @@
     "instructor": "الشيخ أحمد نبيل",
     "youtubeId": "PLW_RdzE7AQzJ-j6BRCzZGz4Z771hcn_DF",
     "isPlaylist": true,
-    "totalLessons": 2,
+    "totalLessons": 6,
     "description": "مدخل تأسيسي في أقسام الحديث وصفات الرواة وقواعد القبول والرد.",
     "episodes": [
       {
         "episodeNum": 1,
-        "title": "شرح البداية في علم المصطلح 1 ـ المبادئ العشرة للتعريف بعلم المصطلح ـ الشيخ أحمد نبيل",
-        "youtubeUrl": "/api/video/sanad_vid_mumss1kb_ca5u_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_1_%D9%80_%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%AF%D8%A6_%D8%A7%D9%84%D8%B9%D8%B4%D8%B1%D8%A9.mp4",
-        "videoUrl": "/api/video/sanad_vid_mumss1kb_ca5u_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_1_%D9%80_%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%AF%D8%A6_%D8%A7%D9%84%D8%B9%D8%B4%D8%B1%D8%A9.mp4",
+        "title": "شرح البداية في علم المصطلح 1 ـ المبادئ العشرة للتعريف بعلم المصطلح ـ الشيخ أحمد نبيل(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux3ygm0_breu_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_1_%D9%80_%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%AF%D8%A6_%D8%A7%D9%84%D8%B9%D8%B4%D8%B1%D8%A9.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux3ygm0_breu_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_1_%D9%80_%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%AF%D8%A6_%D8%A7%D9%84%D8%B9%D8%B4%D8%B1%D8%A9.mp4",
         "audioUrl": "",
-        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 1 ـ المبادئ العشرة للتعريف بعلم المصطلح ـ الشيخ أحمد نبيل_HD)"
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 1 ـ المبادئ العشرة للتعريف بعلم المصطلح ـ الشيخ أحمد نبيل(720P HD)"
       },
       {
         "episodeNum": 2,
-        "title": "المجلس 2",
-        "youtubeUrl": "",
+        "title": "شرح البداية في علم المصطلح 2 ـ الصحيح والحسن والضعيف والسند ـ الشيخ أحمد نبيل(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux3ytgs_a436_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_2_%D9%80_%D8%A7%D9%84%D8%B5%D8%AD%D9%8A%D8%AD_%D9%88%D8%A7%D9%84%D8%AD%D8%B3%D9%86_.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux3ytgs_a436_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_2_%D9%80_%D8%A7%D9%84%D8%B5%D8%AD%D9%8A%D8%AD_%D9%88%D8%A7%D9%84%D8%AD%D8%B3%D9%86_.mp4",
         "audioUrl": "",
-        "description": ""
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 2 ـ الصحيح والحسن والضعيف والسند ـ الشيخ أحمد نبيل(720P HD)"
+      },
+      {
+        "episodeNum": 3,
+        "title": "شرح البداية في علم المصطلح 3 ـ المتن والتواتر والآحاد ـ الشيخ أحمد نبيل(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux3z8ux_ghme_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_3_%D9%80_%D8%A7%D9%84%D9%85%D8%AA%D9%86_%D9%88%D8%A7%D9%84%D8%AA%D9%88%D8%A7%D8%AA%D8%B1.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux3z8ux_ghme_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_3_%D9%80_%D8%A7%D9%84%D9%85%D8%AA%D9%86_%D9%88%D8%A7%D9%84%D8%AA%D9%88%D8%A7%D8%AA%D8%B1.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 3 ـ المتن والتواتر والآحاد ـ الشيخ أحمد نبيل(720P HD)"
+      },
+      {
+        "episodeNum": 4,
+        "title": "شرح البداية في علم المصطلح 4 ـ الشاذ والعلة وأقسام السقط من الإسناد ـ الشيخ أحمد نبيل(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux3zoxx_izaz_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_4_%D9%80_%D8%A7%D9%84%D8%B4%D8%A7%D8%B0_%D9%88%D8%A7%D9%84%D8%B9%D9%84%D8%A9_%D9%88.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux3zoxx_izaz_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_4_%D9%80_%D8%A7%D9%84%D8%B4%D8%A7%D8%B0_%D9%88%D8%A7%D9%84%D8%B9%D9%84%D8%A9_%D9%88.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 4 ـ الشاذ والعلة وأقسام السقط من الإسناد ـ الشيخ أحمد نبيل(720P HD)"
+      },
+      {
+        "episodeNum": 5,
+        "title": "شرح البداية في علم المصطلح 5 ـ الضبط والعدالة والاعتبار وطرق التحمل ـ الشيخ أحمد نبيل(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux402ss_zus5_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_5_%D9%80_%D8%A7%D9%84%D8%B6%D8%A8%D8%B7_%D9%88%D8%A7%D9%84%D8%B9%D8%AF%D8%A7%D9%84%D8%A9.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux402ss_zus5_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_5_%D9%80_%D8%A7%D9%84%D8%B6%D8%A8%D8%B7_%D9%88%D8%A7%D9%84%D8%B9%D8%AF%D8%A7%D9%84%D8%A9.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 5 ـ الضبط والعدالة والاعتبار وطرق التحمل ـ الشيخ أحمد نبيل(720P HD)"
+      },
+      {
+        "episodeNum": 6,
+        "title": "شرح البداية في علم المصطلح 6 والأخيرة ـ معرفة الصحابة وحكم العمل بالضعيف وطرق التصنيف في الحديث ـ(720P HD)",
+        "youtubeUrl": "/api/video/sanad_vid_mux40hd1_x2li_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_6_%D9%88%D8%A7%D9%84%D8%A3%D8%AE%D9%8A%D8%B1%D8%A9_%D9%80_%D9%85%D8%B9%D8%B1%D9%81%D8%A9.mp4",
+        "videoUrl": "/api/video/sanad_vid_mux40hd1_x2li_%D8%B4%D8%B1%D8%AD_%D8%A7%D9%84%D8%A8%D8%AF%D8%A7%D9%8A%D8%A9_%D9%81%D9%8A_%D8%B9%D9%84%D9%85_%D8%A7%D9%84%D9%85%D8%B5%D8%B7%D9%84%D8%AD_6_%D9%88%D8%A7%D9%84%D8%A3%D8%AE%D9%8A%D8%B1%D8%A9_%D9%80_%D9%85%D8%B9%D8%B1%D9%81%D8%A9.mp4",
+        "audioUrl": "",
+        "description": "فيديو مرفوع من المجلد: شرح البداية في علم المصطلح 6 والأخيرة ـ معرفة الصحابة وحكم العمل بالضعيف وطرق التصنيف في الحديث ـ(720P HD)"
       }
     ]
   },
@@ -873,7 +1019,16 @@
     "isPlaylist": true,
     "totalLessons": 1,
     "description": "معاقد تعظيم العلم وبيان معالم التحصيل والتأصيل وطرد الفتور والملل.",
-    "episodes": [],
+    "episodes": [
+      {
+        "episodeNum": 1,
+        "title": "",
+        "youtubeUrl": "",
+        "audioUrl": "",
+        "description": "",
+        "videoUrl": ""
+      }
+    ],
     "videoUrl": "/api/video/sanad_vid_mulzbwqm_4v4w_1_%D9%85%D9%86_17___%D8%A8%D8%B1%D9%86%D8%A7%D9%85%D8%AC_%D9%85%D9%81%D8%A7%D8%AA%D8%AD_%D8%A7%D9%84%D8%B7%D9%84%D8%A8___%D8%A7%D9%84%D9%83%D8%AA%D8%A7%D8%A8_%D8%A7%D9%84%D8%A3%D9%88%D9%84__.mp4",
     "reversePlaylist": false
   },

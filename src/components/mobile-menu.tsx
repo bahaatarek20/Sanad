@@ -183,6 +183,7 @@ export default function MobileMenu({
         className={`
           sanad-mobile-drawer
           fixed top-0 bottom-0 right-0 z-50 flex h-full w-[310px] max-w-[85vw] flex-col
+          bg-[#faf8f5] dark:bg-stone-900 text-stone-900 dark:text-stone-100
           border-l border-stone-200/90 shadow-2xl transition-transform duration-300 ease-out
           dark:border-stone-800
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}

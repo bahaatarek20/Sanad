@@ -17,19 +17,12 @@ import {
 } from '@/lib/cloud-db'
 import type { CommunityPost } from '@/components/community-hub'
 
-function generateAnonymousAlias(): string {
-  const titles = [
-    'طالب علم',
-    'باحث في الفقه',
-    'مستفهم في الأصول',
-    'محرر للحديث',
-    'دارس للسان العرب',
-    'مستشكل في النحو',
-    'طالب تأصيل',
-  ]
-  const randomTitle = titles[Math.floor(Math.random() * titles.length)]
+function generateAnonymousAlias(scholarlyId?: string): string {
+  if (scholarlyId && /^\d+$/.test(scholarlyId)) {
+    return `طالب علم #${scholarlyId}`
+  }
   const randomNumber = Math.floor(100 + Math.random() * 900)
-  return `${randomTitle} #${randomNumber}`
+  return `طالب علم #${randomNumber}`
 }
 
 // إنشاء منشور جديد في مجلس المذاكرة (الرسايل التشاركية)
@@ -48,7 +41,9 @@ export async function createCommunityPost(formData: FormData) {
       return { success: false, error: 'محتوى المسألة أو الفائدة مطلوب' }
     }
 
-    const anonymousAlias = generateAnonymousAlias()
+    const { getStudentProfileData } = await import('@/lib/student-tracking')
+    const studentProfile = studentUser.email ? getStudentProfileData(studentUser.email) : null
+    const anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
 
     // 1. الحفظ في السجل المحلي
     const localPost = saveLocalCommunityPost({
@@ -131,7 +126,9 @@ export async function addCommunityReply(postId: string, content: string) {
 
     if (!content.trim()) return { success: false, error: 'محتوى الرد مطلوب' }
 
-    const anonymousAlias = generateAnonymousAlias()
+    const { getStudentProfileData } = await import('@/lib/student-tracking')
+    const studentProfile = studentUser.email ? getStudentProfileData(studentUser.email) : null
+    const anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
 
     // 1. حفظ الرد محلياً
     const localReply = addLocalCommunityReply(postId, {

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  sanad-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sanad-production-web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - STORAGE_PROVIDER=cloudflare-r2
+      - STORAGE_BUCKET=sanad-curriculum-assets
+      - STORAGE_CDN_BASE_URL=https://cdn.sanad.edu
+    networks:
+      - sanad-network
+
+  # محاكي التخزين السحابي S3 للتجربة المحلية أو الاستضافة الذاتية (MinIO Object Storage)
+  sanad-storage-minio:
+    image: minio/minio:latest
+    container_name: sanad-storage-s3
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: sanad_admin
+      MINIO_ROOT_PASSWORD: SanadStrongPassword2026!
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - sanad-network
+
+networks:
+  sanad-network:
+    driver: bridge
+
+volumes:
+  minio_data:

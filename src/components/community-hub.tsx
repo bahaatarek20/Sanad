@@ -70,6 +70,19 @@ export default function CommunityHub({
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set())
 
+  // استرجاع الإعجابات السابقة من التخزين المحلي لمنع التكرار (1 blessing per user)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('sanad_user_upvotes')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          setUserUpvotes(new Set(parsed))
+        }
+      }
+    } catch {}
+  }, [])
+
   // المزامنة الدورية الخلفية كل 45 ثانية لجلب أي مشاركات جديدة للطلاب تلقائياً
   useEffect(() => {
     const timer = setInterval(() => {
@@ -143,21 +156,40 @@ export default function CommunityHub({
     setIsPosting(false)
   }
 
-  // تسجيل إعجاب
+  // تسجيل دعوة بالبركة / إعجاب (مقتصر على مرة واحدة فقط لكل طالب)
   const handleUpvote = async (postId: string) => {
     if (userUpvotes.has(postId)) return
 
-    setUserUpvotes((prev) => new Set([...prev, postId]))
+    const nextUpvotes = new Set([...userUpvotes, postId])
+    setUserUpvotes(nextUpvotes)
+    try {
+      localStorage.setItem('sanad_user_upvotes', JSON.stringify(Array.from(nextUpvotes)))
+    } catch {}
+
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId ? { ...p, upvotes_count: p.upvotes_count + 1 } : p
       )
     )
 
+    // إشعار نظام التشغيل المباشر عبر Web Notification API
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        try {
+          new Notification('منصة سَنَد — مجلس المذاكرة', {
+            body: 'دعوتَ لأخيك طالب العلم بالتوفيق والبركة في مدارسته! 🌟',
+            icon: '/icon.png',
+          })
+        } catch {}
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission()
+      }
+    }
+
     await upvotePost(postId)
   }
 
-  // إضافة رد مجهول
+  // إضافة رد مجهول فوري وتفاؤلي (Optimistic UI Update)
   const handleAddReply = async (postId: string) => {
     setReplyErrors((prev) => ({ ...prev, [postId]: '' }))
 
@@ -171,6 +203,28 @@ export default function CommunityHub({
 
     setReplyInputs((prev) => ({ ...prev, [postId]: '' }))
 
+    const tempReplyId = `temp-${Date.now()}`
+    const optimisticReply: CommunityReply = {
+      id: tempReplyId,
+      post_id: postId,
+      anonymous_alias: 'طالب علم (أنت)',
+      content: text,
+      created_at: new Date().toISOString(),
+    }
+
+    // إضافة فورية في واجهة المستخدم
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            replies: [...(p.replies || []), optimisticReply],
+          }
+        }
+        return p
+      })
+    )
+
     const res = await addCommunityReply(postId, text)
     if (res.success && res.reply) {
       setPosts((prev) =>
@@ -178,13 +232,26 @@ export default function CommunityHub({
           if (p.id === postId) {
             return {
               ...p,
-              replies: [...(p.replies || []), res.reply as CommunityReply],
+              replies: (p.replies || []).map((r) =>
+                r.id === tempReplyId ? (res.reply as CommunityReply) : r
+              ),
             }
           }
           return p
         })
       )
     } else {
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id === postId) {
+            return {
+              ...p,
+              replies: (p.replies || []).filter((r) => r.id !== tempReplyId),
+            }
+          }
+          return p
+        })
+      )
       setReplyErrors((prev) => ({ ...prev, [postId]: res.error || 'تعذر إضافة الرد.' }))
     }
   }

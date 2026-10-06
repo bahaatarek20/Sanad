@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import DynamicQuotesBanner from '@/components/dynamic-quotes-banner'
-import { Sparkles, Compass, BookOpen, Star, ArrowLeft, Flame, Smartphone, Laptop } from 'lucide-react'
+import { Sparkles, Compass, BookOpen, Star, ArrowLeft, Flame } from 'lucide-react'
 import Link from 'next/link'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import { getStudentProfileData } from '@/lib/student-tracking'
@@ -129,39 +129,78 @@ export default async function HomePage() {
           <span className="font-bold text-emerald-800 dark:text-emerald-400">{courses.length} متناً</span> تأصيلياً محققاً.
         </p>
 
-        {/* بطاقات الإحصاءات الأربع التفاعلية */}
-        <div className="flex flex-wrap items-center justify-center gap-3.5 pt-4">
+        {/* بطاقات المؤشرات الأربع التفاعلية الفخمة */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-4xl mx-auto pt-4">
           {/* عدد المتون */}
           <Link
             href="/courses"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-xs hover:scale-105 transition-all dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+            className="group relative flex items-center gap-3 rounded-2xl border border-emerald-200/80 bg-white/90 p-3 sm:p-3.5 shadow-xs hover:border-emerald-600/80 hover:shadow-md hover:-translate-y-0.5 transition-all text-right dark:border-emerald-900/60 dark:bg-stone-900/90 dark:hover:border-emerald-500"
           >
-            <BookOpen className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-            <span>{courses.length} متناً تأصيلياً</span>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 group-hover:scale-110 transition-transform">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs sm:text-sm font-black text-stone-900 dark:text-white truncate">
+                {courses.length} متناً تأصيلياً
+              </span>
+              <span className="block text-[10px] text-emerald-700 dark:text-emerald-400 font-bold truncate">
+                محققة ومضبوطة بالسند
+              </span>
+            </div>
           </Link>
+
           {/* عدد العلوم */}
           <Link
             href="/roadmap"
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-2.5 text-xs font-bold text-amber-900 shadow-xs hover:scale-105 transition-all dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300"
+            className="group relative flex items-center gap-3 rounded-2xl border border-amber-200/80 bg-white/90 p-3 sm:p-3.5 shadow-xs hover:border-amber-600/80 hover:shadow-md hover:-translate-y-0.5 transition-all text-right dark:border-amber-900/60 dark:bg-stone-900/90 dark:hover:border-amber-500"
           >
-            <Compass className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
-            <span>{allCategories.length} علوم شرعية</span>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 group-hover:scale-110 transition-transform">
+              <Compass className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs sm:text-sm font-black text-stone-900 dark:text-white truncate">
+                {allCategories.length} علوم شرعية
+              </span>
+              <span className="block text-[10px] text-amber-700 dark:text-amber-400 font-bold truncate">
+                مسارات منهجية شاملة
+              </span>
+            </div>
           </Link>
+
           {/* ميدان التنافس والهمة */}
           <Link
             href="/community"
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-200/80 bg-rose-50/70 px-4 py-2.5 text-xs font-bold text-rose-900 shadow-xs hover:scale-105 transition-all dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300"
+            className="group relative flex items-center gap-3 rounded-2xl border border-rose-200/80 bg-white/90 p-3 sm:p-3.5 shadow-xs hover:border-rose-600/80 hover:shadow-md hover:-translate-y-0.5 transition-all text-right dark:border-rose-900/60 dark:bg-stone-900/90 dark:hover:border-rose-500"
           >
-            <Flame className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 fill-rose-500 animate-pulse" />
-            <span>ميدان التنافس والهمة 🔥</span>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 group-hover:scale-110 transition-transform">
+              <Flame className="h-5 w-5 fill-rose-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs sm:text-sm font-black text-stone-900 dark:text-white truncate">
+                ميدان الهمة والتنافس
+              </span>
+              <span className="block text-[10px] text-rose-700 dark:text-rose-400 font-bold truncate">
+                لوحة شرف طلبة العلم
+              </span>
+            </div>
           </Link>
+
           {/* مجلس المذاكرة العام */}
           <Link
             href="/community"
-            className="inline-flex items-center gap-2 rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-2.5 text-xs font-bold text-sky-900 shadow-xs hover:scale-105 transition-all dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-300"
+            className="group relative flex items-center gap-3 rounded-2xl border border-sky-200/80 bg-white/90 p-3 sm:p-3.5 shadow-xs hover:border-sky-600/80 hover:shadow-md hover:-translate-y-0.5 transition-all text-right dark:border-sky-900/60 dark:bg-stone-900/90 dark:hover:border-sky-500"
           >
-            <Star className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-            <span>مجلس المذاكرة التشاركي</span>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 group-hover:scale-110 transition-transform">
+              <Star className="h-5 w-5 fill-sky-400 text-sky-600 dark:text-sky-400" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs sm:text-sm font-black text-stone-900 dark:text-white truncate">
+                مجلس المذاكرة
+              </span>
+              <span className="block text-[10px] text-sky-700 dark:text-sky-400 font-bold truncate">
+                مذاكرة تشاركية للأقران
+              </span>
+            </div>
           </Link>
         </div>
 

@@ -110,3 +110,32 @@ export async function updatePhoneAction(formData: FormData) {
   revalidatePath('/', 'layout')
   redirect(`/settings?message=${encodeURIComponent('تم ربط وتوثيق رقم الهاتف بنجاح.')}`)
 }
+
+// 4. تحديث الصورة الرمزية (Avatar)
+export async function updateAvatarAction(formData: FormData) {
+  const email = (formData.get('email') as string)?.trim()
+  const avatarUrl = (formData.get('avatarUrl') as string)?.trim()
+
+  if (!email || !avatarUrl) {
+    return redirect(`/settings?error=${encodeURIComponent('يرجى اختيار صورة رمزية أو رابط صورة صالح.')}`)
+  }
+
+  const { getStudentProfileData, registerOrUpdateStudent } = await import('@/lib/student-tracking')
+  const student = getStudentProfileData(email)
+  const fullName = student?.name || email.split('@')[0]
+
+  registerOrUpdateStudent(email, fullName, { avatarUrl })
+  await setStudentSessionCookie(fullName, email, {
+    phone: student?.phone,
+    authProvider: student?.authProvider || 'email',
+    avatarUrl,
+  })
+
+  try {
+    const supabase = await createClient()
+    await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } })
+  } catch {}
+
+  revalidatePath('/', 'layout')
+  redirect(`/settings?message=${encodeURIComponent('تم حفظ الصورة الرمزية لحسابك بنجاح.')}`)
+}
