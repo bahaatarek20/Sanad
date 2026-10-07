@@ -355,7 +355,8 @@ export async function signInWithGoogleAction() {
 // 8. الدخول السريع بحساب Google (1-Click Google Direct Login)
 export async function quickGoogleDirectLoginAction(formData: FormData) {
   const googleEmail = (formData.get('googleEmail') as string)?.trim().toLowerCase()
-  const googleName = (formData.get('googleName') as string)?.trim() || 'طالب العلم'
+  const rawGoogleName = (formData.get('googleName') as string)?.trim()
+  const googleName = rawGoogleName || (googleEmail ? googleEmail.split('@')[0] : 'طالب العلم')
 
   if (!googleEmail || !googleEmail.includes('@')) {
     return redirect(`/login?mode=google-direct&error=${encodeURIComponent('يرجى إدخال عنوان بريد Google صالح.')}`)
