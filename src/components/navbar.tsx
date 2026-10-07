@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { BookOpen, Compass, Flame, User, LogOut, Users, FileText, LogIn, ShieldCheck, Map, GitFork, Smartphone } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { signOutAction } from '@/app/login/actions'
+import LogoutButton from '@/components/logout-button'
 import ThemeToggle from '@/components/theme-toggle'
 import PomodoroTimer from '@/components/pomodoro-timer'
 import MobileMenu from '@/components/mobile-menu'
@@ -94,16 +95,8 @@ export default async function Navbar() {
                   <User className="h-3.5 w-3.5" />
                 </Link>
 
-                {/* زر الخروج */}
-                <form action={signOutAction} className="inline-flex">
-                  <button
-                    type="submit"
-                    title="تسجيل الخروج"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:hover:text-rose-400 dark:hover:bg-rose-950/50"
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                  </button>
-                </form>
+                {/* زر الخروج الشامل والتبديل لحساب آخر */}
+                <LogoutButton />
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-1">

@@ -308,7 +308,7 @@ export async function resetPasswordAction(formData: FormData) {
 export async function signOutAction() {
   await clearStudentSession()
   revalidatePath('/', 'layout')
-  redirect('/')
+  redirect('/login?loggedOut=true&mode=login')
 }
 
 // 7. تسجيل الدخول عبر Google المباشر (OAuth)

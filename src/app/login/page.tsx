@@ -36,6 +36,7 @@ interface LoginPageProps {
     message?: string
     mode?: string
     email?: string
+    loggedOut?: string
   }>
 }
 
@@ -46,6 +47,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const isExplicitLogin = params.mode === 'login'
   const isGoogleDirect = params.mode === 'google-direct'
   const isPasswordMode = params.mode === 'password' || params.mode === 'signup' || params.mode === 'forgot'
+  const isLoggedOut = params.loggedOut === 'true'
 
   // الزائر الجديد تظهر له واجهة إنشاء الحساب تلقائياً، إلا إذا اختار الدخول
   const [authTab, setAuthTab] = useState<'password' | 'otp'>('password')
@@ -61,30 +63,54 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const [firebaseLoading, setFirebaseLoading] = useState(false)
   const [firebaseError, setFirebaseError] = useState<string | null>(null)
 
-  // 0. التحقق التلقائي الذكي: إذا كان الطالب قد سجل مسبقاً في هذا الجهاز، يدخل للمنصة فوراً دون إعادة طلب التسجيل
+  // الحساب السابق المكتشف على الجهاز (اختياري للاستئناف دون إجبار)
+  const [savedUser, setSavedUser] = useState<{ email: string; fullName?: string } | null>(null)
+
+  // تنظيف جلسة الخروج أو قراءة الحساب السابق اختيارياً دون إجبار على التحويل التلقائي
   useEffect(() => {
     try {
+      const hasLogoutCookie = document.cookie.includes('sanad_explicit_logout=true')
+      if (isLoggedOut || hasLogoutCookie) {
+        localStorage.removeItem('sanad_student_user')
+        localStorage.removeItem('sanad_student_registered')
+        setSavedUser(null)
+        return
+      }
+
       const localSession = localStorage.getItem('sanad_student_user')
       if (localSession) {
         const parsed = JSON.parse(localSession)
         if (parsed?.email) {
-          fetch('/api/auth/restore-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parsed),
-          })
-            .then((res) => {
-              if (res.ok) {
-                window.location.replace('/')
-              }
-            })
-            .catch(() => {
-              window.location.replace('/')
-            })
+          setSavedUser(parsed)
         }
       }
     } catch {}
-  }, [])
+  }, [isLoggedOut])
+
+  const handleResumeSavedUser = async () => {
+    if (!savedUser) return
+    try {
+      const res = await fetch('/api/auth/restore-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savedUser),
+      })
+      if (res.ok) {
+        window.location.replace('/')
+      }
+    } catch {
+      window.location.replace('/')
+    }
+  }
+
+  const handleForgetSavedUser = () => {
+    try {
+      localStorage.removeItem('sanad_student_user')
+      localStorage.removeItem('sanad_student_registered')
+      document.cookie = 'sanad_explicit_logout=true; path=/; max-age=86400;'
+    } catch {}
+    setSavedUser(null)
+  }
 
   // حفظ بيانات الطالب في localStorage عند إرسال نموذج كلمة المرور
   const handlePasswordFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -208,6 +234,47 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               : 'سجل دخولك ببريدك وكلمة المرور لمتابعة مجالسك التأصيلية'}
           </p>
         </div>
+
+        {/* إشعار تأكيد تسجيل الخروج بنجاح */}
+        {isLoggedOut && !params.error && !params.message && (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-700 dark:border-stone-800 dark:bg-stone-800/60 dark:text-stone-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-bold">تم تسجيل الخروج بنجاح. يمكنك الآن تسجيل الدخول بحساب آخر أو إنشاء حساب جديد.</span>
+          </div>
+        )}
+
+        {/* خيار الاستئناف الاختياري للحساب السابق (دون أي إجبار) */}
+        {savedUser && !isLoggedOut && !isVerifyEmailOtp && (
+          <div className="mt-4 rounded-2xl border border-emerald-300/80 bg-emerald-50/70 p-4 dark:border-emerald-800/80 dark:bg-emerald-950/40">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                  حساب مسجل سابقاً على هذا الجهاز: {savedUser.fullName || 'طالب العلم'}
+                </p>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
+                  {savedUser.email}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleResumeSavedUser}
+                  className="flex-1 sm:flex-initial rounded-xl bg-emerald-800 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-900 transition cursor-pointer"
+                >
+                  متابعة بهذا الحساب ←
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForgetSavedUser}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+                  title="الدخول بحساب آخر"
+                >
+                  حساب آخر ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* رسائل التنبيه والنجاح */}
         {params.error && (

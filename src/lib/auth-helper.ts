@@ -132,7 +132,7 @@ export async function setStudentSessionCookie(
   return studentData
 }
 
-// تسجيل خروج الطالب ومسح الجلسة
+// تسجيل خروج الطالب ومسح الجلسة نهائياً
 export async function clearStudentSession() {
   const cookieStore = await cookies()
 
@@ -143,5 +143,20 @@ export async function clearStudentSession() {
     // تجاوز أخطاء Supabase
   }
 
+  cookieStore.set('sanad_student_user', '', {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  })
   cookieStore.delete('sanad_student_user')
+
+  // تعيين علامة خروج صريحة لمنع أي استعادة تلقائية إجبارية
+  cookieStore.set('sanad_explicit_logout', 'true', {
+    path: '/',
+    maxAge: 86400, // 24 ساعة
+    httpOnly: false,
+    sameSite: 'lax',
+  })
 }

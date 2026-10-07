@@ -24,6 +24,7 @@ import {
   Mail,
   Smartphone,
 } from 'lucide-react'
+import LogoutButton from '@/components/logout-button'
 
 interface MobileMenuProps {
   isLoggedIn: boolean
@@ -385,15 +386,9 @@ export default function MobileMenu({
                 <User className="h-4 w-4" />
                 <span>إعدادات الحساب</span>
               </Link>
-            <form action={signOutAction} className="w-full">
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-stone-100 px-4 py-2.5 text-xs font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition cursor-pointer dark:border-stone-800 dark:bg-stone-850 dark:text-stone-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>تسجيل الخروج من الحساب</span>
-              </button>
-            </form>
+            <div className="w-full">
+              <LogoutButton variant="full" showText={true} />
+            </div>
             </>
           ) : (
             <Link

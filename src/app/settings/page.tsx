@@ -2,9 +2,10 @@ import { redirect } from 'next/navigation'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getStudentProfileData } from '@/lib/student-tracking'
 import { updateProfileAction, changePasswordAction, updatePhoneAction } from './actions'
-import { User, Lock, Sparkles, ArrowLeft, Phone, Mail, CheckCircle2 } from 'lucide-react'
+import { User, Lock, Sparkles, ArrowLeft, Phone, Mail, CheckCircle2, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import AvatarSelector from '@/components/avatar-selector'
+import LogoutButton from '@/components/logout-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -265,6 +266,25 @@ export default async function SettingsPage({
           </div>
         </div>
       )}
+
+      {/* قسم تسجيل الخروج وتبديل الحساب */}
+      <div className="rounded-3xl border border-rose-200/80 bg-rose-50/40 p-6 shadow-sm dark:border-rose-950/60 dark:bg-rose-950/20 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/40">
+            <LogOut className="h-4 w-4 text-rose-700 dark:text-rose-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-black text-stone-900 dark:text-white">تسجيل الخروج والتبديل لحساب آخر</h2>
+            <p className="text-xs text-stone-500 dark:text-stone-400">
+              إنهاء جلسة الحساب الحالي بأمان للدخول بحساب طالب آخر أو إنشاء حساب جديد
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <LogoutButton variant="full" showText={true} />
+        </div>
+      </div>
     </div>
   )
 }

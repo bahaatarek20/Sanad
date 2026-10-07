@@ -1,5 +1,13 @@
 [
   {
+    "type": "register",
+    "studentEmail": "bhaaljml66@gmail.com",
+    "studentName": "مي طارق",
+    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-1003] من 🇪🇬 مصر (IP: 156.204.12.34)",
+    "id": "ev_1791330362876_c2cd",
+    "timestamp": "2026-10-06T23:46:02.876Z"
+  },
+  {
     "type": "listen",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "bhaaljml480",

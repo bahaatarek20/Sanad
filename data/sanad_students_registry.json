@@ -1,7 +1,71 @@
 [
   {
-    "id": "student_1790470821796_fqawb",
+    "id": "student_1791330362861_vfqfa",
+    "scholarlyId": "SND-1003",
+    "email": "bhaaljml66@gmail.com",
+    "name": "مي طارق",
+    "authProvider": "email",
+    "ip": "156.204.12.34",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "القاهرة",
+    "device": "كمبيوتر محمول (Windows)",
+    "browser": "Google Chrome",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "registeredAt": "2026-10-06T23:46:02.861Z",
+    "lastActive": "2026-10-07T00:00:34.649Z",
+    "totalStudyMinutes": 5,
+    "streak": 2,
+    "completedCourses": [],
+    "completedEpisodesMap": {},
+    "dailyStudyLog": {
+      "2026-10-06": 4,
+      "2026-10-07": 1
+    },
+    "listenedSessions": [],
+    "notesCount": 0,
+    "isBanned": false,
+    "lastStudiedDate": "2026-10-07"
+  },
+  {
+    "id": "student_1790473248076_cpkmr",
     "scholarlyId": "SND-1001",
+    "email": "bhaaljml48@gmail.com",
+    "name": "Bahaa Tarek",
+    "isBanned": false,
+    "registeredAt": "2026-09-27T01:40:48.076Z",
+    "lastActive": "2026-09-27T02:08:58.202Z",
+    "totalStudyMinutes": 33,
+    "streak": 1,
+    "completedCourses": [],
+    "completedEpisodesMap": {
+      "bidayat-al-mutafaqqih": []
+    },
+    "dailyStudyLog": {
+      "2026-09-27": 33
+    },
+    "listenedSessions": [
+      {
+        "courseSlug": "bidayat-al-mutafaqqih",
+        "courseTitle": "بداية المتفقه",
+        "episodeNum": 1,
+        "timestamp": "2026-09-27T01:54:59.972Z"
+      }
+    ],
+    "notesCount": 0,
+    "passwordHash": "dac48859dd7c54eadec361a8bba3c1e3ac97fa3b54debbdf67df7968d5297876a1da0fab585cbcff9b03e3da8f6d38d7c3fca4f0104885eafdca5eaa3c7c28d3",
+    "passwordSalt": "bd9e68397e4f9c5760bcc8fe62f21339",
+    "lastStudiedDate": "2026-09-27",
+    "ip": "156.204.88.92",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "الجيزة",
+    "device": "كمبيوتر محمول (Windows)",
+    "browser": "Microsoft Edge"
+  },
+  {
+    "id": "student_1790470821796_fqawb",
+    "scholarlyId": "SND-1002",
     "email": "bhaaljml480@gmail.com",
     "name": "بشمهندس بهاء طارق",
     "isBanned": false,
@@ -66,71 +130,7 @@
     "country": "🇪🇬 مصر",
     "countryCode": "EG",
     "city": "القاهرة",
-    "device": "كمبيوتر محمول (Windows)",
-    "browser": "Google Chrome",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-  },
-  {
-    "id": "student_1790473248076_cpkmr",
-    "scholarlyId": "SND-1002",
-    "email": "bhaaljml48@gmail.com",
-    "name": "Bahaa Tarek",
-    "isBanned": false,
-    "registeredAt": "2026-09-27T01:40:48.076Z",
-    "lastActive": "2026-09-27T02:08:58.202Z",
-    "totalStudyMinutes": 33,
-    "streak": 1,
-    "completedCourses": [],
-    "completedEpisodesMap": {
-      "bidayat-al-mutafaqqih": []
-    },
-    "dailyStudyLog": {
-      "2026-09-27": 33
-    },
-    "listenedSessions": [
-      {
-        "courseSlug": "bidayat-al-mutafaqqih",
-        "courseTitle": "بداية المتفقه",
-        "episodeNum": 1,
-        "timestamp": "2026-09-27T01:54:59.972Z"
-      }
-    ],
-    "notesCount": 0,
-    "passwordHash": "dac48859dd7c54eadec361a8bba3c1e3ac97fa3b54debbdf67df7968d5297876a1da0fab585cbcff9b03e3da8f6d38d7c3fca4f0104885eafdca5eaa3c7c28d3",
-    "passwordSalt": "bd9e68397e4f9c5760bcc8fe62f21339",
-    "lastStudiedDate": "2026-09-27",
-    "authProvider": "email",
-    "ip": "156.204.88.92",
-    "country": "🇪🇬 مصر",
-    "countryCode": "EG",
-    "city": "الجيزة",
-    "device": "كمبيوتر محمول (Windows)",
-    "browser": "Microsoft Edge",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
-  },
-  {
-    "id": "student_1790694776796_phone",
-    "scholarlyId": "SND-1003",
-    "email": "201012728516@student.sanad.edu",
-    "name": "طالب العلم (+201012728516)",
-    "phone": "+201012728516",
-    "isBanned": false,
-    "authProvider": "phone",
-    "registeredAt": "2026-09-29T13:18:29.718Z",
-    "lastActive": "2026-09-29T15:12:56.811Z",
-    "totalStudyMinutes": 0,
-    "streak": 0,
-    "completedCourses": [],
-    "completedEpisodesMap": {},
-    "dailyStudyLog": {},
-    "listenedSessions": [],
-    "notesCount": 0,
-    "ip": "156.204.12.34",
-    "country": "🇪🇬 مصر",
-    "countryCode": "EG",
-    "city": "القاهرة",
     "device": "هاتف ذكي (Android)",
-    "browser": "Google Chrome Mobile",
-    "userAgent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.39 Mobile Safari/537.36"
+    "browser": "Google Chrome"
   }
 ]
