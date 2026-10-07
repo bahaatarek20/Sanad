@@ -9,6 +9,32 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+async function verifySafeMediaFile(filePath: string): Promise<boolean> {
+  try {
+    const fd = await fs.promises.open(filePath, 'r')
+    const headerBuf = Buffer.alloc(32)
+    await fd.read(headerBuf, 0, 32, 0)
+    await fd.close()
+
+    const ascii = headerBuf.toString('ascii')
+    const hex = headerBuf.toString('hex')
+
+    // حظر البرمجيات التنفيذية والسكربتات الخبيثة (MZ, ELF, Shebang, PHP, Script tags)
+    if (
+      ascii.startsWith('MZ') ||
+      hex.startsWith('7f454c46') ||
+      ascii.startsWith('#!') ||
+      ascii.startsWith('<?php') ||
+      ascii.includes('<script')
+    ) {
+      return false
+    }
+    return true
+  } catch {
+    return true
+  }
+}
+
 export async function POST(req: Request) {
   try {
     // تحقق أمني حاسم: لا يُسمح برفع الفيديوهات ومجالس المتون إلا للمشرف العام فقط
@@ -105,6 +131,16 @@ export async function POST(req: Request) {
       // نقل فوري للملف المؤقت إلى المكان النهائي
       await fs.promises.rename(partFilePath, dataFilePath)
 
+      // فحص البصمة السحرية للتأكد من خلوه من أي برمجيات تنفيذية
+      const isSafe = await verifySafeMediaFile(dataFilePath)
+      if (!isSafe) {
+        await fs.promises.unlink(dataFilePath).catch(() => {})
+        return NextResponse.json(
+          { success: false, error: 'أمان الرفع: تم حظر الملف لاحتوائه على ترويسة تنفيذية أو برمجية غير مسموح بها' },
+          { status: 400 }
+        )
+      }
+
       let finalSize = 0
       try {
         const stat = await fs.promises.stat(dataFilePath)
@@ -196,6 +232,16 @@ export async function POST(req: Request) {
       const stat = await fs.promises.stat(dataFilePath)
       finalSize = stat.size
     } catch {}
+
+    // فحص البصمة السحرية للتأكد من خلوه من أي برمجيات تنفيذية
+    const isSafe = await verifySafeMediaFile(dataFilePath)
+    if (!isSafe) {
+      await fs.promises.unlink(dataFilePath).catch(() => {})
+      return NextResponse.json(
+        { success: false, error: 'أمان الرفع: تم حظر الملف لاحتوائه على ترويسة تنفيذية أو برمجية غير مسموح بها' },
+        { status: 400 }
+      )
+    }
 
       const fileUrl = `/api/video/${encodeURIComponent(safeFileName)}`
 

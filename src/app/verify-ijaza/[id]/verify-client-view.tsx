@@ -226,7 +226,11 @@ export default function VerifyIjazaClientView({
           <div className="flex flex-col sm:flex-row items-center gap-6 p-5 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/60 dark:border-amber-900/40 rounded-2xl">
             <div className="bg-white p-3 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm shrink-0">
               <QRCodeSvg
-                value={`https://sanad.edu/verify-ijaza/${encodeURIComponent(cert.id)}`}
+                value={
+                  typeof window !== 'undefined'
+                    ? `${window.location.origin}/verify-ijaza/${encodeURIComponent(cert.id)}`
+                    : `https://sanad-edu1.vercel.app/verify-ijaza/${encodeURIComponent(cert.id)}`
+                }
                 size={110}
               />
             </div>

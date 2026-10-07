@@ -217,7 +217,7 @@ export async function refreshAdminSessionCookie(): Promise<boolean> {
       maxAge: 60 * 60 * 24 * 30, // 30 يوماً
       httpOnly: true,
       sameSite: 'lax',
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
     })
 
     cookieStore.set('sanad_is_platform_owner', 'true', {
@@ -291,7 +291,7 @@ export async function authenticateAdmin(passcode: string, identifier = 'default'
     maxAge: 60 * 60 * 24 * 30, // 30 يوماً متواصلة
     httpOnly: true,
     sameSite: 'lax',
-    secure: false, // متوافق مع HTTP و HTTPS لتفادي رفض المتصفحات حفظ الكوكي
+    secure: process.env.NODE_ENV === 'production',
   })
 
   // علامة دائمة تميز متصفح صاحب المنصة لاستثنائه قطعياً من عداد الزيارات والإحصائيات

@@ -183,6 +183,9 @@ const SCHOLARLY_QUOTES: ScholarlyQuote[] = [
 
 function playNotificationChime() {
   try {
+    if (typeof window !== 'undefined' && localStorage.getItem('sanad_notify_sound_enabled') === 'false') {
+      return
+    }
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     if (!AudioCtx) return
     const ctx = new AudioCtx()
@@ -230,9 +233,15 @@ export default function ScholarlyNotification() {
     let isCancelled = false
     let autoHideTimer: NodeJS.Timeout | null = null
 
-    // 1. فحص الإعلان الإداري الحي من الخادم مباشرة (يظهر فقط إذا كان جديداً وغير معروض من قبل)
+    // 1. فحص الإعلان الإداري الحي من الخادم مباشرة (يظهر فقط إذا كان مفعّلاً في الإعدادات وجديداً)
     const checkLiveBroadcast = async () => {
+      const broadcastsEnabled = typeof window === 'undefined' || localStorage.getItem('sanad_notify_broadcasts_enabled') !== 'false'
       try {
+        if (!broadcastsEnabled) {
+          // المشرف أو الطالب عطل الإعلانات الإدارية من الإعدادات
+          return
+        }
+
         const res = await fetch('/api/broadcast', { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
@@ -281,6 +290,9 @@ export default function ScholarlyNotification() {
 
       // 2. إشعارات شحذة الهمة: فاصل زمني هادئ ومريح جداً (15 دقيقة على الأقل)
       try {
+        if (typeof window !== 'undefined' && localStorage.getItem('sanad_notify_quotes_enabled') === 'false') {
+          return // الطالب عطل ومضات شحذة الهمم من صفحة الإعدادات
+        }
         const lastQuoteTime = parseInt(localStorage.getItem('sanad_last_quote_time') || '0', 10)
         const now = Date.now()
         const COOLDOWN_MS = 15 * 60 * 1000 // 15 دقيقة كاملة بين كل إشعار وآخر

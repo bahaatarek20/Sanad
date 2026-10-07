@@ -276,8 +276,8 @@ export async function verifyPhoneOtp(
     // Fallback to internal verification
   }
 
-  // 3. الفحص الداخلي الاحتياطي
-  const isMasterDevCode = code === '123456'
+  // 3. الفحص الداخلي الاحتياطي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
+  const isMasterDevCode = process.env.NODE_ENV !== 'production' && code === '123456'
 
   if (!record && !isMasterDevCode) {
     return {

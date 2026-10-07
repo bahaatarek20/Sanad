@@ -55,11 +55,13 @@ import {
   ArrowUpRight,
   ArrowLeft,
   GitBranch,
+  HelpCircle,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
 import { resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import ScholarlyStationsModal from '@/components/scholarly-stations-modal'
 import VerifiedDigitalIjaza from '@/components/verified-digital-ijaza'
+import CourseQuizModal from '@/components/course-quiz-modal'
 import { issueCourseCertificateAction } from '@/app/actions/certificate-actions'
 import { VerifiedCertificate } from '@/lib/certificate-service'
 import SanadPdfReaderModal from '@/components/sanad-pdf-reader-modal'
@@ -131,30 +133,16 @@ export default function ClassroomView({
   const hasUncompletedPrereqs = uncompletedPrerequisites.length > 0
   const allPrereqsDone = hasPrerequisites && uncompletedPrerequisites.length === 0
   const [isProgressionOpen, setIsProgressionOpen] = useState(true)
+  const [isQuizOpen, setIsQuizOpen] = useState(false)
 
-  // فتح وإصدار الإجازة الموثقة مباشرة
+  // فتح وإصدار الإجازة الموثقة مباشرة أو فحص استحقاقها عبر اختبار الضبط (80%)
   const handleOpenDirectIjaza = async () => {
-    setIsIssuingDirectIjaza(true)
-    try {
-      const studentName = 'طالب العلم'
-      const res = await issueCourseCertificateAction(currentCourse.slug, studentName)
-      if (res.success && res.certificate) {
-        const cert = res.certificate
-        setDirectIjazaCert(cert)
-        setIsDirectIjazaOpen(true)
-        try {
-          const localCerts = localStorage.getItem('sanad_my_certificates')
-          const certsList = localCerts ? JSON.parse(localCerts) : []
-          if (!certsList.some((c: any) => c.id === cert.id)) {
-            localStorage.setItem('sanad_my_certificates', JSON.stringify([cert, ...certsList]))
-          }
-        } catch {}
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsIssuingDirectIjaza(false)
+    if (directIjazaCert) {
+      setIsDirectIjazaOpen(true)
+      return
     }
+    // فتح اختبار الضبط أولاً للتحقق العلمي قبل منح الإجازة
+    setIsQuizOpen(true)
   }
 
   // 1. أنماط المشغل الحديثة للمنصات التعليمية: cinema (المشغل المدمج للقاعة) أو audio (المشغل الصوتي عالي التركيز)
@@ -805,6 +793,16 @@ export default function ClassroomView({
           >
             <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <span>خلاصة ومراجعة سريعة ⚡</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsQuizOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-300/80 bg-emerald-50/80 px-3.5 py-2 text-xs font-black text-emerald-950 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+            title="اختبار ضبط مسائل المتن واستحقاق الإجازة الموثقة (نسبة الاجتياز 80%)"
+          >
+            <HelpCircle className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+            <span>اختبار الضبط 📝</span>
           </button>
 
           <button
@@ -2019,6 +2017,24 @@ export default function ClassroomView({
           author={currentCourse.author}
         />
       )}
+
+      {/* نافذة اختبار التحقق والضبط المنهجي (حد الاجتياز 80%) */}
+      <CourseQuizModal
+        course={currentCourse}
+        studentName="طالب العلم"
+        isOpen={isQuizOpen}
+        onClose={() => setIsQuizOpen(false)}
+        onCertificationIssued={(cert) => {
+          setDirectIjazaCert(cert)
+          try {
+            const localCerts = localStorage.getItem('sanad_my_certificates')
+            const certsList = localCerts ? JSON.parse(localCerts) : []
+            if (!certsList.some((c: any) => c.id === cert.id)) {
+              localStorage.setItem('sanad_my_certificates', JSON.stringify([cert, ...certsList]))
+            }
+          } catch {}
+        }}
+      />
 
       {/* نافذة المراجعة السريعة وأهم مسائل المتن */}
       <MatnQuickBriefModal

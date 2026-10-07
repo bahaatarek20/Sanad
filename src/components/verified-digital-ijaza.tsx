@@ -41,7 +41,7 @@ export default function VerifiedDigitalIjaza({
     }
   }, [])
 
-  const verifyUrl = `${currentOrigin || 'https://sanad.edu'}/verify-ijaza/${encodeURIComponent(certificate.id)}`
+  const verifyUrl = `${currentOrigin || 'https://sanad-edu1.vercel.app'}/verify-ijaza/${encodeURIComponent(certificate.id)}`
 
   const handleCopyLink = () => {
     if (navigator?.clipboard) {

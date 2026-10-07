@@ -25,6 +25,7 @@ import {
   Smartphone,
 } from 'lucide-react'
 import LogoutButton from '@/components/logout-button'
+import PwaInstallButton from '@/components/pwa-install-button'
 
 interface MobileMenuProps {
   isLoggedIn: boolean
@@ -338,6 +339,9 @@ export default function MobileMenu({
             <p className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               أدوات وتفضيلات
             </p>
+
+            {/* زر تثبيت تطبيق سَنَد المباشر */}
+            <PwaInstallButton variant="full" />
 
             {/* زر تبديل النمط الليلي / النهاري */}
             {mounted && (

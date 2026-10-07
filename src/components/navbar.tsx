@@ -8,6 +8,7 @@ import PomodoroTimer from '@/components/pomodoro-timer'
 import MobileMenu from '@/components/mobile-menu'
 import AiTriggerButton from '@/components/ai-trigger-button'
 import InboxDropdown from '@/components/inbox-dropdown'
+import PwaInstallButton from '@/components/pwa-install-button'
 import { getStudentProfileData } from '@/lib/student-tracking'
 
 export default async function Navbar() {
@@ -69,8 +70,9 @@ export default async function Navbar() {
           {/* فاصل رأسي خفيف */}
           <div className="hidden sm:block h-4 w-px bg-stone-200 dark:bg-stone-800" />
 
-          {/* التفضيلات والحساب */}
+          {/* التفضيلات والحساب وتثبيت التطبيق */}
           <div className="flex items-center gap-1">
+            <PwaInstallButton />
             <ThemeToggle />
             <InboxDropdown />
 

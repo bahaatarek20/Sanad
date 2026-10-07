@@ -153,8 +153,8 @@ export async function verifyOtpCode(
     // متابعة الفحص عبر الـ Store الداخلي
   }
 
-  // فحص الرمز السري الداخلي
-  const isMasterDevCode = cleanCode === '123456'
+  // فحص الرمز السري الداخلي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
+  const isMasterDevCode = process.env.NODE_ENV !== 'production' && cleanCode === '123456'
 
   if (!record && !isMasterDevCode) {
     return {

@@ -43,6 +43,7 @@ interface SanadVideoPlayerProps {
   src: string
   title: string
   subtitle?: string
+  subtitlesUrl?: string
   currentEpisodeIndex: number
   totalLessonsCount: number
   isCompleted?: boolean
@@ -63,6 +64,7 @@ export default function SanadVideoPlayer({
   src,
   title,
   subtitle,
+  subtitlesUrl,
   currentEpisodeIndex,
   totalLessonsCount,
   autoAdvanceNext = true,
@@ -105,6 +107,7 @@ export default function SanadVideoPlayer({
   const [hoverPosition, setHoverPosition] = useState<number | null>(null)
   const [isPiPActive, setIsPiPActive] = useState(false)
   const [isLooping, setIsLooping] = useState(false)
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true)
 
   // النوافذ المنبثقة والقوائم
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
@@ -954,7 +957,17 @@ export default function SanadVideoPlayer({
             }
           }}
           className="h-full w-full object-contain pointer-events-none transition-[filter] duration-300"
-        />
+        >
+          {subtitlesUrl && subtitlesEnabled && (
+            <track
+              kind="subtitles"
+              src={subtitlesUrl}
+              srcLang="ar"
+              label="العربية"
+              default
+            />
+          )}
+        </video>
 
         {/* واجهة استدراك الخطأ الذكية والشاملة لمنع تعطل المنصة نهائياً */}
         {hasPlaybackError && (
@@ -1523,6 +1536,25 @@ export default function SanadVideoPlayer({
                 </div>
               )}
             </div>
+
+            {/* زر تشغيل/إيقاف التفريغ النصي والترجمة (CC) */}
+            {subtitlesUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSubtitlesEnabled(!subtitlesEnabled)
+                  showFeedback(subtitlesEnabled ? 'تم إيقاف التفريغ النصي' : 'تم تفعيل التفريغ النصي')
+                }}
+                title={subtitlesEnabled ? 'إخفاء التفريغ النصي (CC)' : 'إظهار التفريغ النصي (CC)'}
+                className={`flex h-8 px-2 items-center justify-center rounded-xl text-xs font-black transition cursor-pointer border ${
+                  subtitlesEnabled
+                    ? 'bg-amber-400 text-stone-950 border-amber-300 font-bold shadow-md shadow-amber-400/20'
+                    : 'bg-stone-900/80 hover:bg-black text-stone-400 hover:text-white border-stone-700/80'
+                }`}
+              >
+                CC
+              </button>
+            )}
 
             {/* زر وقائمة سرعة التشغيل الموسعة حتى 3x وأكثر */}
             <div className="relative">

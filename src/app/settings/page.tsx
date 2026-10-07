@@ -6,6 +6,7 @@ import { User, Lock, Sparkles, ArrowLeft, Phone, Mail, CheckCircle2, LogOut } fr
 import Link from 'next/link'
 import AvatarSelector from '@/components/avatar-selector'
 import LogoutButton from '@/components/logout-button'
+import NotificationSettings from '@/components/notification-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -243,6 +244,9 @@ export default async function SettingsPage({
           </Link>
         </div>
       </div>
+
+      {/* قسم تفضيلات الإشعارات والتنبيهات */}
+      <NotificationSettings />
 
       {/* إحصاءات سريعة للطالب */}
       {studentProfile && (
