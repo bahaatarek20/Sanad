@@ -268,13 +268,19 @@ h1, h2, h3, h4, .font-amiri, .scholarly-heading {
   }
 }
 
-/* درج القائمة للجوال - خلفية مصمتة مانعة للشفافية والتداخل البصري */
+/* درج القائمة للجوال - خلفية مصمتة مانعة للشفافية والتداخل البصري تماماً */
+.sanad-drawer-portal {
+  isolation: isolate !important;
+}
+
 .sanad-mobile-drawer {
-  background-color: #faf8f5 !important;
+  background-color: #faf7f2 !important;
   color: #1c1917 !important;
+  box-shadow: -10px 0 35px -5px rgba(0, 0, 0, 0.25) !important;
 }
 
 .dark .sanad-mobile-drawer {
   background-color: #161412 !important;
   color: #fafaf9 !important;
+  box-shadow: -10px 0 35px -5px rgba(0, 0, 0, 0.6) !important;
 }

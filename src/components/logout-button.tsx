@@ -64,13 +64,13 @@ export default function LogoutButton({
         type="button"
         onClick={handleLogout}
         disabled={isLoggingOut}
-        className={className || 'flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-stone-100 px-4 py-2.5 text-xs font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition cursor-pointer dark:border-stone-800 dark:bg-stone-850 dark:text-stone-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-300'}
+        className={className || 'flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200/80 bg-rose-50/80 px-4 py-2.5 text-xs font-bold text-rose-800 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-900 transition-all cursor-pointer dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50 shadow-2xs'}
         title="تسجيل الخروج من الحساب"
       >
         {isLoggingOut ? (
           <Loader2 className="h-4 w-4 animate-spin text-rose-600" />
         ) : (
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4 text-rose-600 dark:text-rose-400" />
         )}
         <span>{isLoggingOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج من الحساب'}</span>
       </button>
