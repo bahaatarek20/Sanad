@@ -17,9 +17,6 @@ import {
   Inbox,
   Eye,
   EyeOff,
-  Copy,
-  Check,
-  ExternalLink,
 } from 'lucide-react'
 import { auth, googleProvider } from '@/lib/firebase/config'
 import { signInWithPopup } from 'firebase/auth'
@@ -48,7 +45,8 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
   const isVerifyEmailOtp = params.mode === 'verify-otp'
   const isExplicitLogin = params.mode === 'login'
-  const isGoogleDirect = params.mode === 'google-direct'
+  const [directGoogleMode, setDirectGoogleMode] = useState(false)
+  const isGoogleDirect = params.mode === 'google-direct' || directGoogleMode
   const isPasswordMode = params.mode === 'password' || params.mode === 'signup' || params.mode === 'forgot'
   const isLoggedOut = params.loggedOut === 'true'
 
@@ -65,9 +63,6 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   // حالات Firebase Auth للتحقق والمصادقة
   const [firebaseLoading, setFirebaseLoading] = useState(false)
   const [firebaseError, setFirebaseError] = useState<string | null>(null)
-  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null)
-  const [copiedDomain, setCopiedDomain] = useState(false)
-  const [showDomainSteps, setShowDomainSteps] = useState(false)
 
   // الحساب السابق المكتشف على الجهاز (اختياري للاستئناف دون إجبار)
   const [savedUser, setSavedUser] = useState<{ email: string; fullName?: string } | null>(null)
@@ -178,22 +173,13 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
       if (fbErr.code === 'auth/popup-closed-by-user') {
-        setFirebaseError('تم إغلاق نافذة تسجيل الدخول بـ Google قبل اكتمال العملية.')
-      } else if (fbErr.code === 'auth/unauthorized-domain') {
-        const host = typeof window !== 'undefined' ? window.location.hostname : 'sanad-edu1.vercel.app'
-        setUnauthorizedDomain(host)
-        setFirebaseError('unauthorized-domain')
-      } else if (
-        fbErr.code === 'auth/configuration-not-found' ||
-        fbErr.code === 'auth/operation-not-allowed'
-      ) {
-        const host = typeof window !== 'undefined' ? window.location.hostname : 'sanad-edu1.vercel.app'
-        setUnauthorizedDomain(host)
-        setFirebaseError('unauthorized-domain')
-      } else if (fbErr.code === 'auth/popup-blocked') {
-        setFirebaseError('المتصفح حظر النافذة المنبثقة، يرجى السماح بالنوافذ المنبثقة أو استخدام خيار الدخول المباشر أدناه.')
-      } else {
-        setFirebaseError(fbErr.message || 'تعذر تسجيل الدخول بحساب Google')
+        // المستخدم أغلق نافذة Google بنفسه، نلغي التحميل بهدوء دون أي رسالة مزعجة
+        return
+      }
+      // في حال واجه المتصفح حظر النوافذ المنبثقة أو أي تعذر تقني، نتحول فوراً وبسلاسة إلى نموذج الدخول المباشر بحساب Google
+      setDirectGoogleMode(true)
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '/login?mode=google-direct')
       }
     } finally {
       setFirebaseLoading(false)
@@ -312,76 +298,12 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           </div>
         )}
 
-        {firebaseError === 'unauthorized-domain' && unauthorizedDomain ? (
-          <div className="mt-4 rounded-2xl border border-amber-300/90 bg-amber-50/90 p-4 text-xs text-amber-950 dark:border-amber-900/80 dark:bg-amber-950/40 dark:text-amber-200 space-y-3.5 shadow-sm">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <div className="space-y-1">
-                <h4 className="font-bold text-amber-900 dark:text-amber-200">
-                  تنبيه ترخيص نطاق النشر في Firebase (Authorized Domain)
-                </h4>
-                <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed">
-                  النطاق الحالي (<code className="font-mono font-bold bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-300">{unauthorizedDomain}</code>) يحتاج إلى إضافة سريعة في لوحة Firebase Console للسماح بالنوافذ المنبثقة، أو يمكنك المتابعة بالدخول المباشر السريع الآن دون أي انتظار!
-                </p>
-              </div>
-            </div>
-
-            {/* زر الحل الفوري السريع للمستخدم والطالب */}
-            <Link
-              href="/login?mode=google-direct"
-              className="flex items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-800 to-teal-900 px-4 py-2.5 text-xs font-black text-white shadow-md hover:from-emerald-900 hover:to-teal-950 transition cursor-pointer"
-            >
-              <Sparkles className="h-4 w-4 text-amber-300" />
-              <span>⚡ الدخول الفوري السريع بحساب Google الآن</span>
-            </Link>
-
-            {/* خطوات ترخيص النطاق للمهندس بهاء (المشرف) */}
-            <div className="border-t border-amber-200/80 dark:border-amber-900/60 pt-2.5 space-y-2">
-              <button
-                type="button"
-                onClick={() => setShowDomainSteps(!showDomainSteps)}
-                className="flex items-center justify-between w-full text-[11px] font-bold text-amber-900 hover:text-amber-950 dark:text-amber-300 cursor-pointer"
-              >
-                <span>خطوات ترخيص هذا النطاق للمهندس بهاء طارق (المشرف):</span>
-                <span>{showDomainSteps ? '▲ إخفاء' : '▼ إظهار الخطوات (30 ثانية)'}</span>
-              </button>
-
-              {showDomainSteps && (
-                <div className="rounded-xl bg-white/80 dark:bg-stone-900/80 p-3 border border-amber-200 dark:border-amber-900 space-y-2 text-[11px] text-stone-700 dark:text-stone-300 animate-in fade-in">
-                  <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 font-mono text-[11px]">
-                    <span className="truncate select-all">{unauthorizedDomain}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(unauthorizedDomain)
-                          setCopiedDomain(true)
-                          setTimeout(() => setCopiedDomain(false), 2000)
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 rounded bg-emerald-800 text-white px-2 py-0.5 text-[10px] font-bold shrink-0 hover:bg-emerald-900 transition"
-                    >
-                      {copiedDomain ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                      <span>{copiedDomain ? 'تم النسخ ✓' : 'نسخ النطاق'}</span>
-                    </button>
-                  </div>
-
-                  <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed">
-                    <li>افتح <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-emerald-700 dark:text-emerald-400 font-bold underline inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="h-3 w-3 inline" /></a> ثم اختر مشروع <code className="font-mono font-bold text-amber-700 dark:text-amber-400">sanad-3c558</code>.</li>
-                    <li>من القائمة الجانبية ادخل على: <strong>Build ➔ Authentication ➔ Settings</strong>.</li>
-                    <li>انزل إلى قسم <strong>Authorized domains</strong> واضغط <strong>Add domain</strong>.</li>
-                    <li>الصق النطاق المنسوخ أعلاه واضغط <strong>Save</strong>. سيعمل تسجيل الدخول المنبثق فوراً للجميع.</li>
-                  </ol>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : firebaseError ? (
+        {firebaseError && (
           <div className="mt-4 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/60 dark:text-rose-200">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
             <span className="font-bold leading-relaxed">{firebaseError}</span>
           </div>
-        ) : null}
+        )}
 
         {/* ========================================================
             حالة 1: تأكيد كود التحقق للبريد الإلكتروني (Verify Email OTP)
@@ -466,7 +388,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                 <input
                   type="text"
                   name="googleName"
-                  placeholder="مثال: بشمهندس بهاء طارق (أو اتركه فارغاً)"
+                  placeholder="الاسم الكريم أو اللقب (أو اتركه فارغاً)"
                   className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                 />
                 <User className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
@@ -501,6 +423,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
             <div className="pt-2 text-center">
               <Link
                 href="/login"
+                onClick={() => setDirectGoogleMode(false)}
                 className="text-xs font-bold text-stone-500 hover:text-emerald-800 transition dark:text-stone-400 dark:hover:text-emerald-400"
               >
                 ← العودة إلى خيارات الدخول الأخرى
@@ -546,13 +469,19 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               </button>
 
               <div className="text-center pt-1.5">
-                <Link
-                  href="/login?mode=google-direct"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-500 hover:text-emerald-800 dark:text-stone-400 dark:hover:text-emerald-300 transition"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDirectGoogleMode(true)
+                    if (typeof window !== 'undefined') {
+                      window.history.replaceState(null, '', '/login?mode=google-direct')
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-500 hover:text-emerald-800 dark:text-stone-400 dark:hover:text-emerald-300 transition cursor-pointer"
                 >
                   <Sparkles className="h-3 w-3 text-amber-500" />
-                  <span>أو المتابعة بدخول Google المباشر السريع دون نافذة منبثقة ←</span>
-                </Link>
+                  <span>أو المتابعة بكتابة بريد Google مباشرة ←</span>
+                </button>
               </div>
             </div>
 
@@ -747,7 +676,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                           type="text"
                           name="fullName"
                           required
-                          placeholder="مثال: المهندس بهاء طارق"
+                          placeholder="الاسم الكريم أو اللقب"
                           className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                         />
                         <User className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
