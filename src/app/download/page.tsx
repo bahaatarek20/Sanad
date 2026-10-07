@@ -37,6 +37,8 @@ export default function DownloadAppPage() {
   const [detectedOs, setDetectedOs] = useState<'windows' | 'mac' | 'android' | 'ios' | 'other'>('windows')
 
   useEffect(() => {
+    document.title = 'سند'
+
     // 1. فحص هل التطبيق مثبت بالفعل (PWA Standalone Mode)
     if (
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -207,14 +209,11 @@ export default function DownloadAppPage() {
 
                 {/* أيقونة وهوية البرنامج */}
                 <div className="text-center space-y-3 my-auto">
-                  <div className="mx-auto relative h-20 w-20 rounded-2xl bg-linear-to-br from-emerald-800 via-emerald-950 to-stone-950 p-2 shadow-xl ring-2 ring-amber-400/80 flex items-center justify-center">
-                    <div className="text-center">
-                      <BookOpen className="h-8 w-8 text-amber-300 mx-auto" />
-                      <span className="block font-amiri font-bold text-sm text-amber-300">سَنَد</span>
-                    </div>
+                  <div className="mx-auto relative h-20 w-20 rounded-2xl overflow-hidden shadow-xl ring-2 ring-amber-400/80 flex items-center justify-center">
+                    <img src="/icon-512.png" alt="أيقونة برنامج سند" className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h4 className="text-base font-black font-amiri text-amber-200">منصة سَنَد التأصيلية</h4>
+                    <h4 className="text-base font-black font-amiri text-amber-200">برنامج سَنَد التأصيلي</h4>
                     <p className="text-[11px] text-stone-300 mt-1 max-w-xs mx-auto leading-relaxed">
                       برنامج حقيقي يفتح في نافذة مستقلة كبرامج ويندوز وماك، بدون أشرطة المتصفح المشتتة، وبأيقونة رسمية على شريط المهام (Taskbar).
                     </p>
@@ -259,22 +258,14 @@ export default function DownloadAppPage() {
                     <p className="text-xs text-stone-400">أيقونة «سَنَد» كأي تطبيق أصلي محمل</p>
                   </div>
 
-                  <div className="flex flex-col items-center group">
-                    <div className="relative h-24 w-24 rounded-[26px] bg-linear-to-br from-emerald-800 via-emerald-950 to-stone-950 p-2 shadow-2xl shadow-emerald-600/40 ring-2 ring-amber-400/80 flex items-center justify-center transform transition-all group-hover:scale-105">
-                      <div className="absolute inset-0 rounded-[24px] bg-linear-to-tr from-amber-400/20 via-transparent to-emerald-400/20 animate-pulse" />
-                      <div className="relative text-center">
-                        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 border border-amber-400/40">
-                          <BookOpen className="h-6 w-6 stroke-[2.2]" />
-                        </div>
-                        <span className="mt-1 block font-amiri font-bold text-xl text-amber-300 drop-shadow-md">
-                          سَنَد
-                        </span>
+                    <div className="flex flex-col items-center group">
+                      <div className="relative h-24 w-24 rounded-[26px] overflow-hidden shadow-2xl shadow-emerald-600/40 ring-2 ring-amber-400/80 flex items-center justify-center transform transition-all group-hover:scale-105">
+                        <img src="/icon-512.png" alt="أيقونة تطبيق سند" className="w-full h-full object-cover" />
                       </div>
+                      <span className="mt-2 text-xs font-bold font-amiri text-stone-100 tracking-wide drop-shadow-sm">
+                        سند
+                      </span>
                     </div>
-                    <span className="mt-2 text-xs font-bold font-amiri text-stone-100 tracking-wide drop-shadow-sm">
-                      سَنَد
-                    </span>
-                  </div>
 
                   <div className="grid grid-cols-4 gap-3 pt-4 opacity-50">
                     <div className="flex flex-col items-center gap-1">

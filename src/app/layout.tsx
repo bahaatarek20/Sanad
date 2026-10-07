@@ -39,8 +39,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'سَنَد || رفيقك ومُعينك في طريق طلب العلم والتأصيل المنهجي',
-    template: '%s || منصة سَنَد',
+    default: 'سند',
+    template: '%s || سند',
+  },
+  applicationName: 'سند',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'سند',
   },
   description: 'بيئة علمية رصينة، صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
   keywords: ['متون شرعية', 'طلب العلم', 'علوم إسلامية', 'مدارسة', 'سند', 'فقه', 'عقيدة', 'نحو', 'حديث'],
@@ -51,16 +57,18 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '48x48 32x32 16x16' },
     ],
     shortcut: '/favicon.ico',
     apple: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico' },
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
   },
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   openGraph: {
     type: 'website',
     locale: 'ar_SA',
@@ -143,6 +151,11 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){

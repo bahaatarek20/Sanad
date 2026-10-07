@@ -11,7 +11,7 @@ import { getStudentProfileData } from '@/lib/student-tracking'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'سَنَد || رفيقك ومُعينك في طريق طلب العلم والتأصيل المنهجي',
+  title: 'سند',
   description: 'منصة سَنَد: بيئة علمية رصينة لمدارسة المتون الشرعية وضبط الفنون التسعة بالتدرج مع كبار مشايخ أهل السنة بلا مشتتات.',
   alternates: {
     canonical: 'https://sanad-edu1.vercel.app',

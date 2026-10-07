@@ -1,5 +1,5 @@
 {
-  "name": "سَنَد || رفيقك في طلب العلم والتأصيل المنهجي",
+  "name": "سند",
   "short_name": "سند",
   "description": "بيئة علمية رصينة، صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.",
   "start_url": "/",
@@ -13,26 +13,43 @@
   "categories": ["education", "books", "lifestyle"],
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     },
     {
       "src": "/favicon.ico",
       "sizes": "48x48 32x32 16x16",
       "type": "image/x-icon"
-    },
-    {
-      "src": "/og-default.png",
-      "sizes": "1200x630",
-      "type": "image/png"
     }
   ]
 }
