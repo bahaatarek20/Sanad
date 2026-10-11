@@ -76,8 +76,11 @@ const REGISTRY_FILE = path.join(DATA_DIR, 'sanad_students_registry.json')
 const UPLOAD_REGISTRY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_students_registry.json')
 const STATS_FILE = path.join(DATA_DIR, 'sanad_platform_stats.json')
 const EVENTS_FILE = path.join(DATA_DIR, 'sanad_platform_events.json')
+const UPLOAD_EVENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_events.json')
 const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
 const UPLOAD_MESSAGES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_messages_registry.json')
+const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
+const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_certificates.json')
 
 const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
 const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json')
@@ -87,6 +90,10 @@ const TMP_EVENTS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_events.json')
 declare global {
   // eslint-disable-next-line no-var
   var __sanad_registry_cache__: StudentActivityRecord[] | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_latest_registered_student__: StudentActivityRecord | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_last_registered_time__: number | undefined
 }
 
 export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
@@ -165,13 +172,14 @@ function ensureDataFiles() {
   } catch {}
 }
 
-export function readAllLocalStudents(): StudentActivityRecord[] {
-  if (globalThis.__sanad_registry_cache__ && globalThis.__sanad_registry_cache__.length > 0) {
+export function readAllLocalStudents(forceRefresh: boolean = false): StudentActivityRecord[] {
+  if (!forceRefresh && globalThis.__sanad_registry_cache__ && globalThis.__sanad_registry_cache__.length > 0) {
     return globalThis.__sanad_registry_cache__
   }
 
   const map = new Map<string, StudentActivityRecord>()
 
+  // 1. تحميل سجلات الطلاب من الملفات الرئيسية
   const tryLoad = (filePath: string) => {
     try {
       if (fs.existsSync(filePath)) {
@@ -200,6 +208,137 @@ export function readAllLocalStudents(): StudentActivityRecord[] {
   tryLoad(REGISTRY_FILE)
   tryLoad(UPLOAD_REGISTRY_FILE)
   tryLoad(TMP_REGISTRY_FILE)
+
+  // 2. فحص سجل الرسائل الموثقة لاستعادة أي حسابات سجلت أو تلقت إشعارات مسبقاً
+  const tryLoadFromMessages = (msgFilePath: string) => {
+    try {
+      if (fs.existsSync(msgFilePath)) {
+        const raw = fs.readFileSync(msgFilePath, 'utf8')
+        const messages = JSON.parse(raw)
+        if (Array.isArray(messages)) {
+          for (const m of messages) {
+            const recip = (m.recipient || '').trim()
+            if (!recip) continue
+            if (recip.includes('@')) {
+              const key = recip.toLowerCase()
+              if (!map.has(key)) {
+                const isGmail = key.includes('@gmail.com')
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: key,
+                  name: key.split('@')[0],
+                  authProvider: isGmail ? 'google' : 'email',
+                  registeredAt: m.timestamp || new Date().toISOString(),
+                  lastActive: m.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(key, fakeStudent)
+              }
+            } else if (recip.startsWith('+')) {
+              const fakeEmail = `${recip.replace(/[^0-9]/g, '')}@student.sanad.edu`
+              const key = fakeEmail.toLowerCase()
+              if (!map.has(key)) {
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: fakeEmail,
+                  name: `طالب العلم (${recip})`,
+                  phone: recip,
+                  authProvider: 'phone',
+                  registeredAt: m.timestamp || new Date().toISOString(),
+                  lastActive: m.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(key, fakeStudent)
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  tryLoadFromMessages(MESSAGES_FILE)
+  tryLoadFromMessages(UPLOAD_MESSAGES_FILE)
+
+  // 3. فحص سجل أحداث المنصة لاستعادة أي حسابات قديمة سجلت قبل هذه الميزة
+  const tryLoadFromEvents = (evtFilePath: string) => {
+    try {
+      if (fs.existsSync(evtFilePath)) {
+        const raw = fs.readFileSync(evtFilePath, 'utf8')
+        const events = JSON.parse(raw)
+        if (Array.isArray(events)) {
+          for (const ev of events) {
+            const evEmail = (ev.studentEmail || '').trim().toLowerCase()
+            if (evEmail && evEmail.includes('@')) {
+              if (!map.has(evEmail)) {
+                const isGmail = evEmail.includes('@gmail.com')
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: evEmail,
+                  name: ev.studentName || evEmail.split('@')[0],
+                  authProvider: isGmail ? 'google' : 'email',
+                  registeredAt: ev.timestamp || new Date().toISOString(),
+                  lastActive: ev.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(evEmail, fakeStudent)
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  tryLoadFromEvents(EVENTS_FILE)
+  tryLoadFromEvents(UPLOAD_EVENTS_FILE)
+  tryLoadFromEvents(TMP_EVENTS_FILE)
+
+  // ترقيم تسلسلي لمعرفات الطلاب المفقودة
+  let maxScholarly = 1000
+  for (const s of map.values()) {
+    if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
+      const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
+      if (!isNaN(numPart) && numPart > maxScholarly) {
+        maxScholarly = numPart
+      }
+    }
+  }
+
+  for (const s of map.values()) {
+    if (!s.scholarlyId) {
+      maxScholarly += 1
+      s.scholarlyId = `SND-${maxScholarly}`
+    }
+    if (s.isBanned === undefined) {
+      s.isBanned = false
+    }
+    ensureStudentTelemetryDefaults(s)
+  }
 
   const list = Array.from(map.values())
   globalThis.__sanad_registry_cache__ = list
@@ -449,6 +588,7 @@ export function registerOrUpdateStudent(
     students[existingIdx].dailyStudyLog = students[existingIdx].dailyStudyLog || {}
 
     ensureStudentTelemetryDefaults(students[existingIdx])
+    globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
 
     // مزامنة سحابية حية مع Cloud Firestore
@@ -463,7 +603,7 @@ export function registerOrUpdateStudent(
       email: cleanEmail,
       name: studentName,
       phone: meta?.phone,
-      authProvider: meta?.authProvider || (meta?.phone ? 'phone' : 'email'),
+      authProvider: meta?.authProvider || (cleanEmail.includes('@gmail.com') ? 'google' : meta?.phone ? 'phone' : 'email'),
       avatarUrl: meta?.avatarUrl,
       ip: meta?.ip,
       country: meta?.country,
@@ -486,8 +626,13 @@ export function registerOrUpdateStudent(
 
     ensureStudentTelemetryDefaults(newStudent)
     students.unshift(newStudent)
-    saveAllLocalStudents(students)
 
+    // تسجيل فوري للمستخدم الجديد في الذاكرة لتسمع اللوحة في 0 ثانية
+    globalThis.__sanad_latest_registered_student__ = newStudent
+    globalThis.__sanad_last_registered_time__ = Date.now()
+    globalThis.__sanad_registry_cache__ = undefined
+
+    saveAllLocalStudents(students)
     saveStudentToCloud(newStudent).catch(() => {})
 
     try {
@@ -940,13 +1085,13 @@ export function deleteStudentLocalNote(email: string, noteId: string): boolean {
 }
 
 // 6. جلب كافة بيانات الإحصائيات والطلاب للوحة الإدارة مدمجة من كافة السجلات مع الـ IP والدول
-export function getAdminDashboardData(): {
+export function getAdminDashboardData(forceRefresh: boolean = false): {
   students: StudentActivityRecord[]
   stats: PlatformStats
   recentEvents: PlatformEvent[]
 } {
   ensureDataFiles()
-  let students = readAllLocalStudents()
+  let students = readAllLocalStudents(forceRefresh)
   let recentEvents: PlatformEvent[] = []
   let stats: PlatformStats = {
     totalVisitors: 0,
@@ -956,68 +1101,6 @@ export function getAdminDashboardData(): {
     totalCompletedCoursesCount: 0,
     lastUpdated: new Date().toISOString(),
   }
-
-  // فحص سجل الرسائل الموثقة لإضافة أي طلاب سجلوا بريدهم أو هاتفهم مسبقاً
-  try {
-    const rawMsg = fs.existsSync(MESSAGES_FILE)
-      ? fs.readFileSync(MESSAGES_FILE, 'utf8')
-      : fs.existsSync(UPLOAD_MESSAGES_FILE)
-      ? fs.readFileSync(UPLOAD_MESSAGES_FILE, 'utf8')
-      : '[]'
-    const messages = JSON.parse(rawMsg)
-    if (Array.isArray(messages)) {
-      const existingEmails = new Set(students.map((s) => s.email.toLowerCase()))
-      const existingPhones = new Set(students.map((s) => s.phone).filter(Boolean))
-
-      for (const m of messages) {
-        const recip = (m.recipient || '').trim()
-        if (!recip) continue
-        if (recip.includes('@') && !existingEmails.has(recip.toLowerCase())) {
-          const fakeStudent: StudentActivityRecord = {
-            id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            scholarlyId: generateScholarlyId(students),
-            email: recip.toLowerCase(),
-            name: recip.split('@')[0],
-            registeredAt: m.timestamp || new Date().toISOString(),
-            lastActive: m.timestamp || new Date().toISOString(),
-            totalStudyMinutes: 0,
-            streak: 0,
-            completedCourses: [],
-            listenedSessions: [],
-            notesCount: 0,
-            isBanned: false,
-          }
-          ensureStudentTelemetryDefaults(fakeStudent)
-          students.push(fakeStudent)
-          existingEmails.add(recip.toLowerCase())
-        } else if (recip.startsWith('+') && !existingPhones.has(recip)) {
-          const fakeEmail = `${recip.replace(/[^0-9]/g, '')}@student.sanad.edu`
-          if (!existingEmails.has(fakeEmail)) {
-            const fakeStudent: StudentActivityRecord = {
-              id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-              scholarlyId: generateScholarlyId(students),
-              email: fakeEmail,
-              name: `طالب (${recip})`,
-              phone: recip,
-              authProvider: 'phone',
-              registeredAt: m.timestamp || new Date().toISOString(),
-              lastActive: m.timestamp || new Date().toISOString(),
-              totalStudyMinutes: 0,
-              streak: 0,
-              completedCourses: [],
-              listenedSessions: [],
-              notesCount: 0,
-              isBanned: false,
-            }
-            ensureStudentTelemetryDefaults(fakeStudent)
-            students.push(fakeStudent)
-            existingPhones.add(recip)
-            existingEmails.add(fakeEmail)
-          }
-        }
-      }
-    }
-  } catch {}
 
   // التأكد من معرف فريد وبيانات التتبع لكل طالب
   let currentMax = 1000
@@ -1077,12 +1160,12 @@ export function getAdminDashboardData(): {
 /**
  * 6.1 جلب كافة بيانات الطلاب المحدثة حياً من Cloud Firestore ودمجها مع السجل المحلي للوحة الإدارة
  */
-export async function getAdminDashboardDataAsync(): Promise<{
+export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): Promise<{
   students: StudentActivityRecord[]
   stats: PlatformStats
   recentEvents: PlatformEvent[]
 }> {
-  const localData = getAdminDashboardData()
+  const localData = getAdminDashboardData(forceRefresh)
   let mergedStudents = [...localData.students]
 
   try {
@@ -1110,6 +1193,16 @@ export async function getAdminDashboardDataAsync(): Promise<{
 
   mergedStudents.forEach((st) => ensureStudentTelemetryDefaults(st))
 
+  // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
+  mergedStudents.sort((a, b) => {
+    const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+    const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+    return timeB - timeA
+  })
+
+  // حفظ القائمة المدمجة المحدثة
+  saveAllLocalStudents(mergedStudents)
+
   const stats = {
     ...localData.stats,
     totalRegisteredStudents: mergedStudents.length,
@@ -1123,6 +1216,25 @@ export async function getAdminDashboardDataAsync(): Promise<{
     stats,
     recentEvents: localData.recentEvents,
   }
+}
+
+/**
+ * 6.2 جلب أحدث طالب انضم للمنصة في الذاكرة الحية أو في السجل
+ */
+export function getLatestRegisteredStudent(): StudentActivityRecord | null {
+  if (globalThis.__sanad_latest_registered_student__) {
+    return globalThis.__sanad_latest_registered_student__
+  }
+  const students = readAllLocalStudents(false)
+  if (students.length > 0) {
+    const sorted = [...students].sort((a, b) => {
+      const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+      const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+      return timeB - timeA
+    })
+    return sorted[0] || null
+  }
+  return null
 }
 
 // 7. حفظ كلمة مرور مشفرة للطالب محلياً

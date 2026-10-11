@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { isStudentBanned, registerOrUpdateStudent } from '@/lib/student-tracking'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const fullName = (rawName || '').trim() || email.split('@')[0] || 'طالب العلم'
+    const clientTelemetry = extractClientTelemetry(request.headers)
 
     // تجديد الكوكي ليكون صالحاً لسنة كاملة
     await setStudentSessionCookie(fullName, email, {
@@ -26,11 +28,12 @@ export async function POST(request: NextRequest) {
       avatarUrl,
     })
 
-    // تحديث تاريخ آخر زيارة للطالب في السجل
+    // تحديث تاريخ آخر زيارة للطالب في السجل مع البيانات الجغرافية
     registerOrUpdateStudent(email, fullName, {
       phone,
       authProvider: authProvider || 'email',
       avatarUrl,
+      ...clientTelemetry,
     })
 
     return NextResponse.json({ success: true, redirect: '/' })

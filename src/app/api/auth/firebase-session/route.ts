@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { registerOrUpdateStudent } from '@/lib/student-tracking'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,12 +23,14 @@ export async function POST(request: NextRequest) {
 
     const fullName = (rawName || '').trim() || (phone ? `طالب العلم (${phone})` : 'طالب العلم')
     const provider = authProvider === 'phone' ? 'phone' : 'google'
+    const clientTelemetry = extractClientTelemetry(request.headers)
 
-    // 1. تسجيل أو تحديث سجل الطالب في المنصة
+    // 1. تسجيل أو تحديث سجل الطالب في المنصة مع كامل البيانات الجغرافية والـ IP
     const student = registerOrUpdateStudent(email, fullName, {
       phone,
       authProvider: provider,
       avatarUrl,
+      ...clientTelemetry,
     })
 
     // 2. إيداع رسالة ترحيبية أو إشعار أمني في صندوق رسائل الطالب

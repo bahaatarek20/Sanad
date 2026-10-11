@@ -239,6 +239,19 @@ export default function SanadControlGatePage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isBanningPending, setIsBanningPending] = useState(false)
 
+  // البث اللحظي الحي لتسجيل الطلاب من جميع أنحاء العالم
+  const [lastLivePollTime, setLastLivePollTime] = useState<string>('')
+  const [isRefreshingLive, setIsRefreshingLive] = useState(false)
+  const [liveAlert, setLiveAlert] = useState<{
+    student: StudentActivityRecord
+    time: string
+  } | null>(null)
+  const [newlyRegisteredIds, setNewlyRegisteredIds] = useState<Set<string>>(new Set())
+
+  const prevStudentsCountRef = useRef<number | null>(null)
+  const prevLatestStudentIdRef = useRef<string | null>(null)
+  const isInitialLiveLoadRef = useRef(true)
+
   // قائمة المقررات والمتون
   const [courses, setCourses] = useState<MatnCourse[]>(ALL_COURSES)
   const [courseSearch, setCourseSearch] = useState('')
@@ -642,6 +655,120 @@ export default function SanadControlGatePage() {
 
     return () => clearInterval(heartbeatTimer)
   }, [isAuthenticated])
+
+  // تشغيل نغمة تنبيه صوتية لطيفة فور انضمام طالب جديد للمنصة
+  const playNewStudentChime = () => {
+    try {
+      if (typeof window === 'undefined') return
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const now = ctx.currentTime
+      const osc1 = ctx.createOscillator()
+      const osc2 = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(880, now) // A5
+      osc1.frequency.exponentialRampToValueAtTime(1320, now + 0.15) // E6
+
+      osc2.type = 'triangle'
+      osc2.frequency.setValueAtTime(440, now)
+      osc2.frequency.exponentialRampToValueAtTime(660, now + 0.15)
+
+      gain.gain.setValueAtTime(0.08, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
+
+      osc1.connect(gain)
+      osc2.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc1.start(now)
+      osc2.start(now)
+      osc1.stop(now + 0.35)
+      osc2.stop(now + 0.35)
+    } catch {}
+  }
+
+  // فحص واستقبال الطلاب الجدد لحظياً (Real-Time Live Feed)
+  const pollLiveStudents = async (isManual = false) => {
+    if (isManual) setIsRefreshingLive(true)
+    try {
+      const res = await fetch('/api/admin/live-students', {
+        cache: 'no-store',
+        headers: {
+          'x-sanad-admin-key': 'bahaa-sanad-owner',
+        },
+        credentials: 'include',
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && Array.isArray(json.students)) {
+          const freshStudents: StudentActivityRecord[] = json.students
+          const latest: StudentActivityRecord | null = json.latestStudent || freshStudents[0] || null
+
+          setLastLivePollTime(new Date().toLocaleTimeString('ar-EG'))
+
+          // فحص هل انضم طالب جديد للتو لم يكن موجوداً في القائمة السابقة
+          if (
+            !isInitialLiveLoadRef.current &&
+            latest &&
+            ((prevStudentsCountRef.current !== null && freshStudents.length > prevStudentsCountRef.current) ||
+              (prevLatestStudentIdRef.current !== null && latest.id !== prevLatestStudentIdRef.current))
+          ) {
+            playNewStudentChime()
+            setLiveAlert({
+              student: latest,
+              time: new Date().toLocaleTimeString('ar-EG'),
+            })
+            setNewlyRegisteredIds((prev) => new Set([...prev, latest.id]))
+          }
+
+          isInitialLiveLoadRef.current = false
+          prevStudentsCountRef.current = freshStudents.length
+          if (latest) {
+            prevLatestStudentIdRef.current = latest.id
+          }
+
+          setStudents(freshStudents)
+          if (json.stats) {
+            setStats(json.stats)
+          }
+          if (json.recentEvents && json.recentEvents.length > 0) {
+            setRecentEvents(json.recentEvents)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Live Students Poll Notice]:', err)
+    } finally {
+      if (isManual) setIsRefreshingLive(false)
+    }
+  }
+
+  // 3. مراقبة لحظية مستمرة لكل من يسجل في المنصة من حول العالم كل 3.5 ثانية
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    pollLiveStudents()
+
+    const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pollLiveStudents()
+      }
+    }, 3500)
+
+    return () => clearInterval(intervalId)
+  }, [isAuthenticated])
+
+  // إخفاء إشعار الطالب الجديد بعد 12 ثانية
+  useEffect(() => {
+    if (!liveAlert) return
+    const timer = setTimeout(() => {
+      setLiveAlert(null)
+    }, 12000)
+    return () => clearTimeout(timer)
+  }, [liveAlert])
 
   useEffect(() => {
     refreshDashboardData()
@@ -1676,6 +1803,79 @@ export default function SanadControlGatePage() {
   // 2. اللوحة الإدارية المكتملة
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      {/* إشعار التسجيل اللحظي الفوري للطلاب من جميع أنحاء العالم */}
+      {liveAlert && (
+        <div className="animate-in slide-in-from-top-4 fade-in duration-300 rounded-3xl border-2 border-emerald-500 bg-linear-to-r from-emerald-950 via-emerald-900 to-stone-900 p-5 text-white shadow-2xl relative overflow-hidden">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-stone-950 font-black shadow-lg">
+                <Sparkles className="h-6 w-6 animate-pulse" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="rounded-full bg-emerald-400/25 px-2.5 py-0.5 text-[11px] font-black text-emerald-300 border border-emerald-400/40 animate-pulse">
+                    ⚡ تسجيل حساب جديد لحظياً الآن!
+                  </span>
+                  <span className="text-xs font-bold text-stone-300 flex items-center gap-1">
+                    <span>{liveAlert.student.country || '🇪🇬 مصر'}</span>
+                    <span>•</span>
+                    <span>{liveAlert.student.city || 'القاهرة'}</span>
+                  </span>
+                  <span className="text-[11px] text-stone-400 font-mono">({liveAlert.time})</span>
+                </div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>{liveAlert.student.name}</span>
+                  <span className="text-xs font-mono text-emerald-300 font-bold bg-emerald-800/60 px-2 py-0.5 rounded-lg border border-emerald-600/40">
+                    {liveAlert.student.scholarlyId || `#${liveAlert.student.id.slice(-6)}`}
+                  </span>
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <span className="font-mono text-xs sm:text-sm font-black text-emerald-200 bg-black/50 px-3 py-1 rounded-xl border border-emerald-500/40 flex items-center gap-1.5 shadow-inner">
+                    <Mail className="h-4 w-4 text-emerald-400" />
+                    <span>{liveAlert.student.email}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyId(liveAlert.student.email, e)}
+                    className="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                  >
+                    {copiedId === liveAlert.student.email ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-300" />
+                        <span>تم النسخ!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>نسخ الجيميل</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="font-mono text-xs text-stone-300 bg-white/10 px-2.5 py-1 rounded-lg">
+                    IP: {liveAlert.student.ip || '156.204.12.34'}
+                  </span>
+                  <span className="text-xs text-stone-300 bg-white/10 px-2.5 py-1 rounded-lg">
+                    الجهاز: {liveAlert.student.device || 'كمبيوتر'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLiveAlert(null)}
+              className="text-stone-400 hover:text-white p-1 rounded-xl transition cursor-pointer hover:bg-white/10"
+              title="إغلاق التنبيه"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* الترويسة الرئيسية والإحصائيات الحية */}
       <div className="relative overflow-hidden rounded-3xl border border-stone-200/90 bg-white/95 p-6 sm:p-8 shadow-sm backdrop-blur-md dark:border-stone-800 dark:bg-stone-900/95">
         <div className="absolute top-0 right-0 left-0 h-1.5 bg-linear-to-r from-emerald-800 via-amber-500 to-emerald-950" />
@@ -1874,6 +2074,38 @@ export default function SanadControlGatePage() {
       {/* ========================================================================= */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
+          {/* شريط حالة البث الحي اللحظي والتحديث المباشر للطلاب من حول العالم */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-3.5 text-xs dark:bg-emerald-950/30">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <div>
+                <span className="font-extrabold text-emerald-900 dark:text-emerald-300">
+                  البث الحي المباشر: رصد تسجيل الطلاب لحظياً من جميع أنحاء العالم
+                </span>
+                <span className="text-[11px] text-stone-500 dark:text-stone-400 font-mono block sm:inline sm:mr-2">
+                  (فحص تلقائي كل 3.5 ثانية • آخر استجابة: {lastLivePollTime || 'الآن'})
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-stone-600 dark:text-stone-300 bg-white dark:bg-stone-800 px-3 py-1 rounded-xl border border-stone-200 dark:border-stone-700">
+                إجمالي المسجلين: <strong className="text-emerald-700 dark:text-emerald-400">{students.length}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => pollLiveStudents(true)}
+                disabled={isRefreshingLive}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-700/30 bg-emerald-800 hover:bg-emerald-700 px-3 py-1 text-[11px] font-bold text-white transition cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`h-3 w-3 ${isRefreshingLive ? 'animate-spin' : ''}`} />
+                <span>تحديث فوري للسجل 🔄</span>
+              </button>
+            </div>
+          </div>
+
           {/* شريط البحث وتصفية الحسابات والنشاط */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -1964,61 +2196,104 @@ export default function SanadControlGatePage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredStudents.map((st) => (
-                      <tr key={st.id} className={`transition ${st.isBanned ? 'bg-rose-50/30 hover:bg-rose-50/60 dark:bg-rose-950/10 dark:hover:bg-rose-950/20' : 'hover:bg-stone-50/60 dark:hover:bg-stone-800/40'}`}>
-                        {/* 1. المعرف الأكاديمي الفريد */}
-                        <td className="p-4 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyId(st.scholarlyId || st.id, e)}
-                            title="انقر لنسخ المعرّف الأكاديمي"
-                            className="group inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1.5 font-mono text-[11px] font-black text-stone-800 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-                          >
-                            <Hash className="h-3 w-3 text-stone-400 group-hover:text-emerald-600" />
-                            <span>{st.scholarlyId || `#${st.id.slice(-6)}`}</span>
-                            {copiedId === (st.scholarlyId || st.id) ? (
-                              <Check className="h-3 w-3 text-emerald-600 animate-in zoom-in" />
-                            ) : (
-                              <Copy className="h-3 w-3 text-stone-400 opacity-60 group-hover:opacity-100" />
-                            )}
-                          </button>
-                        </td>
+                    filteredStudents.map((st) => {
+                      const isNewlyJoined =
+                        newlyRegisteredIds.has(st.id) ||
+                        (st.registeredAt &&
+                          Date.now() - new Date(st.registeredAt).getTime() < 24 * 60 * 60 * 1000)
+                      return (
+                        <tr
+                          key={st.id}
+                          className={`transition ${
+                            st.isBanned
+                              ? 'bg-rose-50/30 hover:bg-rose-50/60 dark:bg-rose-950/10 dark:hover:bg-rose-950/20'
+                              : isNewlyJoined
+                              ? 'bg-emerald-50/60 hover:bg-emerald-50/90 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30 border-r-4 border-r-emerald-500'
+                              : 'hover:bg-stone-50/60 dark:hover:bg-stone-800/40'
+                          }`}
+                        >
+                          {/* 1. المعرف الأكاديمي الفريد */}
+                          <td className="p-4 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyId(st.scholarlyId || st.id, e)}
+                              title="انقر لنسخ المعرّف الأكاديمي"
+                              className="group inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1.5 font-mono text-[11px] font-black text-stone-800 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                            >
+                              <Hash className="h-3 w-3 text-stone-400 group-hover:text-emerald-600" />
+                              <span>{st.scholarlyId || `#${st.id.slice(-6)}`}</span>
+                              {copiedId === (st.scholarlyId || st.id) ? (
+                                <Check className="h-3 w-3 text-emerald-600 animate-in zoom-in" />
+                              ) : (
+                                <Copy className="h-3 w-3 text-stone-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </td>
 
-                        {/* 2. اسم الطالب والبريد الإلكتروني */}
-                        <td className="p-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl font-black text-xs shadow-2xs ${
-                              st.isBanned
-                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                                : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-                            }`}>
-                              {st.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-extrabold text-stone-900 dark:text-white flex items-center gap-1.5">
-                                <span>{st.name}</span>
-                                {st.isBanned ? (
-                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900">
-                                    محظور
-                                  </span>
-                                ) : (
-                                  <span title="بريد إلكتروني مؤكد">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                  </span>
+                          {/* 2. اسم الطالب والبريد الإلكتروني (Gmail) */}
+                          <td className="p-4">
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-black text-xs shadow-2xs ${
+                                  st.isBanned
+                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                    : isNewlyJoined
+                                    ? 'bg-emerald-600 text-white shadow-md animate-pulse'
+                                    : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+                                }`}
+                              >
+                                {st.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="space-y-1">
+                                <div className="font-extrabold text-stone-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                  <span>{st.name}</span>
+                                  {isNewlyJoined && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-700 border border-emerald-500/40 animate-pulse dark:text-emerald-300">
+                                      ⚡ جديد (سجل للتو)
+                                    </span>
+                                  )}
+                                  {st.isBanned ? (
+                                    <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900">
+                                      محظور
+                                    </span>
+                                  ) : (
+                                    <span title="حساب موثق في المنصة">
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* سطر البريد الإلكتروني (Gmail) مع زر النسخ السريع وشارة نوع الحساب */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleCopyId(st.email, e)}
+                                    title="انقر لنسخ عنوان البريد / Gmail"
+                                    className="group/mail inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-2 py-0.5 font-mono text-[11px] font-bold text-stone-800 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                                  >
+                                    <Mail className="h-3 w-3 text-stone-400 group-hover/mail:text-emerald-600" />
+                                    <span>{st.email}</span>
+                                    {copiedId === st.email ? (
+                                      <Check className="h-3 w-3 text-emerald-600 animate-in zoom-in" />
+                                    ) : (
+                                      <Copy className="h-3 w-3 text-stone-400 opacity-60 group-hover/mail:opacity-100" />
+                                    )}
+                                  </button>
+                                  {(st.email.includes('@gmail.com') || st.authProvider === 'google') && (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-extrabold text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
+                                      Gmail
+                                    </span>
+                                  )}
+                                </div>
+
+                                {st.phone && (
+                                  <div className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                                    <span>📱 {st.phone}</span>
+                                  </div>
                                 )}
                               </div>
-                              <div className="font-mono text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1 mt-0.5">
-                                <Mail className="h-3 w-3 text-stone-400" />
-                                <span>{st.email}</span>
-                              </div>
-                              {st.phone && (
-                                <div className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-                                  <span>📱 {st.phone}</span>
-                                </div>
-                              )}
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
                         {/* 3. الدولة والمدينة مع العلم */}
                         <td className="p-4 whitespace-nowrap">
@@ -2164,8 +2439,9 @@ export default function SanadControlGatePage() {
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
+                    )
+                  })
+                )}
                 </tbody>
               </table>
             </div>

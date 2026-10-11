@@ -28,6 +28,31 @@
     "lastStudiedDate": "2026-10-07"
   },
   {
+    "id": "student_1790694776796_phone",
+    "scholarlyId": "SND-1003",
+    "email": "201012728516@student.sanad.edu",
+    "name": "طالب العلم (+201012728516)",
+    "phone": "+201012728516",
+    "isBanned": false,
+    "authProvider": "phone",
+    "registeredAt": "2026-09-29T13:18:29.718Z",
+    "lastActive": "2026-09-29T15:12:56.811Z",
+    "totalStudyMinutes": 0,
+    "streak": 0,
+    "completedCourses": [],
+    "completedEpisodesMap": {},
+    "dailyStudyLog": {},
+    "listenedSessions": [],
+    "notesCount": 0,
+    "ip": "156.204.12.34",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "القاهرة",
+    "device": "هاتف ذكي (Android)",
+    "browser": "Google Chrome Mobile",
+    "userAgent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.39 Mobile Safari/537.36"
+  },
+  {
     "id": "student_1790473248076_cpkmr",
     "scholarlyId": "SND-1001",
     "email": "bhaaljml48@gmail.com",
@@ -70,7 +95,7 @@
     "name": "بشمهندس بهاء طارق",
     "isBanned": false,
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-06T21:37:30.481Z",
+    "lastActive": "2026-10-11T05:43:49.623Z",
     "totalStudyMinutes": 757,
     "streak": 1,
     "completedCourses": [],
@@ -130,7 +155,8 @@
     "country": "🇪🇬 مصر",
     "countryCode": "EG",
     "city": "القاهرة",
-    "device": "هاتف ذكي (Android)",
-    "browser": "Google Chrome"
+    "device": "كمبيوتر محمول (Windows)",
+    "browser": "Google Chrome",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
   }
 ]
