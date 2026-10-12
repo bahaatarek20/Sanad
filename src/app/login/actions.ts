@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie, clearStudentSession } from '@/lib/auth-helper'
 import { sendOtpToEmail, verifyOtpCode } from '@/lib/otp-service'
 import { sendOtpToPhone, verifyPhoneOtp } from '@/lib/phone-auth-service'
@@ -116,40 +115,16 @@ export async function loginWithPassword(formData: FormData) {
   try {
     const headerList = await headers()
     const clientTelemetry = extractClientTelemetry(headerList)
-    const supabase = await createClient()
 
-    // 1. محاولة تسجيل الدخول عبر Supabase
-    let supabaseSuccess = false
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      })
-
-      if (!error && data?.user) {
-        supabaseSuccess = true
-        const fullName = data.user.user_metadata?.full_name || cleanEmail.split('@')[0]
-        await setStudentSessionCookie(fullName, cleanEmail)
-        registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
-        saveStudentLocalPassword(cleanEmail, password, fullName)
-        redirectTo = '/courses'
-      }
-    } catch {
-      // استمرار للفحص المحلي إن تعثر الاتصال
-    }
-
-    // 2. التحقق من السجل المحلي المعتمد إن لم تنجح سوبابيز
-    if (!supabaseSuccess) {
-      const isVerified = verifyStudentLocalPassword(cleanEmail, password)
-      if (isVerified) {
-        const student = getStudentProfileData(cleanEmail)
-        const fullName = student?.name || cleanEmail.split('@')[0]
-        await setStudentSessionCookie(fullName, cleanEmail)
-        registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
-        redirectTo = '/courses'
-      } else {
-        errorMessage = 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.'
-      }
+    const isVerified = verifyStudentLocalPassword(cleanEmail, password)
+    if (isVerified) {
+      const student = getStudentProfileData(cleanEmail)
+      const fullName = student?.name || cleanEmail.split('@')[0]
+      await setStudentSessionCookie(fullName, cleanEmail)
+      registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
+      redirectTo = '/courses'
+    } else {
+      errorMessage = 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.'
     }
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err
@@ -201,22 +176,6 @@ export async function signupWithPassword(formData: FormData) {
     saveStudentLocalPassword(cleanEmail, password, fullName)
     await setStudentSessionCookie(fullName, cleanEmail)
     registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
-
-    // 2. المزامنة السحابية في Supabase
-    try {
-      const supabase = await createClient()
-      await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      })
-    } catch {
-      // استمرار حتى لو كانت سوبابيز غير مستجيبة
-    }
 
     redirectTo = '/courses'
   } catch (err: unknown) {
@@ -278,14 +237,6 @@ export async function resetPasswordAction(formData: FormData) {
     await setStudentSessionCookie(fullName, cleanEmail)
     registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry })
 
-    // 2. محاولة المزامنة مع سوبابيز
-    try {
-      const supabase = await createClient()
-      await supabase.auth.updateUser({ password: newPassword })
-    } catch {
-      // استمرار
-    }
-
     redirectTo = '/courses'
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err
@@ -311,44 +262,8 @@ export async function signOutAction() {
   redirect('/login?loggedOut=true&mode=login')
 }
 
-// 7. تسجيل الدخول عبر Google المباشر (OAuth)
+// 7. تسجيل الدخول عبر Google المباشر (Firebase 1-Click Popup / Direct)
 export async function signInWithGoogleAction() {
-  const origin = (await headers()).get('origin') || 'http://localhost:3000'
-  let targetUrl: string | null = null
-
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${origin}/auth/callback?next=/courses`,
-      },
-    })
-
-    if (!error && data?.url) {
-      try {
-        // فحص سريع لاستجابة Supabase للتأكد من تفعيل مزود Google
-        const probe = await fetch(data.url, { method: 'GET', redirect: 'manual' })
-        if (probe.status >= 400) {
-          console.warn('⚠️ [Google OAuth] مزود Google غير مفعّل بعد في لوحة Supabase. جاري التحويل للدخول السريع الآمن.')
-          targetUrl = null
-        } else {
-          targetUrl = data.url
-        }
-      } catch {
-        targetUrl = data.url
-      }
-    }
-  } catch (err: unknown) {
-    if (isRedirectError(err)) throw err
-    console.warn('[Google OAuth Supabase Notice]:', err)
-  }
-
-  if (targetUrl) {
-    redirect(targetUrl)
-  }
-
-  // في حال لم يتم إعداد مزود Google في Supabase السحابي بعد، فتح واجهة الدخول السريع
   redirect('/login?mode=google-direct')
 }
 

@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import {
   saveLocalCommunityPost,
@@ -59,24 +58,6 @@ export async function createCommunityPost(formData: FormData) {
       console.warn('Could not save post to cloud DB:', cErr)
     }
 
-    // 3. الحفظ في سحابة Supabase كنسخة احتياطية إضافية إن توفرت
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase
-          .from('community_posts')
-          .insert({
-            user_id: user.id,
-            anonymous_alias: anonymousAlias,
-            course_slug: courseSlug || null,
-            post_type: postType,
-            content: content.trim(),
-            upvotes_count: 0,
-          })
-      }
-    } catch {}
-
     revalidatePath('/community')
     return {
       success: true,
@@ -97,15 +78,6 @@ export async function upvotePost(postId: string) {
     // 2. تحديث الإعجاب في Cloud Firestore
     try {
       await upvoteCommunityPostInCloud(postId)
-    } catch {}
-
-    // 3. تحديث الإعجاب في Supabase
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.rpc('increment_post_upvotes', { post_id_arg: postId })
-      }
     } catch {}
 
     revalidatePath('/community')
@@ -148,20 +120,6 @@ export async function addCommunityReply(postId: string, content: string) {
     } catch (cErr) {
       console.warn('Could not save reply to cloud DB:', cErr)
     }
-
-    // 3. حفظ الرد في Supabase إن أمكن
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('community_replies').insert({
-          post_id: postId,
-          user_id: user.id,
-          anonymous_alias: anonymousAlias,
-          content: content.trim(),
-        })
-      }
-    } catch {}
 
     revalidatePath('/community')
     return {

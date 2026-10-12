@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { isStudentBanned } from '@/lib/student-tracking'
 
 export interface StudentUser {
@@ -16,11 +15,13 @@ export interface StudentUser {
   }
 }
 
-// جلب المستخدم الحالي: فحص محلي فوري (0ms) لمنع أي بطء في التنقل بين الصفحات
+/**
+ * جلب المستخدم الحالي: فحص محلي فوري (0ms) لمنع أي بطء في التنقل بين الصفحات
+ */
 export async function getCurrentStudentUser(): Promise<StudentUser | null> {
   const cookieStore = await cookies()
 
-  // 1. فحص جلسة الطالب المحلية المخزنة في الكوكيز أولاً (فوري 0ms بدون استدعاءات شبكة)
+  // فحص جلسة الطالب المعتمدة المخزنة في الكوكيز
   try {
     const localSession = cookieStore.get('sanad_student_user')
     if (localSession?.value) {
@@ -50,50 +51,12 @@ export async function getCurrentStudentUser(): Promise<StudentUser | null> {
     // خطأ في فك تشفير الكوكي
   }
 
-  // 2. فحص سريع: هل توجد أي كوكيز لـ Supabase أصلاً قبل محاولة الاتصال بالشبكة؟
-  const allCookies = cookieStore.getAll()
-  const hasSupabaseCookie = allCookies.some(
-    (c) => (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) || c.name === 'supabase-auth-token'
-  )
-
-  // إذا لم يكن مسجلاً في Supabase ولا توجد كوكيز، نعيد null فوراً دون تعطيل الصفحة
-  if (!hasSupabaseCookie) {
-    return null
-  }
-
-  // 3. فقط إذا كان كوكي Supabase موجوداً فعلياً، نقوم بالتحقق منه
-  try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (user && !error && user.email) {
-      const banCheck = isStudentBanned(user.email)
-      if (banCheck.isBanned) {
-        cookieStore.delete('sanad_student_user')
-        return null
-      }
-      const provider = (user.app_metadata?.provider as 'google' | 'phone' | 'email') || 'email'
-      return {
-        id: user.id,
-        email: user.email,
-        phone: user.phone || user.user_metadata?.phone,
-        authProvider: provider,
-        avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        user_metadata: {
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'طالب العلم',
-          phone: user.phone || user.user_metadata?.phone,
-          authProvider: provider,
-          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        },
-      }
-    }
-  } catch {
-    // تجاوز أخطاء الاتصال أو بطء الشبكة
-  }
-
   return null
 }
 
-// حفظ جلسة طالب محلية في الكوكيز (تدعم البريد الإلكتروني أو الهاتف)
+/**
+ * حفظ جلسة طالب معتمدة في الكوكيز (تدعم البريد الإلكتروني أو الهاتف أو Google)
+ */
 export async function setStudentSessionCookie(
   fullName: string,
   emailOrPhone: string,
@@ -124,7 +87,7 @@ export async function setStudentSessionCookie(
   cookieStore.set('sanad_student_user', JSON.stringify(studentData), {
     path: '/',
     maxAge: 60 * 60 * 24 * 365, // سنة كاملة
-    httpOnly: false, // متاح للعميل لضمان حفظ الجلسة محلياً والمزامنة التلقائية
+    httpOnly: false, // متاح للعميل لضمان حفظ الجلسة والمزامنة الفورية
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   })
@@ -132,16 +95,11 @@ export async function setStudentSessionCookie(
   return studentData
 }
 
-// تسجيل خروج الطالب ومسح الجلسة نهائياً
+/**
+ * تسجيل خروج الطالب ومسح الجلسة نهائياً ومنع الاستعادة التلقائية الإجبارية
+ */
 export async function clearStudentSession() {
   const cookieStore = await cookies()
-
-  try {
-    const supabase = await createClient()
-    await supabase.auth.signOut()
-  } catch {
-    // تجاوز أخطاء Supabase
-  }
 
   cookieStore.set('sanad_student_user', '', {
     path: '/',

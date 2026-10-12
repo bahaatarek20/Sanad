@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +13,7 @@ export async function POST() {
   try {
     const cookieStore = await cookies()
 
-    // 1. محاولة إنهاء الجلسة في Supabase إن وجدت
-    try {
-      const supabase = await createClient()
-      await supabase.auth.signOut()
-    } catch {}
-
-    // 2. تدمير كوكي الطالب بكافة الطرق المعيارية (Path, MaxAge 0, Expired)
+    // 1. تدمير كوكي الطالب بكافة الطرق المعيارية (Path, MaxAge 0, Expired)
     cookieStore.set('sanad_student_user', '', {
       path: '/',
       maxAge: 0,
@@ -30,7 +23,7 @@ export async function POST() {
     })
     cookieStore.delete('sanad_student_user')
 
-    // 3. تعيين علامة خروج صريحة لمنع الاستعادة التلقائية المؤرقة
+    // 2. تعيين علامة خروج صريحة لمنع الاستعادة التلقائية المؤرقة
     cookieStore.set('sanad_explicit_logout', 'true', {
       path: '/',
       maxAge: 86400, // 24 ساعة
@@ -39,10 +32,11 @@ export async function POST() {
     })
 
     return NextResponse.json({ success: true, message: 'تم تسجيل الخروج بنجاح' })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Logout error:', err)
+    const message = err instanceof Error ? err.message : 'فشل تسجيل الخروج'
     return NextResponse.json(
-      { success: false, error: err.message || 'فشل تسجيل الخروج' },
+      { success: false, error: message },
       { status: 500 }
     )
   }

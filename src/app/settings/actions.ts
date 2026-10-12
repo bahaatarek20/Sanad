@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent, saveStudentLocalPassword } from '@/lib/student-tracking'
 
@@ -16,17 +15,9 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   try {
-    // تحديث السجل المحلي
+    // تحديث السجل
     await setStudentSessionCookie(fullName, email)
     registerOrUpdateStudent(email, fullName)
-
-    // تحديث Supabase إن كان متاحاً
-    try {
-      const supabase = await createClient()
-      await supabase.auth.updateUser({ data: { full_name: fullName } })
-    } catch {
-      // استمرار حتى لو تعذر تحديث Supabase
-    }
   } catch (err) {
     console.error('Settings update error:', err)
   }
@@ -54,16 +45,8 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   try {
-    // تحديث كلمة المرور في السجل المحلي
+    // تحديث كلمة المرور في السجل
     saveStudentLocalPassword(email, newPassword)
-
-    // تحديث Supabase إن كان متاحاً
-    try {
-      const supabase = await createClient()
-      await supabase.auth.updateUser({ password: newPassword })
-    } catch {
-      // استمرار
-    }
   } catch (err) {
     console.error('Password change error:', err)
     return redirect(`/settings?error=${encodeURIComponent('تعذر تغيير كلمة المرور.')}`)
@@ -120,7 +103,7 @@ export async function updateAvatarAction(formData: FormData) {
     return redirect(`/settings?error=${encodeURIComponent('يرجى اختيار صورة رمزية أو رابط صورة صالح.')}`)
   }
 
-  const { getStudentProfileData, registerOrUpdateStudent } = await import('@/lib/student-tracking')
+  const { getStudentProfileData } = await import('@/lib/student-tracking')
   const student = getStudentProfileData(email)
   const fullName = student?.name || email.split('@')[0]
 
@@ -130,11 +113,6 @@ export async function updateAvatarAction(formData: FormData) {
     authProvider: student?.authProvider || 'email',
     avatarUrl,
   })
-
-  try {
-    const supabase = await createClient()
-    await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } })
-  } catch {}
 
   revalidatePath('/', 'layout')
   redirect(`/settings?message=${encodeURIComponent('تم حفظ الصورة الرمزية لحسابك بنجاح.')}`)

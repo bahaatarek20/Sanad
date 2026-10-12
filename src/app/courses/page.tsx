@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import { Compass, BookOpen } from 'lucide-react'
@@ -42,8 +41,6 @@ export const metadata: Metadata = {
 
 
 export default async function CoursesCatalogPage() {
-  const supabase = await createClient()
-
   // جلب كافة المتون المعتمدة والنشطة من الخادم (بما فيها التعديلات والإضافات الإدارية)
   const courses = getActiveCourses()
 
@@ -52,33 +49,10 @@ export default async function CoursesCatalogPage() {
 
   let completedCourseSlugs: string[] = []
 
-  if (user) {
-    // 1. مزامنة المتون المكتملة المحفوظة في سجل الطالب الدائم على السيرفر
-    if (user.email) {
-      const studentProfile = getStudentProfileData(user.email)
-      if (studentProfile?.completedCourses) {
-        completedCourseSlugs = [...studentProfile.completedCourses]
-      }
-    }
-
-    // 2. مزامنة مع Supabase فقط إذا كان الحساب سحابياً
-    if (!user.id.startsWith('student-')) {
-      try {
-        const { data: progress } = await supabase
-          .from('student_progress')
-          .select('course_slug')
-          .eq('user_id', user.id)
-          .eq('is_completed', true)
-
-        if (progress) {
-          const fromDb = progress
-            .map((p) => p.course_slug)
-            .filter((slug): slug is string => Boolean(slug))
-          completedCourseSlugs = Array.from(new Set([...completedCourseSlugs, ...fromDb]))
-        }
-      } catch {
-        // Fallback to server registry
-      }
+  if (user && user.email) {
+    const studentProfile = getStudentProfileData(user.email)
+    if (studentProfile?.completedCourses) {
+      completedCourseSlugs = [...studentProfile.completedCourses]
     }
   }
 

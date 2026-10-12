@@ -241,3 +241,43 @@ export async function deleteCommunityReplyFromCloud(
     return false
   }
 }
+
+const PLATFORM_STATS_COLLECTION = 'platform_stats'
+
+/**
+ * 9. حفظ إحصائيات المنصة في Cloud Firestore
+ */
+export async function savePlatformStatsToCloud(stats: Record<string, any>): Promise<boolean> {
+  try {
+    const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
+    await setDoc(
+      docRef,
+      {
+        ...stats,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    )
+    return true
+  } catch (err) {
+    logFirestoreNotice(err)
+    return false
+  }
+}
+
+/**
+ * 10. جلب إحصائيات المنصة من Cloud Firestore
+ */
+export async function getPlatformStatsFromCloud(): Promise<Record<string, any> | null> {
+  try {
+    const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
+    const snap = await getDoc(docRef)
+    if (snap.exists()) {
+      return snap.data()
+    }
+    return null
+  } catch (err) {
+    logFirestoreNotice(err)
+    return null
+  }
+}

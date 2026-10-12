@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import DynamicQuotesBanner from '@/components/dynamic-quotes-banner'
@@ -56,8 +55,6 @@ const JOURNEY_STEPS = [
 ]
 
 export default async function HomePage() {
-  const supabase = await createClient()
-
   // جلب كافة المتون المعتمدة والنشطة من السيرفر (بما فيها تعديلات المشرف الفورية)
   const courses = getActiveCourses()
 
@@ -66,34 +63,10 @@ export default async function HomePage() {
 
   let completedCourseSlugs: string[] = []
 
-  if (user) {
-    // 1. مزامنة المتون المكتملة المحفوظة في سجل الطالب الدائم على السيرفر
-    if (user.email) {
-      const studentProfile = getStudentProfileData(user.email)
-      if (studentProfile?.completedCourses) {
-        completedCourseSlugs = [...studentProfile.completedCourses]
-      }
-    }
-
-    // 2. مزامنة مع Supabase فقط إذا كان المستخدم مسجلاً في سحابة Supabase بمعرف UUID صالح
-    const isSupabaseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id || '')
-    if (isSupabaseUuid) {
-      try {
-        const { data: progress } = await supabase
-          .from('student_progress')
-          .select('course_slug')
-          .eq('user_id', user.id)
-          .eq('is_completed', true)
-
-        if (progress) {
-          const fromDb = progress
-            .map((p) => p.course_slug)
-            .filter((slug): slug is string => Boolean(slug))
-          completedCourseSlugs = Array.from(new Set([...completedCourseSlugs, ...fromDb]))
-        }
-      } catch {
-        // الاعتماد على السجل المحلي
-      }
+  if (user && user.email) {
+    const studentProfile = getStudentProfileData(user.email)
+    if (studentProfile?.completedCourses) {
+      completedCourseSlugs = [...studentProfile.completedCourses]
     }
   }
 

@@ -45,7 +45,7 @@ function detectUserIntent(
   // 3. هل السؤال تقني عن المنصة أو المطور أو الخوادم والبرمجة؟
   const technicalKeywords = [
     'المنصة', 'الموقع', 'التطبيق', 'السيرفر', 'البرمجة', 'بهاء', 'المهندس', 'باشمهندس',
-    'خطأ', 'فيديو', 'مش شغال', 'تحميل', 'pwa', 'next', 'vercel', 'supabase', 'قاعدة البيانات',
+    'خطأ', 'فيديو', 'مش شغال', 'تحميل', 'pwa', 'next', 'vercel', 'firebase', 'قاعدة البيانات',
     'كود', 'api', 'prompt', 'temperature', 'system prompt', 'instruction', 'تحديث', 'إصدار'
   ]
   if (technicalKeywords.some((k) => q.includes(k))) {

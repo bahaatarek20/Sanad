@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CheckCircle, Flame, Bookmark, ArrowLeft, Sparkles, BookOpen, Layers, Mail, Phone, ShieldCheck, Compass } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
 import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-list'
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
 import StudentAnalytics from '@/components/student-analytics'
@@ -27,13 +26,11 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const supabase = await createClient()
-
   // 1. جلب بيانات الحساب وسجل المدارسة الحقيقي من الخادم (يبدأ من الصفر تماماً)
   let currentStreak = 0
   let totalStudyMinutes = 0
   let dailyStudyLog: Record<string, number> = {}
-  let serverCompletedSlugs: string[] = []
+  let completedSlugs: string[] = []
   let scholarlyId: string | undefined = undefined
 
   if (user.email) {
@@ -43,42 +40,7 @@ export default async function DashboardPage() {
       currentStreak = studentProfile.streak || 0
       totalStudyMinutes = studentProfile.totalStudyMinutes || 0
       dailyStudyLog = studentProfile.dailyStudyLog || {}
-      serverCompletedSlugs = Array.isArray(studentProfile.completedCourses) ? studentProfile.completedCourses : []
-    }
-  }
-
-  // 2. فحص Supabase فقط إذا كان المستخدم مسجلاً في سحابة Supabase
-  let completedSlugs: string[] = [...serverCompletedSlugs]
-
-  if (!user.id.startsWith('student-')) {
-    try {
-      const [profileRes, progressRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('current_streak, total_study_minutes')
-          .eq('id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('student_progress')
-          .select('course_slug, is_completed, completed_at')
-          .eq('user_id', user.id)
-          .eq('is_completed', true),
-      ])
-
-      const profile = profileRes.data
-      if (profile?.current_streak && profile.current_streak > currentStreak) {
-        currentStreak = profile.current_streak
-      }
-      if (profile?.total_study_minutes && profile.total_study_minutes > totalStudyMinutes) {
-        totalStudyMinutes = profile.total_study_minutes
-      }
-
-      if (progressRes.data) {
-        const fromDb = progressRes.data.map((p) => p.course_slug).filter(Boolean)
-        completedSlugs = Array.from(new Set([...completedSlugs, ...fromDb]))
-      }
-    } catch (err) {
-      console.error('Error fetching progress from supabase:', err)
+      completedSlugs = Array.isArray(studentProfile.completedCourses) ? studentProfile.completedCourses : []
     }
   }
 
@@ -86,10 +48,9 @@ export default async function DashboardPage() {
   const completedCourses = allCourses.filter((c) => completedSlugs.includes(c.slug))
   const recommendedStudies = getRecommendedCoursesForStudent(completedSlugs, allCourses)
 
-  // 3. جلب كافة الفوائد المقيدة في كشكول الطالب (السجل المحلي الفوري + سحابة Supabase إن وُجدت)
+  // 2. جلب كافة الفوائد المقيدة في كشكول الطالب من السجل
   let formattedNotes: DashboardNoteItem[] = []
 
-  // أ) الفوائد من السجل المحلي
   if (user.email) {
     const localNotes = getStudentLocalNotes(user.email)
     if (localNotes && localNotes.length > 0) {
@@ -106,47 +67,6 @@ export default async function DashboardPage() {
           courseCategory: course ? course.category : undefined,
         }
       })
-    }
-  }
-
-  // ب) الفوائد من سحابة Supabase إن كان حساباً سحابياً
-  if (!user.id.startsWith('student-')) {
-    try {
-      const { data: notesData } = await supabase
-        .from('student_notes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (notesData) {
-        const existingIds = new Set(formattedNotes.map((n) => n.id))
-        const existingContents = new Set(formattedNotes.map((n) => n.content.trim()))
-
-        for (const item of notesData as Record<string, unknown>[]) {
-          const id = String(item.id)
-          const content = String(item.content || item.note_text || '')
-          if (!existingIds.has(id) && !existingContents.has(content.trim())) {
-            const slug = String(item.course_slug || '')
-            const course = allCourses.find((c) => c.slug === slug)
-            const tag = String(
-              item.tag || (Array.isArray(item.tags) && item.tags[0]) || 'فائدة'
-            )
-            formattedNotes.push({
-              id,
-              title: String(item.title || ''),
-              content,
-              tag,
-              created_at: String(item.created_at || new Date().toISOString()),
-              courseSlug: slug,
-              courseTitle: course ? course.title : slug || 'متن تأصيلي',
-              courseCategory: course ? course.category : undefined,
-            })
-            existingIds.add(id)
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching notes from supabase:', err)
     }
   }
 

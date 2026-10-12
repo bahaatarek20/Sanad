@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { getActiveCourses } from '@/lib/courses-store'
 import { getScholarlyLeaderboardData } from '@/lib/student-tracking'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
@@ -93,8 +92,6 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
 ]
 
 export default async function CommunityPage() {
-  const supabase = await createClient()
-  // دعم المسجلين عبر Supabase أو الجلسة المحلية على حد سواء (فحص فوري سريع)
   const currentUser = await getCurrentStudentUser()
   const isLoggedIn = Boolean(currentUser)
 
@@ -133,33 +130,6 @@ export default async function CommunityPage() {
     }
   } catch (cErr) {
     console.warn('Could not fetch community posts from cloud DB:', cErr)
-  }
-
-  // 3. جلب المنشورات السحابية من Supabase كاحتياط إضافي
-  try {
-    const { data: dbPosts } = await supabase
-      .from('community_posts')
-      .select('*, replies:community_replies(*)')
-      .order('created_at', { ascending: false })
-
-    if (dbPosts && dbPosts.length > 0) {
-      for (const p of dbPosts) {
-        if (!postMap.has(p.id)) {
-          postMap.set(p.id, {
-            id: p.id,
-            anonymous_alias: p.anonymous_alias,
-            course_slug: p.course_slug,
-            post_type: p.post_type,
-            content: p.content,
-            upvotes_count: p.upvotes_count || 0,
-            created_at: p.created_at,
-            replies: p.replies || [],
-          })
-        }
-      }
-    }
-  } catch {
-    // في حال عدم توفر Supabase يتم الاعتماد على Firestore والسجل المحلي
   }
 
   let posts = Array.from(postMap.values())

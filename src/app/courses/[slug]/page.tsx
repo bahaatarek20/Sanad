@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getActiveCourseBySlug, getActiveCourses } from '@/lib/courses-store'
 import { getStudentProfileData, getStudentLocalNotes } from '@/lib/student-tracking'
@@ -122,56 +121,6 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
         }
       } catch (err) {
         console.warn('Failed to sync student local notes:', err)
-      }
-    }
-
-    // 2. جلب البيانات من Supabase فقط إذا كان الحساب سحابياً بمعرف UUID صحيح
-    const isSupabaseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id || '')
-    if (isSupabaseUuid) {
-      try {
-        const supabase = await createClient()
-        const [{ data: notesData }, { data: progressData }] = await Promise.all([
-          supabase
-            .from('student_notes')
-            .select('*')
-            .eq('course_slug', slug)
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('student_progress')
-            .select('is_completed')
-            .eq('course_slug', slug)
-            .eq('user_id', user.id)
-            .maybeSingle(),
-        ])
-
-        if (notesData && notesData.length > 0) {
-          const remoteNotes: NoteItem[] = notesData.map((n: Record<string, unknown>) => ({
-            id: String(n.id),
-            title: String(n.title || ''),
-            content: String(n.content || n.note_text || ''),
-            tag: String(n.tag || (Array.isArray(n.tags) && n.tags[0]) || 'فائدة'),
-            created_at: String(n.created_at || new Date().toISOString()),
-          }))
-
-          // دمج الفوائد السحابية مع المحلية مع منع التكرار
-          const existingIds = new Set(initialNotes.map((n) => n.id))
-          const existingContents = new Set(initialNotes.map((n) => n.content.trim()))
-          for (const rNote of remoteNotes) {
-            if (!existingIds.has(rNote.id) && !existingContents.has(rNote.content.trim())) {
-              initialNotes.push(rNote)
-              existingIds.add(rNote.id)
-            }
-          }
-          // ترتيب تنازلي حسب تاريخ التدوين
-          initialNotes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        }
-
-        if (progressData?.is_completed) {
-          initialIsCompleted = true
-        }
-      } catch (e) {
-        console.error('Error fetching student course data:', e)
       }
     }
   }

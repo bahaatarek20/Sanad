@@ -5,7 +5,7 @@
  * 
  * المبادئ الهندسية:
  * 1. Storage Abstraction Layer (S3-Compatible): التبديل بين مزودي التخزين 
- *    (Cloudflare R2, AWS S3, Wasabi, Backblaze B2, MinIO, Supabase)
+ *    (Cloudflare R2, AWS S3, Wasabi, Backblaze B2, MinIO, Firebase Storage)
  *    يتم عبر متغيرات البيئة فقط دون تعديل سطر واحد في الكود البرمجي.
  * 2. Direct Upload Architecture: الملفات الضخمة (فيديوهات وصوتيات 5GB+) 
  *    تُرفع مباشرة من متصفح المشرف إلى مساحة التخزين عبر Presigned URL
@@ -23,7 +23,7 @@ export interface SanadAssetMetadata {
   fileName: string
   fileSizeBytes: number
   mimeType: string
-  storageProvider: 'cloudflare-r2' | 'aws-s3' | 'wasabi' | 'minio' | 'supabase' | 'local'
+  storageProvider: 'cloudflare-r2' | 'aws-s3' | 'wasabi' | 'minio' | 'firebase-storage' | 'local'
   storageKey: string
   cdnUrl: string
   checksumSha256?: string
@@ -42,7 +42,7 @@ export interface PresignedUploadResponse {
 }
 
 export interface StorageConfig {
-  provider: 'cloudflare-r2' | 'aws-s3' | 'wasabi' | 'minio' | 'supabase' | 'local'
+  provider: 'cloudflare-r2' | 'aws-s3' | 'wasabi' | 'minio' | 'firebase-storage' | 'local'
   bucket: string
   region: string
   endpoint?: string

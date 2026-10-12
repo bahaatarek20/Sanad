@@ -19,8 +19,8 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 export const auth: Auth = getAuth(app)
 auth.useDeviceLanguage()
 
-// قاعدة بيانات Cloud Firestore المشتركة
-export const db: Firestore = getFirestore(app)
+// قاعدة بيانات Cloud Firestore المشتركة (المربوطة بقاعدة default المعتمدة)
+export const db: Firestore = getFirestore(app, 'default')
 
 // موفّر تسجيل الدخول المباشر بحساب Google
 export const googleProvider = new GoogleAuthProvider()

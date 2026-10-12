@@ -1,21 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { deleteLocalCommunityPost, deleteLocalCommunityReply } from '@/lib/community-store'
+import { deleteCommunityPostFromCloud, deleteCommunityReplyFromCloud } from '@/lib/cloud-db'
 
 // حذف منشور مخالف من مجلس المذاكرة
 export async function deleteCommunityPostAction(postId: string) {
   try {
-    const supabase = await createClient()
-    const { error } = await supabase
-      .from('community_posts')
-      .delete()
-      .eq('id', postId)
-
-    if (error) {
-      console.error('Error deleting post:', error)
-      return { success: false, error: error.message }
-    }
+    deleteLocalCommunityPost(postId)
+    await deleteCommunityPostFromCloud(postId)
 
     revalidatePath('/community')
     revalidatePath('/admin')
@@ -29,16 +22,9 @@ export async function deleteCommunityPostAction(postId: string) {
 // حذف تعليق مخالف من مجلس المذاكرة
 export async function deleteCommunityReplyAction(replyId: string) {
   try {
-    const supabase = await createClient()
-    const { error } = await supabase
-      .from('community_replies')
-      .delete()
-      .eq('id', replyId)
-
-    if (error) {
-      console.error('Error deleting reply:', error)
-      return { success: false, error: error.message }
-    }
+    // يحذف محلياً وسحابياً
+    deleteLocalCommunityReply('', replyId)
+    await deleteCommunityReplyFromCloud('', replyId)
 
     revalidatePath('/community')
     revalidatePath('/admin')

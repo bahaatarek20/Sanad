@@ -2,7 +2,6 @@
 
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import {
   authenticateAdmin,
   verifyAdminSession,
@@ -237,12 +236,6 @@ export async function deleteCommunityPostAdminAction(postId: string) {
     await deleteCommunityPostFromCloud(postId)
   } catch {}
 
-  // 3. الحذف من Supabase إن توفر
-  try {
-    const supabase = await createClient()
-    await supabase.from('community_posts').delete().eq('id', postId)
-  } catch {}
-
   revalidatePath('/community')
   revalidatePath('/sanad-control-gate')
   return { success: true }
@@ -265,12 +258,6 @@ export async function deleteCommunityReplyAdminAction(replyId: string, postId?: 
       await deleteCommunityReplyFromCloud(postId, replyId)
     } catch {}
   }
-
-  // 3. الحذف من Supabase إن توفر
-  try {
-    const supabase = await createClient()
-    await supabase.from('community_replies').delete().eq('id', replyId)
-  } catch {}
 
   revalidatePath('/community')
   revalidatePath('/sanad-control-gate')

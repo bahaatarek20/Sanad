@@ -11,8 +11,6 @@
     "backup:test": "node scripts/backup-and-restore.mjs"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.0",
     "@types/qrcode": "^1.5.6",
     "clsx": "^2.1.1",
     "firebase": "^12.19.0",

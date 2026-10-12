@@ -1,5 +1,4 @@
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent, isStudentBanned } from '@/lib/student-tracking'
 import { depositOtpMessage } from '@/lib/messages-service'
@@ -155,21 +154,6 @@ export async function sendOtpToPhone(
     }
   }
 
-  // 4. محاولة إرسال SMS حقيقي عبر Supabase Phone Auth إن لم يُستخدم Twilio
-  if (!twilioSent) {
-    try {
-      const supabase = await createClient()
-      await supabase.auth.signInWithOtp({
-        phone,
-        options: {
-          shouldCreateUser: true,
-        },
-      })
-    } catch {
-      // يستمر الاعتماد على الكود الداخلي وصندوق رسائل سَنَد
-    }
-  }
-
   return {
     success: true,
     message: twilioSent
@@ -257,37 +241,7 @@ export async function verifyPhoneOtp(
     }
   }
 
-  // 2. فحص عبر Supabase Phone Auth
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone,
-      token: code,
-      type: 'sms',
-    })
-
-    if (!error && data?.user) {
-      globalPhoneStore.delete(phone)
-      const studentName = data.user.user_metadata?.full_name || record?.fullName || `طالب العلم (${phone})`
-      const cleanDigits = phone.replace(/[^0-9]/g, '')
-      const syntheticEmail = `${cleanDigits}@student.sanad.edu`
-      await setStudentSessionCookie(studentName, syntheticEmail, {
-        phone,
-        authProvider: 'phone',
-      })
-      registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone', ...telemetry })
-      return {
-        success: true,
-        message: 'تم التحقق بنجاح من رقم هاتفك. أهلاً بك في منصة سَنَد!',
-        phone,
-        studentName,
-      }
-    }
-  } catch {
-    // Fallback to internal verification
-  }
-
-  // 3. الفحص الداخلي الاحتياطي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
+  // 2. الفحص الداخلي الاحتياطي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
   const isMasterDevCode = process.env.NODE_ENV !== 'production' && code === '123456'
 
   if (!record && !isMasterDevCode) {

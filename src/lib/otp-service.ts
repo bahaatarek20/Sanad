@@ -1,5 +1,4 @@
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent } from '@/lib/student-tracking'
 import { sendRealEmail, buildVerificationEmailHtml } from '@/lib/email-service'
@@ -66,7 +65,7 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
   let isEmailSent = false
   let sendMethod = 'none'
 
-  // 1. المحاولة الأولى: الإرسال المباشر عبر Resend API أو SMTP (Google/Custom)
+  // الإرسال المباشر عبر Gmail SMTP المعتمد
   try {
     const html = buildVerificationEmailHtml(otpCode)
     const directResult = await sendRealEmail({
@@ -84,30 +83,12 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
     console.warn('[Sanad OTP] Direct email transport failed:', err)
   }
 
-  // 2. المحاولة الثانية: الإرسال عبر Supabase Auth إن لم يُرسل مباشرة
-  if (!isEmailSent) {
-    try {
-      const supabase = await createClient()
-      const { error } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          shouldCreateUser: true,
-        },
-      })
-
-      if (!error) {
-        isEmailSent = true
-        sendMethod = 'supabase'
-      }
-    } catch {
-      // استمرار
-    }
-  }
-
   // رسالة أمان موحدة دون كشف الرمز إطلاقاً في الواجهة
   return {
     success: true,
-    message: 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).',
+    message: isEmailSent
+      ? 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
+      : 'تم توليد رمز التحقق بنجاح. تفقد بريدك الإلكتروني أو أعد المحاولة.',
     method: sendMethod,
   }
 }
@@ -129,29 +110,6 @@ export async function verifyOtpCode(
 
   const record = globalOtpStore.get(cleanEmail)
   const now = Date.now()
-
-  // فحص عبر Supabase verifyOtp أولاً إن كان أُرسل عبرها
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanCode,
-      type: 'email',
-    })
-
-    if (!error && data?.user) {
-      globalOtpStore.delete(cleanEmail)
-      const name = data.user.user_metadata?.full_name || cleanEmail.split('@')[0]
-      await setStudentSessionCookie(name, cleanEmail)
-      registerOrUpdateStudent(cleanEmail, name)
-      return {
-        success: true,
-        message: 'تم التحقق بنجاح من حسابك. أهلاً بك في منصة سَنَد.',
-      }
-    }
-  } catch {
-    // متابعة الفحص عبر الـ Store الداخلي
-  }
 
   // فحص الرمز السري الداخلي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
   const isMasterDevCode = process.env.NODE_ENV !== 'production' && cleanCode === '123456'
