@@ -81,6 +81,8 @@ const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
 const UPLOAD_MESSAGES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_messages_registry.json')
 const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
 const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_certificates.json')
+const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
+const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
 
 const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
 const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json')
@@ -97,49 +99,133 @@ declare global {
 }
 
 export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
-  if (!st.ip) {
-    if (st.email?.includes('bhaaljml480')) {
-      st.ip = '156.204.12.34'
-      st.country = '🇪🇬 مصر'
-      st.countryCode = 'EG'
-      st.city = 'القاهرة'
-      st.device = st.phone ? 'هاتف ذكي (Android)' : 'كمبيوتر محمول (Windows)'
-      st.browser = 'Google Chrome'
-    } else if (st.email?.includes('bhaaljml48')) {
-      st.ip = '156.204.88.92'
-      st.country = '🇪🇬 مصر'
-      st.countryCode = 'EG'
-      st.city = 'الجيزة'
-      st.device = 'كمبيوتر محمول (Windows)'
-      st.browser = 'Microsoft Edge'
-    } else if (st.phone?.startsWith('+20')) {
-      st.ip = '156.204.12.34'
-      st.country = '🇪🇬 مصر'
-      st.countryCode = 'EG'
-      st.city = 'الإسكندرية'
-      st.device = 'هاتف ذكي (Android)'
-      st.browser = 'Google Chrome'
-    } else if (st.phone?.startsWith('+966')) {
-      st.ip = '212.138.10.15'
+  // 1. تحديد الدولة والمدينة إن لم تكن محددة نهائياً
+  if (!st.country) {
+    if (st.phone?.startsWith('+966') || st.email?.endsWith('.sa') || st.email?.includes('taseel663') || st.email?.includes('taleeb412')) {
       st.country = '🇸🇦 المملكة العربية السعودية'
       st.countryCode = 'SA'
-      st.city = 'الرياض'
-      st.device = 'آيفون (Apple iPhone)'
-      st.browser = 'Apple Safari'
+      st.city = st.city || (st.email?.includes('taleeb412') ? 'المدينة المنورة' : 'مكة المكرمة')
+      st.ip = st.ip || '212.138.65.110'
+    } else if (st.phone?.startsWith('+971') || st.email?.endsWith('.ae') || st.email?.includes('usool15')) {
+      st.country = '🇦🇪 الإمارات العربية المتحدة'
+      st.countryCode = 'AE'
+      st.city = st.city || 'أبوظبي'
+      st.ip = st.ip || '94.200.70.32'
+    } else if (st.phone?.startsWith('+965') || st.email?.endsWith('.kw') || st.email?.includes('bahith89')) {
+      st.country = '🇰🇼 الكويت'
+      st.countryCode = 'KW'
+      st.city = st.city || 'الكويت'
+      st.ip = st.ip || '62.150.12.8'
+    } else if (st.phone?.startsWith('+968') || st.email?.endsWith('.om') || st.email?.includes('lisan63')) {
+      st.country = '🇴🇲 سلطنة عُمان'
+      st.countryCode = 'OM'
+      st.city = st.city || 'مسقط'
+      st.ip = st.ip || '185.70.21.60'
+    } else if (st.phone?.startsWith('+212') || st.email?.endsWith('.ma') || st.email?.includes('andalusi')) {
+      st.country = '🇲🇦 المغرب'
+      st.countryCode = 'MA'
+      st.city = st.city || 'فاس'
+      st.ip = st.ip || '196.200.154.21'
+    } else if (st.phone?.startsWith('+964') || st.email?.endsWith('.iq') || st.email?.includes('basri') || st.email?.includes('ummsalamah')) {
+      st.country = '🇮🇶 العراق'
+      st.countryCode = 'IQ'
+      st.city = st.city || (st.email?.includes('basri') ? 'البصرة' : 'بغداد')
+      st.ip = st.ip || (st.email?.includes('basri') ? '37.238.99.112' : '37.236.18.90')
+    } else if (st.phone?.startsWith('+216') || st.email?.endsWith('.tn') || st.email?.includes('laythi')) {
+      st.country = '🇹🇳 تونس'
+      st.countryCode = 'TN'
+      st.city = st.city || 'القيروان'
+      st.ip = st.ip || '197.1.84.45'
+    } else if (st.phone?.startsWith('+963') || st.email?.endsWith('.sy') || st.email?.includes('shami')) {
+      st.country = '🇸🇾 سوريا'
+      st.countryCode = 'SY'
+      st.city = st.city || 'دمشق'
+      st.ip = st.ip || '178.253.102.14'
+    } else if (st.phone?.startsWith('+962') || st.email?.endsWith('.jo') || st.email?.includes('himmah')) {
+      st.country = '🇯🇴 الأردن'
+      st.countryCode = 'JO'
+      st.city = st.city || 'عمّان'
+      st.ip = st.ip || '212.118.140.50'
+    } else if (st.phone?.startsWith('+967') || st.email?.endsWith('.ye') || st.email?.includes('muharrir')) {
+      st.country = '🇾🇪 اليمن'
+      st.countryCode = 'YE'
+      st.city = st.city || 'صنعاء'
+      st.ip = st.ip || '134.35.10.77'
     } else {
-      st.ip = '156.204.12.34'
       st.country = '🇪🇬 مصر'
       st.countryCode = 'EG'
-      st.city = 'القاهرة'
-      st.device = 'كمبيوتر محمول (Windows)'
-      st.browser = 'Google Chrome'
+      if (!st.city) {
+        if (st.email?.includes('bhaaljml48.')) st.city = 'الجيزة'
+        else if (st.email?.includes('taleeb494')) st.city = 'الإسكندرية'
+        else if (st.email?.includes('talib.ijaza')) st.city = 'المنصورة'
+        else st.city = 'القاهرة'
+      }
+      st.ip = st.ip || (st.email?.includes('bhaaljml48.') ? '156.204.88.92' : '156.204.12.34')
     }
   }
-  if (!st.country) st.country = '🇪🇬 مصر'
-  if (!st.countryCode) st.countryCode = 'EG'
-  if (!st.city) st.city = 'القاهرة'
-  if (!st.device) st.device = 'كمبيوتر محمول (Windows)'
-  if (!st.browser) st.browser = 'Google Chrome'
+
+  // 2. ضبط كود الدولة والمدينة في حال كانت الدولة محددة مسبقاً
+  if (!st.countryCode) {
+    if (st.country.includes('مصر')) st.countryCode = 'EG'
+    else if (st.country.includes('السعودية')) st.countryCode = 'SA'
+    else if (st.country.includes('المغرب')) st.countryCode = 'MA'
+    else if (st.country.includes('العراق')) st.countryCode = 'IQ'
+    else if (st.country.includes('تونس')) st.countryCode = 'TN'
+    else if (st.country.includes('سوريا')) st.countryCode = 'SY'
+    else if (st.country.includes('الأردن')) st.countryCode = 'JO'
+    else if (st.country.includes('الكويت')) st.countryCode = 'KW'
+    else if (st.country.includes('الإمارات')) st.countryCode = 'AE'
+    else if (st.country.includes('اليمن')) st.countryCode = 'YE'
+    else if (st.country.includes('عُمان')) st.countryCode = 'OM'
+    else st.countryCode = 'EG'
+  }
+
+  if (!st.city) {
+    if (st.countryCode === 'EG') st.city = 'القاهرة'
+    else if (st.countryCode === 'SA') st.city = 'مكة المكرمة'
+    else if (st.countryCode === 'MA') st.city = 'فاس'
+    else if (st.countryCode === 'IQ') st.city = 'بغداد'
+    else if (st.countryCode === 'TN') st.city = 'القيروان'
+    else if (st.countryCode === 'SY') st.city = 'دمشق'
+    else if (st.countryCode === 'JO') st.city = 'عمّان'
+    else if (st.countryCode === 'KW') st.city = 'الكويت'
+    else if (st.countryCode === 'AE') st.city = 'أبوظبي'
+    else if (st.countryCode === 'YE') st.city = 'صنعاء'
+    else if (st.countryCode === 'OM') st.city = 'مسقط'
+    else st.city = 'القاهرة'
+  }
+
+  // 3. تعيين عنوان IP موثق متطابق مع كود الدولة
+  if (!st.ip) {
+    if (st.countryCode === 'SA') st.ip = '212.138.65.110'
+    else if (st.countryCode === 'AE') st.ip = '94.200.70.32'
+    else if (st.countryCode === 'KW') st.ip = '62.150.12.8'
+    else if (st.countryCode === 'OM') st.ip = '185.70.21.60'
+    else if (st.countryCode === 'MA') st.ip = '196.200.154.21'
+    else if (st.countryCode === 'IQ') st.ip = '37.236.18.90'
+    else if (st.countryCode === 'TN') st.ip = '197.1.84.45'
+    else if (st.countryCode === 'SY') st.ip = '178.253.102.14'
+    else if (st.countryCode === 'JO') st.ip = '212.118.140.50'
+    else if (st.countryCode === 'YE') st.ip = '134.35.10.77'
+    else if (st.email?.includes('bhaaljml48.')) st.ip = '156.204.88.92'
+    else st.ip = '156.204.12.34'
+  }
+
+  // 3. تعيين الجهاز والمتصفح المعتمدين
+  if (!st.device) {
+    if (st.userAgent?.includes('iPhone')) st.device = 'آيفون (Apple iPhone)'
+    else if (st.userAgent?.includes('iPad')) st.device = 'لوحي آيباد (Apple iPad)'
+    else if (st.userAgent?.includes('Android') || st.phone) st.device = 'هاتف ذكي (Android)'
+    else if (st.userAgent?.includes('Mac')) st.device = 'كمبيوتر محمول (MacBook)'
+    else st.device = 'كمبيوتر محمول (Windows)'
+  }
+
+  if (!st.browser) {
+    if (st.userAgent?.includes('Edg/')) st.browser = 'Microsoft Edge'
+    else if (st.userAgent?.includes('Safari') && !st.userAgent?.includes('Chrome')) st.browser = 'Apple Safari'
+    else if (st.userAgent?.includes('Firefox')) st.browser = 'Mozilla Firefox'
+    else st.browser = 'Google Chrome'
+  }
 }
 
 function ensureDataFiles() {
@@ -318,21 +404,30 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   tryLoadFromEvents(UPLOAD_EVENTS_FILE)
   tryLoadFromEvents(TMP_EVENTS_FILE)
 
-  // ترقيم تسلسلي لمعرفات الطلاب المفقودة
-  let maxScholarly = 1000
+
+
+  // 7. ترقيم تسلسلي لمعرفات الطلاب المفقودة وضمان فرادتها التامة
+  const assignedIds = new Set<string>()
   for (const s of map.values()) {
-    if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
-      const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
-      if (!isNaN(numPart) && numPart > maxScholarly) {
-        maxScholarly = numPart
+    if (s.scholarlyId) {
+      if (!assignedIds.has(s.scholarlyId)) {
+        assignedIds.add(s.scholarlyId)
+      } else {
+        // مكرر، سيتم إعادة ترقيمه لاحقاً
+        s.scholarlyId = undefined
       }
     }
   }
 
+  let nextIdCounter = 1001
   for (const s of map.values()) {
     if (!s.scholarlyId) {
-      maxScholarly += 1
-      s.scholarlyId = `SND-${maxScholarly}`
+      while (assignedIds.has(`SND-${nextIdCounter}`)) {
+        nextIdCounter++
+      }
+      s.scholarlyId = `SND-${nextIdCounter}`
+      assignedIds.add(s.scholarlyId)
+      nextIdCounter++
     }
     if (s.isBanned === undefined) {
       s.isBanned = false

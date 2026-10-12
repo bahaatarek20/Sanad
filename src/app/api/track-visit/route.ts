@@ -1,11 +1,30 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { recordVisitorHit } from '@/lib/student-tracking'
+import { recordVisitorHit, registerOrUpdateStudent } from '@/lib/student-tracking'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function POST(request: NextRequest) {
   try {
     const cookies = request.cookies
 
-    // 1. استثناء جلسة المشرف وصاحب المنصة
+    // 1. مزامنة تسجيل الطالب الفعلي من اللاب أو الهاتف فورياً وبشكل دائم
+    const studentUserCookie = cookies.get('sanad_student_user')?.value
+    if (studentUserCookie) {
+      try {
+        const student = JSON.parse(studentUserCookie)
+        const email = (student.email || '').trim().toLowerCase()
+        if (email) {
+          const clientTelemetry = extractClientTelemetry(request.headers)
+          registerOrUpdateStudent(email, student.fullName || student.name, {
+            phone: student.phone,
+            authProvider: student.authProvider || 'email',
+            avatarUrl: student.avatarUrl,
+            ...clientTelemetry,
+          })
+        }
+      } catch {}
+    }
+
+    // 2. استثناء جلسة المشرف وصاحب المنصة من عداد الزيارات
     const hasAdminToken = cookies.has('sanad_admin_gate_token')
     const isOwner = cookies.has('sanad_is_platform_owner')
     const role = cookies.get('sanad_role')?.value
@@ -14,8 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ counted: false, reason: 'owner_excluded' })
     }
 
-    // 2. استثناء حسابات المشرف عند دخوله بحساب طالب العلم
-    const studentUserCookie = cookies.get('sanad_student_user')?.value
+    // 3. استثناء حسابات المشرف عند دخوله بحساب طالب العلم من عداد الزيارات
     if (studentUserCookie) {
       try {
         const student = JSON.parse(studentUserCookie)

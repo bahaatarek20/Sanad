@@ -185,7 +185,16 @@ export async function sendOtpToPhone(
 export async function verifyPhoneOtp(
   rawPhone: string,
   enteredCode: string,
-  defaultCountry = '+20'
+  defaultCountry = '+20',
+  telemetry?: {
+    ip?: string
+    country?: string
+    countryCode?: string
+    city?: string
+    device?: string
+    browser?: string
+    userAgent?: string
+  }
 ): Promise<{ success: boolean; message: string; phone: string; studentName: string }> {
   const phone = normalizePhoneNumber(rawPhone, defaultCountry)
   const code = enteredCode.trim()
@@ -228,13 +237,14 @@ export async function verifyPhoneOtp(
       const twData = await twRes.json()
       if (twRes.ok && twData.status === 'approved') {
         globalPhoneStore.delete(phone)
-        const studentName = record?.fullName || `طالب (${phone.slice(-4)})`
-        const syntheticEmail = `${phone.replace(/\+/g, '')}@phone.sanad.edu`
+        const studentName = record?.fullName || `طالب العلم (${phone})`
+        const cleanDigits = phone.replace(/[^0-9]/g, '')
+        const syntheticEmail = `${cleanDigits}@student.sanad.edu`
         await setStudentSessionCookie(studentName, syntheticEmail, {
           phone,
           authProvider: 'phone',
         })
-        registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone' })
+        registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone', ...telemetry })
         return {
           success: true,
           message: 'تم التحقق بنجاح من رقم هاتفك عبر Twilio. أهلاً بك في منصة سَنَد!',
@@ -258,13 +268,14 @@ export async function verifyPhoneOtp(
 
     if (!error && data?.user) {
       globalPhoneStore.delete(phone)
-      const studentName = data.user.user_metadata?.full_name || record?.fullName || `طالب (${phone.slice(-4)})`
-      const syntheticEmail = `${phone.replace(/\+/g, '')}@phone.sanad.edu`
+      const studentName = data.user.user_metadata?.full_name || record?.fullName || `طالب العلم (${phone})`
+      const cleanDigits = phone.replace(/[^0-9]/g, '')
+      const syntheticEmail = `${cleanDigits}@student.sanad.edu`
       await setStudentSessionCookie(studentName, syntheticEmail, {
         phone,
         authProvider: 'phone',
       })
-      registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone' })
+      registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone', ...telemetry })
       return {
         success: true,
         message: 'تم التحقق بنجاح من رقم هاتفك. أهلاً بك في منصة سَنَد!',
@@ -318,15 +329,16 @@ export async function verifyPhoneOtp(
   }
 
   // تم التحقق بنجاح!
-  const studentName = record?.fullName || `طالب (${phone.slice(-4)})`
+  const studentName = record?.fullName || `طالب العلم (${phone})`
   globalPhoneStore.delete(phone)
 
-  const syntheticEmail = `${phone.replace(/\+/g, '')}@phone.sanad.edu`
+  const cleanDigits = phone.replace(/[^0-9]/g, '')
+  const syntheticEmail = `${cleanDigits}@student.sanad.edu`
   await setStudentSessionCookie(studentName, syntheticEmail, {
     phone,
     authProvider: 'phone',
   })
-  registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone' })
+  registerOrUpdateStudent(syntheticEmail, studentName, { phone, authProvider: 'phone', ...telemetry })
 
   return {
     success: true,
