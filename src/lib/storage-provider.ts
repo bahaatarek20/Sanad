@@ -55,7 +55,12 @@ export interface StorageConfig {
  * جلب إعدادات التخزين النشطة من متغيرات البيئة
  */
 export function getActiveStorageConfig(): StorageConfig {
-  const provider = (process.env.STORAGE_PROVIDER as any) || 'cloudflare-r2'
+  const envProv = process.env.STORAGE_PROVIDER
+  const validProviders = ['cloudflare-r2', 'aws-s3', 'wasabi', 'minio', 'firebase-storage', 'local'] as const
+  const provider =
+    typeof envProv === 'string' && (validProviders as readonly string[]).includes(envProv)
+      ? (envProv as (typeof validProviders)[number])
+      : 'cloudflare-r2'
   return {
     provider,
     bucket: process.env.STORAGE_BUCKET || 'sanad-curriculum-assets',
@@ -129,7 +134,17 @@ export async function generatePresignedDirectUploadUrl(params: {
  * تصدير حزمة الأرشيف الكاملة للمتون والدروس كملف محمول (Full JSON Export Archive)
  * يضمن عدم الاعتماد على أي منصة أو مزود خارجي مستقبلاً
  */
-export function exportCurriculumArchiveJson(allCourses: any[]): string {
+export function exportCurriculumArchiveJson(
+  allCourses: Array<{
+    slug?: string
+    title?: string
+    category?: string
+    instructor?: string
+    author?: string
+    stage?: number | string
+    episodes?: unknown[]
+  }>
+): string {
   const archive = {
     sanadVersion: '2.4.0',
     exportedAt: new Date().toISOString(),

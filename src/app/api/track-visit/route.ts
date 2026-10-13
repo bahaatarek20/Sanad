@@ -18,12 +18,13 @@ export async function POST(request: NextRequest) {
     if (studentUserCookie) {
       try {
         const student = verifySessionToken(studentUserCookie)
-        const email = student?.email ? String(student.email).trim().toLowerCase() : ''
-        if (email) {
+        if (student && student.email) {
+          const email = String(student.email).trim().toLowerCase()
           const clientTelemetry = extractClientTelemetry(request.headers)
+          const authProvider = (student.authProvider === 'google' || student.authProvider === 'phone') ? student.authProvider : 'email'
           registerOrUpdateStudent(email, (student.full_name || student.name) as string, {
             phone: student.phone as string,
-            authProvider: (student.authProvider || 'email') as any,
+            authProvider,
             avatarUrl: student.avatarUrl as string,
             ...clientTelemetry,
           })

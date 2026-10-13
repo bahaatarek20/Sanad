@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
 
   // 2. فحص كوكي الطالب المعتمد
   const studentCookie = request.cookies.get('sanad_student_user')
-  let hasUser = Boolean(studentCookie?.value)
+  const hasUser = Boolean(studentCookie?.value)
 
   // 2.5. تحصين مسارات الإدارة وبوابة التحكم (Admin Route Fortress)
   // لا يُسمح بدخول أو حتى رؤية بوابة الإدارة إلا للمهندس المشرف العام حصراً
@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
 
     let isOwnerVerified =
       isLocalDev ||
-      (Boolean(adminToken) && adminToken.includes('.')) ||
+      (adminToken ? adminToken.includes('.') : false) ||
       (Boolean(gateKey) && gateKey === validEntryKey)
 
     if (!isOwnerVerified && studentCookie?.value) {

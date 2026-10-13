@@ -90,12 +90,15 @@ export async function getCurrentStudentUser(): Promise<StudentUser | null> {
           id: String(parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
           email,
           phone: parsed.phone ? String(parsed.phone) : undefined,
-          authProvider: (parsed.authProvider as any) || 'email',
+          authProvider:
+            parsed.authProvider === 'google' || parsed.authProvider === 'phone'
+              ? (parsed.authProvider as 'google' | 'phone')
+              : 'email',
           avatarUrl: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
           user_metadata: {
             full_name: String(parsed.full_name || parsed.fullName || 'طالب العلم'),
             phone: parsed.phone ? String(parsed.phone) : undefined,
-            authProvider: (parsed.authProvider as any) || 'email',
+            authProvider: typeof parsed.authProvider === 'string' ? parsed.authProvider : 'email',
             avatar_url: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
           },
         }

@@ -105,7 +105,7 @@ export function getCountryInfo(code?: string): { country: string; flag: string; 
 
 export function extractClientTelemetry(headersSource: Headers | Record<string, string | null | undefined>): ClientTelemetry {
   const getHeader = (key: string): string => {
-    if (typeof (headersSource as any).get === 'function') {
+    if ('get' in headersSource && typeof headersSource.get === 'function') {
       return (headersSource as Headers).get(key) || ''
     }
     return (headersSource as Record<string, string>)[key] || ''

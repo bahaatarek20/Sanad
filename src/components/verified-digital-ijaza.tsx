@@ -36,9 +36,12 @@ export default function VerifiedDigitalIjaza({
   const [currentOrigin, setCurrentOrigin] = useState('')
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCurrentOrigin(window.location.origin)
-    }
+    const t = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        setCurrentOrigin(window.location.origin)
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   const verifyUrl = `${currentOrigin || 'https://sanad-edu1.vercel.app'}/verify-ijaza/${encodeURIComponent(certificate.id)}`

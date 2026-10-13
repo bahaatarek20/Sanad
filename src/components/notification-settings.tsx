@@ -14,15 +14,18 @@ export default function NotificationSettings() {
   const [savedMsg, setSavedMsg] = useState(false)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setPreferences({
-        dailyReminders: localStorage.getItem('sanad_notify_daily_reminders') !== 'false',
-        spacedRepetition: localStorage.getItem('sanad_notify_spaced_repetition') !== 'false',
-        quotesEnabled: localStorage.getItem('sanad_notify_quotes_enabled') !== 'false',
-        broadcastsEnabled: localStorage.getItem('sanad_notify_broadcasts_enabled') !== 'false',
-        soundEnabled: localStorage.getItem('sanad_notify_sound_enabled') !== 'false',
-      })
-    }
+    const t = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        setPreferences({
+          dailyReminders: localStorage.getItem('sanad_notify_daily_reminders') !== 'false',
+          spacedRepetition: localStorage.getItem('sanad_notify_spaced_repetition') !== 'false',
+          quotesEnabled: localStorage.getItem('sanad_notify_quotes_enabled') !== 'false',
+          broadcastsEnabled: localStorage.getItem('sanad_notify_broadcasts_enabled') !== 'false',
+          soundEnabled: localStorage.getItem('sanad_notify_sound_enabled') !== 'false',
+        })
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   const togglePreference = (key: keyof typeof preferences) => {

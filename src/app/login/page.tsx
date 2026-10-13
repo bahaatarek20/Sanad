@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use, Suspense } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   BookOpen,
   KeyRound,
@@ -12,8 +13,6 @@ import {
   CheckCircle2,
   Send,
   RefreshCw,
-  Lock,
-  Sparkles,
   Eye,
   EyeOff,
 } from 'lucide-react'
@@ -39,6 +38,7 @@ interface LoginPageProps {
 }
 
 function LoginFormContent({ searchParams }: LoginPageProps) {
+  const router = useRouter()
   const params = use(searchParams)
 
   const isVerifyEmailOtp = params.mode === 'verify-otp'
@@ -89,7 +89,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       })
 
       if (syncRes.ok) {
-        window.location.href = '/courses'
+        router.push('/courses')
       } else {
         const data = await syncRes.json().catch(() => ({}))
         setFirebaseError(data.error || 'فشل توثيق جلسة Google في المنصة')
@@ -110,8 +110,8 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <div className="container mx-auto flex min-h-[calc(100vh-10rem)] max-w-md items-center justify-center px-4 py-12">
-      <div className="card-3d relative w-full overflow-hidden rounded-3xl border border-stone-200/90 bg-white/95 p-8 shadow-xl backdrop-blur-md dark:border-stone-700 dark:bg-stone-900/95">
+    <div className="container mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-start justify-center px-4 pt-6 sm:pt-10 pb-16">
+      <div className="card-3d relative w-full overflow-hidden rounded-3xl border border-stone-200/90 bg-white/95 p-6 sm:p-8 shadow-xl backdrop-blur-md dark:border-stone-700 dark:bg-stone-900/95">
         
         {/* شريط تذهيب علوي فاخر */}
         <div className="absolute top-0 right-0 left-0 h-1.5 bg-linear-to-r from-emerald-800 via-amber-500 to-emerald-950" />

@@ -212,28 +212,31 @@ export default function GlobalAiTutor() {
 
   // تحميل المفتاح والمحادثة المحفوظة إن وُجدت
   useEffect(() => {
-    try {
-      const storedKey = localStorage.getItem('sanad_gemini_key')
-      if (storedKey) {
-        setUserApiKey(storedKey)
-        setKeyInput(storedKey)
-      }
-      const storedChat = localStorage.getItem('sanad_ai_chat_history')
-      if (storedChat) {
-        const parsed = JSON.parse(storedChat)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed)
+    const t = setTimeout(() => {
+      try {
+        const storedKey = localStorage.getItem('sanad_gemini_key')
+        if (storedKey) {
+          setUserApiKey(storedKey)
+          setKeyInput(storedKey)
         }
-      }
-      fetch('/api/courses')
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.success && Array.isArray(data.courses) && data.courses.length > 0) {
-            setCoursesList(data.courses)
+        const storedChat = localStorage.getItem('sanad_ai_chat_history')
+        if (storedChat) {
+          const parsed = JSON.parse(storedChat)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed)
           }
-        })
-        .catch(() => {})
-    } catch {}
+        }
+        fetch('/api/courses')
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.success && Array.isArray(data.courses) && data.courses.length > 0) {
+              setCoursesList(data.courses)
+            }
+          })
+          .catch(() => {})
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // حفظ المحادثة تلقائياً

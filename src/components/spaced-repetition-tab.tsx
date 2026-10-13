@@ -36,9 +36,12 @@ export default function SpacedRepetitionTab({
   const [showSuccessToast, setShowSuccessToast] = useState(false)
 
   useEffect(() => {
-    setIsClient(true)
-    const rec = getCourseReviewRecord(course.slug)
-    setRecord(rec)
+    const t = setTimeout(() => {
+      setIsClient(true)
+      const rec = getCourseReviewRecord(course.slug)
+      setRecord(rec)
+    }, 0)
+    return () => clearTimeout(t)
   }, [course.slug])
 
   const handleReviewAction = (quality: 'easy' | 'good' | 'hard' | 'again') => {

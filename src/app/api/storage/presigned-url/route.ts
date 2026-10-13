@@ -60,10 +60,11 @@ export async function POST(req: Request) {
       success: true,
       ...presignedData,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in presigned upload route:', err)
+    const errorMessage = err instanceof Error ? err.message : String(err)
     return NextResponse.json(
-      { success: false, error: `فشل توليد رابط الرفع المباشر: ${err.message || String(err)}` },
+      { success: false, error: `فشل توليد رابط الرفع المباشر: ${errorMessage}` },
       { status: 500 }
     )
   }

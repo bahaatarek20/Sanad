@@ -61,69 +61,65 @@ export default async function Navbar() {
 
         {/* أدوات الطالب المضبوطة بحجم مدمج وأنيق */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* حزمة أدوات المدارسة التفاعلية */}
-          <div className="flex items-center gap-1">
-            <AiTriggerButton />
-            <PomodoroTimer />
-          </div>
-
-          {/* فاصل رأسي خفيف */}
-          <div className="hidden sm:block h-4 w-px bg-stone-200 dark:bg-stone-800" />
-
-          {/* التفضيلات والحساب وتثبيت التطبيق */}
-          <div className="flex items-center gap-1">
-            <PwaInstallButton />
-            <ThemeToggle />
-            <InboxDropdown />
-
-            {user ? (
-              <div className="hidden md:flex items-center gap-1">
-                {/* رابط كشكول الطالب الخاص */}
-                <Link
-                  href="/dashboard"
-                  title="كشكول الفوائد ومتابعة الإنجاز"
-                  className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
-                >
-                  <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>الكشكول</span>
-                </Link>
-
-                {/* رابط إعدادات الحساب */}
-                <Link
-                  href="/settings"
-                  title="إعدادات الحساب والملف الشخصي"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
-                >
-                  <User className="h-3.5 w-3.5" />
-                </Link>
-
-                {/* زر الخروج الشامل والتبديل لحساب آخر */}
-                <LogoutButton />
+          {user ? (
+            <>
+              {/* حزمة أدوات المدارسة التفاعلية للطالب المسجل */}
+              <div className="flex items-center gap-1">
+                <AiTriggerButton />
+                <div className="hidden sm:block">
+                  <PomodoroTimer />
+                </div>
               </div>
-            ) : (
-              <div className="hidden md:flex items-center gap-1">
-                {/* زر كشكول الطالب المستقل */}
-                <Link
-                  href="/dashboard"
-                  title="كشكول الفوائد والشوارد"
-                  className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
-                >
-                  <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>الكشكول</span>
-                </Link>
 
-                {/* زر تسجيل الدخول */}
-                <Link
-                  href="/login"
-                  title="تسجيل الدخول إلى المنصة"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-emerald-900 px-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800 dark:hover:bg-emerald-700"
-                >
-                  <LogIn className="h-3.5 w-3.5" />
-                  <span>دخول</span>
-                </Link>
+              {/* فاصل رأسي خفيف */}
+              <div className="hidden sm:block h-4 w-px bg-stone-200 dark:bg-stone-800" />
+
+              {/* التفضيلات والحساب وتثبيت التطبيق */}
+              <div className="flex items-center gap-1">
+                <div className="hidden sm:block">
+                  <PwaInstallButton />
+                </div>
+                <ThemeToggle />
+                <InboxDropdown />
+
+                <div className="hidden md:flex items-center gap-1">
+                  {/* رابط كشكول الطالب الخاص */}
+                  <Link
+                    href="/dashboard"
+                    title="كشكول الفوائد ومتابعة الإنجاز"
+                    className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>الكشكول</span>
+                  </Link>
+
+                  {/* رابط إعدادات الحساب */}
+                  <Link
+                    href="/settings"
+                    title="إعدادات الحساب والملف الشخصي"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
+                  >
+                    <User className="h-3.5 w-3.5" />
+                  </Link>
+
+                  {/* زر الخروج الشامل والتبديل لحساب آخر */}
+                  <LogoutButton />
+                </div>
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <ThemeToggle />
+              <Link
+                href="/login"
+                title="تسجيل الدخول أو إنشاء حساب"
+                className="flex h-8 sm:h-8.5 items-center gap-1 sm:gap-1.5 rounded-xl bg-linear-to-r from-emerald-800 to-emerald-950 px-2.5 sm:px-3.5 text-xs font-bold text-white shadow-xs hover:from-emerald-700 hover:to-emerald-900 transition cursor-pointer border border-emerald-600/30"
+              >
+                <LogIn className="h-3.5 w-3.5 text-amber-300" />
+                <span>دخول / حساب جديد</span>
+              </Link>
+            </div>
+          )}
 
           {/* زر الهامبرجر للجوال — يظهر فقط تحت lg */}
           <div className="lg:hidden">

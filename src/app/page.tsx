@@ -3,6 +3,7 @@ import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import DynamicQuotesBanner from '@/components/dynamic-quotes-banner'
 import { Sparkles, Compass, BookOpen, Star, ArrowLeft, Flame } from 'lucide-react'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import { getStudentProfileData } from '@/lib/student-tracking'
@@ -60,6 +61,10 @@ export default async function HomePage() {
 
   // جلب بيانات الطالب للتعرف على المتون المنجزة
   const user = await getCurrentStudentUser()
+
+  if (!user) {
+    redirect('/login')
+  }
 
   let completedCourseSlugs: string[] = []
 

@@ -48,16 +48,19 @@ export default function MobileMenu({
 
   // تزامن حالة النمط النهاري والليلي
   useEffect(() => {
-    setMounted(true)
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
-    if (stored === 'dark') {
-      setIsDark(true)
-    } else {
-      setIsDark(false)
-      if (!stored && typeof window !== 'undefined') {
-        localStorage.setItem('sanad_theme', 'light')
+    const t = setTimeout(() => {
+      setMounted(true)
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
+      if (stored === 'dark') {
+        setIsDark(true)
+      } else {
+        setIsDark(false)
+        if (!stored && typeof window !== 'undefined') {
+          localStorage.setItem('sanad_theme', 'light')
+        }
       }
-    }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   const toggleTheme = () => {
@@ -74,7 +77,10 @@ export default function MobileMenu({
 
   // أغلق القائمة عند الانتقال لصفحة جديدة
   useEffect(() => {
-    setIsOpen(false)
+    const t = setTimeout(() => {
+      setIsOpen(false)
+    }, 0)
+    return () => clearTimeout(t)
   }, [pathname])
 
   // منع تمرير الصفحة خلف القائمة وإغلاقها بزر Escape

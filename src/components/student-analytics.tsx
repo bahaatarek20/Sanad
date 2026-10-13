@@ -69,7 +69,6 @@ export default function StudentAnalytics({
     } catch {}
 
     sessionSecondsRef.current = initialSec
-    setSessionSeconds(initialSec)
 
     const checkTabActive = () => {
       if (typeof document === 'undefined') return true
@@ -96,7 +95,11 @@ export default function StudentAnalytics({
     // فحص مبدئي للحالة
     const initiallyActive = checkTabActive()
     isTabActiveRef.current = initiallyActive
-    setIsTabActive(initiallyActive)
+
+    const t = setTimeout(() => {
+      setSessionSeconds(initialSec)
+      setIsTabActive(initiallyActive)
+    }, 0)
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
@@ -115,6 +118,7 @@ export default function StudentAnalytics({
     }, 1000)
 
     return () => {
+      clearTimeout(t)
       clearInterval(timer)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)

@@ -123,10 +123,11 @@ export async function GET(req: NextRequest) {
       listId,
       videos: [],
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [YouTube Playlist API Error]:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { success: false, message: 'حدث خطأ أثناء معالجة قائمة التشغيل.', error: error?.message },
+      { success: false, message: 'حدث خطأ أثناء معالجة قائمة التشغيل.', error: errorMessage },
       { status: 500 }
     )
   }

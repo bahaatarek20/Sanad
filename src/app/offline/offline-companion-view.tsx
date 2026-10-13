@@ -1,6 +1,6 @@
 'use client'
 
-export function OfflineCompanionView(props?: any) {
+export function OfflineCompanionView(_props?: Record<string, unknown>) {
   return null
 }
 

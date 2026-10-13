@@ -1,5 +1,29 @@
 [
   {
+    "id": "student_1791906352772_8y2di",
+    "scholarlyId": "SND-1005",
+    "email": "bhaaljml3@gmail.com",
+    "name": "test 1",
+    "authProvider": "email",
+    "ip": "156.204.12.34",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "القاهرة",
+    "device": "كمبيوتر محمول (Windows)",
+    "browser": "Google Chrome",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "registeredAt": "2026-10-13T15:45:52.772Z",
+    "lastActive": "2026-10-13T15:45:52.991Z",
+    "totalStudyMinutes": 0,
+    "streak": 0,
+    "completedCourses": [],
+    "completedEpisodesMap": {},
+    "dailyStudyLog": {},
+    "listenedSessions": [],
+    "notesCount": 0,
+    "isBanned": false
+  },
+  {
     "id": "student_1791330362861_vfqfa",
     "scholarlyId": "SND-1004",
     "email": "bhaaljml66@gmail.com",
@@ -98,9 +122,9 @@
     "authProvider": "email",
     "phone": "+201012728516",
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-12T22:49:11.416Z",
-    "totalStudyMinutes": 759,
-    "streak": 1,
+    "lastActive": "2026-10-13T18:18:20.189Z",
+    "totalStudyMinutes": 825,
+    "streak": 2,
     "completedCourses": [],
     "completedEpisodesMap": {
       "40-hadith-nawawi-1": [],
@@ -114,7 +138,8 @@
       "2026-09-30": 15,
       "2026-10-04": 46,
       "2026-10-06": 3,
-      "2026-10-12": 2
+      "2026-10-12": 2,
+      "2026-10-13": 66
     },
     "listenedSessions": [
       {
@@ -149,7 +174,7 @@
       }
     ],
     "notesCount": 0,
-    "lastStudiedDate": "2026-10-12",
+    "lastStudiedDate": "2026-10-13",
     "passwordHash": "9f00281e6f8ea02ae9eba5393bb24899ad6140f9c18dc75817828befab6d2412e632ec492d0f5e44bbb7a7d4dfb8b60fbc0ed5b695f582a2a6aff986d0d0c1af",
     "passwordSalt": "0936ba752134526d993d54c7ff17741d",
     "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A8%D9%87%D8%A7%D8%A1&background=047857&color=fff&size=128",

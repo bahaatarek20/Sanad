@@ -8,19 +8,22 @@ export default function ThemeToggle() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
-    if (stored === 'dark') {
-      setIsDark(true)
-      document.documentElement.classList.add('dark')
-    } else {
-      // الوضع الافتراضي الحتمي هو الوضع النهاري
-      setIsDark(false)
-      document.documentElement.classList.remove('dark')
-      if (!stored && typeof window !== 'undefined') {
-        localStorage.setItem('sanad_theme', 'light')
+    const t = setTimeout(() => {
+      setMounted(true)
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('sanad_theme') : null
+      if (stored === 'dark') {
+        setIsDark(true)
+        document.documentElement.classList.add('dark')
+      } else {
+        // الوضع الافتراضي الحتمي هو الوضع النهاري
+        setIsDark(false)
+        document.documentElement.classList.remove('dark')
+        if (!stored && typeof window !== 'undefined') {
+          localStorage.setItem('sanad_theme', 'light')
+        }
       }
-    }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   const toggleTheme = () => {

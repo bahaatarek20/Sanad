@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Amiri, Cairo } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/navbar'
+import BottomNav from '@/components/bottom-nav'
 import Footer from '@/components/footer'
 import ScholarlyNotification from '@/components/scholarly-notification'
 import GlobalAiTutor from '@/components/global-ai-tutor'
@@ -34,6 +35,7 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export const metadata: Metadata = {
@@ -145,12 +147,6 @@ export default async function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-          rel="stylesheet"
-        />
         <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
         <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -180,7 +176,8 @@ export default async function RootLayout({
         className={`${cairo.variable} ${amiri.variable} ${cairo.className} min-h-screen flex flex-col antialiased selection:bg-amber-400/30 selection:text-emerald-950 transition-colors duration-300 font-sans`}
       >
         <Navbar />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 pb-18 lg:pb-0">{children}</main>
+        <BottomNav isLoggedIn={!!user} />
         <Footer />
         <ScholarlyNotification />
         <GlobalAiTutor />

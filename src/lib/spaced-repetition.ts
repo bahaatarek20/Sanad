@@ -76,7 +76,7 @@ export function recordCourseReview(
 
   const now = new Date()
   let currentLevel = existing ? existing.level : 0
-  let repetitionsCount = existing ? existing.repetitionsCount + 1 : 1
+  const repetitionsCount = existing ? existing.repetitionsCount + 1 : 1
 
   // تعديل المستوى وفق مستوى الاستحضار
   if (quality === 'again') {

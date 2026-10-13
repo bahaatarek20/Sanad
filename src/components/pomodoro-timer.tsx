@@ -18,23 +18,26 @@ export default function PomodoroTimer() {
 
   // قراءة وقت المدارسة اليومي والإعدادات من المتصفح
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sanad_today_study_seconds')
-      if (stored) {
-        setTotalStudySeconds(Number(stored))
-      }
-      const savedDuration = localStorage.getItem('sanad_study_custom_min')
-      if (savedDuration) {
-        const val = Number(savedDuration)
-        if (val > 0) {
-          setStudyMinutes(val)
-          setTimeLeft(val * 60)
-          setCustomInputVal(String(val))
+    const t = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('sanad_today_study_seconds')
+        if (stored) {
+          setTotalStudySeconds(Number(stored))
         }
+        const savedDuration = localStorage.getItem('sanad_study_custom_min')
+        if (savedDuration) {
+          const val = Number(savedDuration)
+          if (val > 0) {
+            setStudyMinutes(val)
+            setTimeLeft(val * 60)
+            setCustomInputVal(String(val))
+          }
+        }
+      } catch {
+        // LocalStorage fallback
       }
-    } catch {
-      // LocalStorage fallback
-    }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // إغلاق النافذة عند الضغط على Escape
@@ -70,21 +73,24 @@ export default function PomodoroTimer() {
           })
         }
       }, 1000)
-    } else if (timeLeft === 0) {
-      if (mode === 'study') {
-        // إنهاء جلسة المدارسة والبدء في استراحة الاستغفار
-        setMode('break')
-        setTimeLeft(breakMinutes * 60)
-        setIsActive(false)
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification('انتهت جلسة المدارسة! خذ وقتاً للاستراحة والاستغفار والذكر.')
+    } else if (timeLeft === 0 && isActive) {
+      const t = setTimeout(() => {
+        if (mode === 'study') {
+          // إنهاء جلسة المدارسة والبدء في استراحة الاستغفار
+          setMode('break')
+          setTimeLeft(breakMinutes * 60)
+          setIsActive(false)
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('انتهت جلسة المدارسة! خذ وقتاً للاستراحة والاستغفار والذكر.')
+          }
+        } else {
+          // إنهاء الاستراحة والعودة للمدارسة
+          setMode('study')
+          setTimeLeft(studyMinutes * 60)
+          setIsActive(false)
         }
-      } else {
-        // إنهاء الاستراحة والعودة للمدارسة
-        setMode('study')
-        setTimeLeft(studyMinutes * 60)
-        setIsActive(false)
-      }
+      }, 0)
+      return () => clearTimeout(t)
     }
 
     return () => {

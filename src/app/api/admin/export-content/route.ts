@@ -84,10 +84,11 @@ export async function GET(req: Request) {
       status: 200,
       headers: responseHeaders,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating curriculum archive:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { success: false, error: `فشل إنشاء الأرشيف الوقفي: ${error.message || String(error)}` },
+      { success: false, error: `فشل إنشاء الأرشيف الوقفي: ${errorMessage}` },
       { status: 500 }
     )
   }

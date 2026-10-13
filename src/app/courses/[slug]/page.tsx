@@ -146,7 +146,9 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
           name: 'منصة سَنَد للتعليم الشرعي والتأصيل المنهجي',
           url: 'https://sanad-edu1.vercel.app',
         },
-        educationalLevel: (course as any).difficulty || (course.stage === 1 ? 'تأسيس' : course.stage === 2 ? 'بناء' : 'تمكن'),
+        educationalLevel: ('difficulty' in course && typeof (course as Record<string, unknown>).difficulty === 'string')
+          ? String((course as Record<string, unknown>).difficulty)
+          : (course.stage === 1 ? 'تأسيس' : course.stage === 2 ? 'بناء' : 'تمكن'),
         inLanguage: 'ar',
         isAccessibleForFree: true,
         ...(course.instructor

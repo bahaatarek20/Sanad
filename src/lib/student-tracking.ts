@@ -1186,7 +1186,7 @@ export function getAdminDashboardData(forceRefresh: boolean = false): {
   recentEvents: PlatformEvent[]
 } {
   ensureDataFiles()
-  let students = readAllLocalStudents(forceRefresh)
+  const students = readAllLocalStudents(forceRefresh)
   let recentEvents: PlatformEvent[] = []
   let stats: PlatformStats = {
     totalVisitors: 0,
@@ -1261,7 +1261,7 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   recentEvents: PlatformEvent[]
 }> {
   const localData = getAdminDashboardData(forceRefresh)
-  let mergedStudents = [...localData.students]
+  const mergedStudents = [...localData.students]
 
   try {
     const cloudStudents = await getStudentsFromCloud()

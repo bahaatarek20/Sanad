@@ -22,10 +22,13 @@ export default function DynamicQuotesBanner() {
 
   // تهيئة عشوائية أولية لمنع التكرار في كل زيارة
   useEffect(() => {
-    setMounted(true)
-    setRevIndex(Math.floor(Math.random() * REVELATION_QUOTES.length))
-    setSalafIndex(Math.floor(Math.random() * SALAF_QUOTES.length))
-    setScholarsIndex(Math.floor(Math.random() * SCHOLARS_QUOTES.length))
+    const t = setTimeout(() => {
+      setMounted(true)
+      setRevIndex(Math.floor(Math.random() * REVELATION_QUOTES.length))
+      setSalafIndex(Math.floor(Math.random() * SALAF_QUOTES.length))
+      setScholarsIndex(Math.floor(Math.random() * SCHOLARS_QUOTES.length))
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // الانتقال إلى المقولات السابقة

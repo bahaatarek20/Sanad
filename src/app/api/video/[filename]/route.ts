@@ -37,7 +37,7 @@ async function resolveVideoFile(rawFilename: string) {
   if (!rawFilename) return null
 
   // 1. تنظيف أي شرطات مائلة زائدة في البداية أو النهاية (معالجة مشكلة .mp4/)
-  let cleaned = rawFilename.replace(/^[\/\\]+|[\/\\]+$/g, '').trim()
+  const cleaned = rawFilename.replace(/^[\/\\]+|[\/\\]+$/g, '').trim()
 
   // 2. فك التشفير متعدد المراحل لضمان عدم تعطل الأسماء العربية المشفرة جزئياً أو كلياً
   let decodedFilename = cleaned

@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
 import { ALL_COURSES, MatnCourse, CATEGORIES_LIST } from '@/lib/curriculum-data'
-import { cleanVideoTitle, cleanEpisodeDescription } from '@/lib/title-cleaner'
 
 export interface BroadcastNotice {
   active: boolean
@@ -426,7 +425,7 @@ export function saveCategoryToServer({
   oldTitle?: string
 }): { categories: CategoryItem[]; courses: MatnCourse[] } {
   ensureStoreFiles()
-  let categories = getActiveCategories()
+  const categories = getActiveCategories()
   const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-')
   const cleanTitle = title.trim()
   const targetOldSlug = (oldSlug || cleanSlug).trim().toLowerCase()

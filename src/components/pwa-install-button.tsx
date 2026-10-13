@@ -24,15 +24,16 @@ export default function PwaInstallButton({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // فحص ما إذا كان التطبيق يعمل بالفعل داخل نافذة PWA مستقلة
-    const isStandaloneMode =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    const t = setTimeout(() => {
+      // فحص ما إذا كان التطبيق يعمل بالفعل داخل نافذة PWA مستقلة
+      const isStandaloneMode =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true
 
-    if (isStandaloneMode) {
-      setIsStandalone(true)
-      return
-    }
+      if (isStandaloneMode) {
+        setIsStandalone(true)
+      }
+    }, 0)
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault()
@@ -48,6 +49,7 @@ export default function PwaInstallButton({
     window.addEventListener('appinstalled', handleAppInstalled)
 
     return () => {
+      clearTimeout(t)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }

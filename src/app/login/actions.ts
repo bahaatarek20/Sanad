@@ -385,7 +385,7 @@ export async function verifyPhoneOtpAction(formData: FormData) {
   }
 
   const clientTelemetry = extractClientTelemetry(await headers())
-  const formattedPhone = (result as any).formattedPhone || phone
+  const formattedPhone = ('formattedPhone' in result && typeof result.formattedPhone === 'string') ? result.formattedPhone : phone
   const studentEmail = `${formattedPhone.replace(/[^0-9]/g, '')}@student.sanad.edu`
   const studentName = `طالب (${formattedPhone})`
 

@@ -27,40 +27,43 @@ export default function StudentNotesList({ initialNotes }: StudentNotesListProps
 
   // مزامنة ودمج الفوائد المقيدة محلياً في المتصفح مع فوائد السيرفر لضمان عدم ضياع أي فائدة
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const merged = [...initialNotes]
-        const existingIds = new Set(initialNotes.map((n) => n.id))
+    const t = setTimeout(() => {
+      try {
+        if (typeof window !== 'undefined') {
+          const merged = [...initialNotes]
+          const existingIds = new Set(initialNotes.map((n) => n.id))
 
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('sanad_notes_')) {
-            const courseSlug = key.replace('sanad_notes_', '')
-            const raw = localStorage.getItem(key)
-            if (raw) {
-              const parsed = JSON.parse(raw)
-              if (Array.isArray(parsed)) {
-                parsed.forEach((item) => {
-                  if (item && item.id && !existingIds.has(item.id)) {
-                    existingIds.add(item.id)
-                    merged.push({
-                      id: item.id,
-                      title: item.title || `فائدة في متن: ${courseSlug}`,
-                      content: item.content || '',
-                      tag: item.tag || 'فائدة',
-                      created_at: item.created_at || new Date().toISOString(),
-                      courseSlug: courseSlug,
-                      courseTitle: item.title?.includes(':') ? item.title.split(':')[1].trim() : courseSlug,
-                    })
-                  }
-                })
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith('sanad_notes_')) {
+              const courseSlug = key.replace('sanad_notes_', '')
+              const raw = localStorage.getItem(key)
+              if (raw) {
+                const parsed = JSON.parse(raw)
+                if (Array.isArray(parsed)) {
+                  parsed.forEach((item) => {
+                    if (item && item.id && !existingIds.has(item.id)) {
+                      existingIds.add(item.id)
+                      merged.push({
+                        id: item.id,
+                        title: item.title || `فائدة في متن: ${courseSlug}`,
+                        content: item.content || '',
+                        tag: item.tag || 'فائدة',
+                        created_at: item.created_at || new Date().toISOString(),
+                        courseSlug: courseSlug,
+                        courseTitle: item.title?.includes(':') ? item.title.split(':')[1].trim() : courseSlug,
+                      })
+                    }
+                  })
+                }
               }
             }
           }
+          setAllNotes(merged)
         }
-        setAllNotes(merged)
-      }
-    } catch {}
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
   }, [initialNotes])
 
   const tags = [

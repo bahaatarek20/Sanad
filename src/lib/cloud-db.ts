@@ -247,7 +247,7 @@ const PLATFORM_STATS_COLLECTION = 'platform_stats'
 /**
  * 9. حفظ إحصائيات المنصة في Cloud Firestore
  */
-export async function savePlatformStatsToCloud(stats: Record<string, any>): Promise<boolean> {
+export async function savePlatformStatsToCloud(stats: Record<string, unknown>): Promise<boolean> {
   try {
     const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
     await setDoc(
@@ -268,7 +268,7 @@ export async function savePlatformStatsToCloud(stats: Record<string, any>): Prom
 /**
  * 10. جلب إحصائيات المنصة من Cloud Firestore
  */
-export async function getPlatformStatsFromCloud(): Promise<Record<string, any> | null> {
+export async function getPlatformStatsFromCloud(): Promise<Record<string, unknown> | null> {
   try {
     const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
     const snap = await getDoc(docRef)

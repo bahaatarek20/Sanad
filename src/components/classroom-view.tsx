@@ -154,9 +154,12 @@ export default function ClassroomView({
   const [mountedOrigin, setMountedOrigin] = useState('') // نطاق المصدر للتحقق من أمان التضمين
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.origin) {
-      setMountedOrigin(window.location.origin)
-    }
+    const t = setTimeout(() => {
+      if (typeof window !== 'undefined' && window.location.origin) {
+        setMountedOrigin(window.location.origin)
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // عداد مدارسة الدرس الحالي الحقيقي بالثواني
@@ -164,7 +167,10 @@ export default function ClassroomView({
 
   // مزامنة المتن مباشرة مع بيانات الخادم المعتمدة
   useEffect(() => {
-    setCurrentCourse(course)
+    const t = setTimeout(() => {
+      setCurrentCourse(course)
+    }, 0)
+    return () => clearTimeout(t)
   }, [course])
 
   // حالة الحفظ التلقائي (Auto-save)
@@ -216,39 +222,42 @@ export default function ClassroomView({
 
   // تحميل التقدم وموضع المشاهدة عند البدء
   useEffect(() => {
-    try {
-      const storedCompleted = localStorage.getItem('sanad_completed_courses')
-      if (storedCompleted) {
-        const list: string[] = JSON.parse(storedCompleted)
-        if (list.includes(currentCourse.slug)) {
-          setIsCompleted(true)
+    const t = setTimeout(() => {
+      try {
+        const storedCompleted = localStorage.getItem('sanad_completed_courses')
+        if (storedCompleted) {
+          const list: string[] = JSON.parse(storedCompleted)
+          if (list.includes(currentCourse.slug)) {
+            setIsCompleted(true)
+          }
         }
-      }
 
-      const storedPos = localStorage.getItem(`sanad_pos_${currentCourse.slug}`)
-      if (storedPos && Number(storedPos) > 30) {
-        setSavedPosition(Number(storedPos))
-        setShowResumePrompt(true)
-      }
+        const storedPos = localStorage.getItem(`sanad_pos_${currentCourse.slug}`)
+        if (storedPos && Number(storedPos) > 30) {
+          setSavedPosition(Number(storedPos))
+          setShowResumePrompt(true)
+        }
 
-      const storedEpisodes = localStorage.getItem(`sanad_episodes_${currentCourse.slug}`)
-      if (storedEpisodes) {
-        const parsed: number[] = JSON.parse(storedEpisodes)
-        setCompletedEpisodes((prev) => new Set([...Array.from(prev), ...parsed]))
-      }
+        const storedEpisodes = localStorage.getItem(`sanad_episodes_${currentCourse.slug}`)
+        if (storedEpisodes) {
+          const parsed: number[] = JSON.parse(storedEpisodes)
+          setCompletedEpisodes((prev) => new Set([...Array.from(prev), ...parsed]))
+        }
 
-      const storedNotes = localStorage.getItem(`sanad_notes_${currentCourse.slug}`)
-      if (storedNotes) {
-        const localNotes: NoteItem[] = JSON.parse(storedNotes)
-        setNotes((prev) => {
-          const existingIds = new Set(prev.map((n) => n.id))
-          const newUnique = localNotes.filter((n) => !existingIds.has(n.id))
-          return [...prev, ...newUnique]
-        })
+        const storedNotes = localStorage.getItem(`sanad_notes_${currentCourse.slug}`)
+        if (storedNotes) {
+          const localNotes: NoteItem[] = JSON.parse(storedNotes)
+          setNotes((prev) => {
+            const existingIds = new Set(prev.map((n) => n.id))
+            const newUnique = localNotes.filter((n) => !existingIds.has(n.id))
+            return [...prev, ...newUnique]
+          })
+        }
+      } catch {
+        // LocalStorage fallback
       }
-    } catch {
-      // LocalStorage fallback
-    }
+    }, 0)
+    return () => clearTimeout(t)
   }, [currentCourse.slug])
 
   const [isReversedOrder, setIsReversedOrder] = useState<boolean>(currentCourse.reversePlaylist || false)
@@ -2029,7 +2038,7 @@ export default function ClassroomView({
           try {
             const localCerts = localStorage.getItem('sanad_my_certificates')
             const certsList = localCerts ? JSON.parse(localCerts) : []
-            if (!certsList.some((c: any) => c.id === cert.id)) {
+            if (!certsList.some((c: { id?: string }) => c?.id === cert.id)) {
               localStorage.setItem('sanad_my_certificates', JSON.stringify([cert, ...certsList]))
             }
           } catch {}

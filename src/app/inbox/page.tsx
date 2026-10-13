@@ -85,7 +85,10 @@ function InboxContent() {
   }
 
   useEffect(() => {
-    fetchMessages()
+    const t = setTimeout(() => {
+      fetchMessages()
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // الاستماع لأي تحديثات على الرسائل في المنصة لمزامنة الحالة فوراً
@@ -134,7 +137,10 @@ function InboxContent() {
     if (!selectedMessageId || messages.length === 0) return
     const msg = messages.find((m) => m.id === selectedMessageId)
     if (msg && !msg.read) {
-      markAsRead(msg.id)
+      const t = setTimeout(() => {
+        markAsRead(msg.id)
+      }, 0)
+      return () => clearTimeout(t)
     }
   }, [selectedMessageId, messages])
 
@@ -476,10 +482,12 @@ function InboxContent() {
                             {msg.sender || msg.senderName || 'إدارة منصة سَنَد'}
                           </span>
                           <span className="text-[10px] text-stone-400 font-mono shrink-0">
-                            {new Date(msg.createdAt || msg.timestamp || Date.now()).toLocaleTimeString('ar-EG', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {msg.createdAt || msg.timestamp
+                              ? new Date(msg.createdAt || msg.timestamp!).toLocaleTimeString('ar-EG', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : ''}
                           </span>
                         </div>
 

@@ -54,13 +54,14 @@ export async function POST(req: NextRequest) {
       phone: result.phone,
       studentName: result.studentName,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [API /api/auth/verify-otp Error]:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
         message: 'حدث خطأ أثناء التحقق من الرمز.',
-        error: error?.message,
+        error: errorMessage,
       },
       { status: 500 }
     )

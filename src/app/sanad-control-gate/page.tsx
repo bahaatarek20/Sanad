@@ -135,14 +135,23 @@ function naturalSortVideoFiles(files: File[]): File[] {
   })
 }
 
+interface WebkitEntry {
+  isFile: boolean
+  isDirectory: boolean
+  file: (success: (file: File) => void, error?: () => void) => void
+  createReader: () => {
+    readEntries: (success: (entries: WebkitEntry[]) => void, error?: () => void) => void
+  }
+}
+
 async function extractFilesFromDataTransfer(items: DataTransferItemList): Promise<File[]> {
   const files: File[] = []
-  const queue: any[] = []
+  const queue: WebkitEntry[] = []
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     if (typeof item.webkitGetAsEntry === 'function') {
-      const entry = item.webkitGetAsEntry()
+      const entry = item.webkitGetAsEntry() as unknown as WebkitEntry | null
       if (entry) queue.push(entry)
     } else {
       const f = item.getAsFile()
@@ -150,7 +159,7 @@ async function extractFilesFromDataTransfer(items: DataTransferItemList): Promis
     }
   }
 
-  const readRecursively = async (entry: any): Promise<void> => {
+  const readRecursively = async (entry: WebkitEntry): Promise<void> => {
     if (entry.isFile) {
       return new Promise<void>((resolve) => {
         entry.file(
@@ -166,7 +175,7 @@ async function extractFilesFromDataTransfer(items: DataTransferItemList): Promis
       const readBatch = (): Promise<void> => {
         return new Promise<void>((resolve) => {
           reader.readEntries(
-            async (entries: any[]) => {
+            async (entries: WebkitEntry[]) => {
               if (entries.length === 0) {
                 resolve()
               } else {
@@ -660,7 +669,7 @@ export default function SanadControlGatePage() {
   const playNewStudentChime = () => {
     try {
       if (typeof window === 'undefined') return
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!AudioCtx) return
       const ctx = new AudioCtx()
       const now = ctx.currentTime
@@ -724,6 +733,12 @@ export default function SanadControlGatePage() {
             setNewlyRegisteredIds((prev) => new Set([...prev, latest.id]))
           }
 
+          const nowMs = Date.now()
+          const recentIds = freshStudents
+            .filter((s) => s.registeredAt && nowMs - new Date(s.registeredAt).getTime() < 24 * 60 * 60 * 1000)
+            .map((s) => s.id)
+          setNewlyRegisteredIds((prev) => new Set([...prev, ...recentIds]))
+
           isInitialLiveLoadRef.current = false
           prevStudentsCountRef.current = freshStudents.length
           if (latest) {
@@ -750,7 +765,9 @@ export default function SanadControlGatePage() {
   useEffect(() => {
     if (!isAuthenticated) return
 
-    pollLiveStudents()
+    const t = setTimeout(() => {
+      pollLiveStudents()
+    }, 0)
 
     const intervalId = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
@@ -758,7 +775,10 @@ export default function SanadControlGatePage() {
       }
     }, 3500)
 
-    return () => clearInterval(intervalId)
+    return () => {
+      clearTimeout(t)
+      clearInterval(intervalId)
+    }
   }, [isAuthenticated])
 
   // إخفاء إشعار الطالب الجديد بعد 12 ثانية
@@ -771,17 +791,21 @@ export default function SanadControlGatePage() {
   }, [liveAlert])
 
   useEffect(() => {
-    refreshDashboardData()
+    const t = setTimeout(() => {
+      refreshDashboardData()
 
-    // استعادة قائمة المحظورين
-    try {
-      const storedBans = localStorage.getItem('sanad_banned_users')
-      if (storedBans) {
-        setBannedUserIds(JSON.parse(storedBans))
+      // استعادة قائمة المحظورين
+      try {
+        const storedBans = localStorage.getItem('sanad_banned_users')
+        if (storedBans) {
+          setBannedUserIds(JSON.parse(storedBans))
+        }
+      } catch (err) {
+        console.error('Error restoring local custom items:', err)
       }
-    } catch (err) {
-      console.error('Error restoring local custom items:', err)
-    }
+    }, 0)
+
+    return () => clearTimeout(t)
   }, [])
 
   // معالجة تسجيل الدخول الآمن عبر Server Action
@@ -2197,10 +2221,7 @@ export default function SanadControlGatePage() {
                     </tr>
                   ) : (
                     filteredStudents.map((st) => {
-                      const isNewlyJoined =
-                        newlyRegisteredIds.has(st.id) ||
-                        (st.registeredAt &&
-                          Date.now() - new Date(st.registeredAt).getTime() < 24 * 60 * 60 * 1000)
+                      const isNewlyJoined = newlyRegisteredIds.has(st.id)
                       return (
                         <tr
                           key={st.id}

@@ -28,8 +28,13 @@ import {
   Minus,
 } from 'lucide-react'
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 export default function DownloadAppPage() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [installSuccess, setInstallSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<'desktop' | 'android' | 'ios'>('desktop')
@@ -39,34 +44,39 @@ export default function DownloadAppPage() {
   useEffect(() => {
     document.title = 'سند'
 
-    // 1. فحص هل التطبيق مثبت بالفعل (PWA Standalone Mode)
-    if (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true
-    ) {
-      setIsInstalled(true)
-    }
+    const t = setTimeout(() => {
+      // 1. فحص هل التطبيق مثبت بالفعل (PWA Standalone Mode)
+      const isStandaloneSafari =
+        'standalone' in window.navigator &&
+        Boolean((window.navigator as unknown as { standalone?: boolean }).standalone)
+      if (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        isStandaloneSafari
+      ) {
+        setIsInstalled(true)
+      }
 
-    // 2. كشف نظام التشغيل تلقائياً لضبط الواجهة بالشكل المناسب
-    const ua = navigator.userAgent || ''
-    if (/iPad|iPhone|iPod/.test(ua)) {
-      setActiveTab('ios')
-      setDetectedOs('ios')
-    } else if (/Android/.test(ua)) {
-      setActiveTab('android')
-      setDetectedOs('android')
-    } else if (/Macintosh|Mac OS X/.test(ua)) {
-      setActiveTab('desktop')
-      setDetectedOs('mac')
-    } else {
-      setActiveTab('desktop')
-      setDetectedOs('windows')
-    }
+      // 2. كشف نظام التشغيل تلقائياً لضبط الواجهة بالشكل المناسب
+      const ua = navigator.userAgent || ''
+      if (/iPad|iPhone|iPod/.test(ua)) {
+        setActiveTab('ios')
+        setDetectedOs('ios')
+      } else if (/Android/.test(ua)) {
+        setActiveTab('android')
+        setDetectedOs('android')
+      } else if (/Macintosh|Mac OS X/.test(ua)) {
+        setActiveTab('desktop')
+        setDetectedOs('mac')
+      } else {
+        setActiveTab('desktop')
+        setDetectedOs('windows')
+      }
+    }, 0)
 
     // 3. التقاط حدث التثبيت المباشر
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault()
-      setDeferredPrompt(e)
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
     }
 
     const handleAppInstalled = () => {
@@ -79,6 +89,7 @@ export default function DownloadAppPage() {
     window.addEventListener('appinstalled', handleAppInstalled)
 
     return () => {
+      clearTimeout(t)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }

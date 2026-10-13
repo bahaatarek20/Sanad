@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useId } from 'react'
 import {
   Trophy,
   Award,
@@ -58,6 +58,8 @@ export default function ScholarlyStationsModal({
     completedCourses.length > 0 ? completedCourses[0].title : 'الآجرومية في علم النحو'
   )
   const [verifiedCert, setVerifiedCert] = useState<VerifiedCertificate | null>(null)
+  const certIdSeed = useId()
+  const certSerialNumber = certIdSeed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6) || '849201'
   const [isVerifiedIjazaOpen, setIsVerifiedIjazaOpen] = useState(false)
   const [isIssuingCert, setIsIssuingCert] = useState(false)
 
@@ -511,7 +513,7 @@ export default function ScholarlyStationsModal({
               <div className="print-certificate-container relative mx-auto max-w-2xl overflow-hidden rounded-3xl border-8 border-double border-amber-600/60 bg-[#fffdf8] p-8 text-center shadow-lg dark:bg-[#1f1d1a] dark:border-amber-700/60 space-y-6">
                 <div className="absolute top-2 right-2 text-amber-500 text-xs">﷽</div>
                 <div className="absolute top-2 left-2 font-mono text-[9px] text-stone-400">
-                  SANAD-CERT-#{Date.now().toString().slice(-6)}
+                  SANAD-CERT-#{certSerialNumber}
                 </div>
 
                 {/* ترويسة الشهادة */}

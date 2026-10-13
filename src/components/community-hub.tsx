@@ -72,15 +72,18 @@ export default function CommunityHub({
 
   // استرجاع الإعجابات السابقة من التخزين المحلي لمنع التكرار (1 blessing per user)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sanad_user_upvotes')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed)) {
-          setUserUpvotes(new Set(parsed))
+    const t = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('sanad_user_upvotes')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            setUserUpvotes(new Set(parsed))
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // المزامنة الدورية الخلفية كل 8 ثوانٍ لجلب أي مشاركات جديدة للطلاب تلقائياً ولحظياً
@@ -454,15 +457,15 @@ export default function CommunityHub({
       <div className="flex items-center justify-between border-b border-stone-200/80 pb-4 dark:border-stone-800">
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-stone-400" />
-          {[
+          {([
             { key: 'all', label: 'كافة المشاركات' },
             { key: 'question', label: 'استشكالات ومسائل' },
             { key: 'summary', label: 'تلخيصات وخرائط' },
             { key: 'benefit', label: 'فوائد وضوابط' },
-          ].map((f) => (
+          ] as const).map((f) => (
             <button
               key={f.key}
-              onClick={() => setActiveFilter(f.key as any)}
+              onClick={() => setActiveFilter(f.key)}
               className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
                 activeFilter === f.key
                   ? 'bg-emerald-900 text-white shadow-xs dark:bg-emerald-800'

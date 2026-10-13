@@ -60,6 +60,19 @@ interface SanadVideoPlayerProps {
   onSwitchToAudio?: () => void
 }
 
+export function formatTime(secs: number): string {
+  if (!secs || isNaN(secs)) return '00:00'
+  const totalSeconds = Math.floor(secs)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 export default function SanadVideoPlayer({
   src,
   title,
@@ -133,6 +146,22 @@ export default function SanadVideoPlayer({
   const [playbackErrorMessage, setPlaybackErrorMessage] = useState<string | null>(null)
   const [autoFallbackCountdown, setAutoFallbackCountdown] = useState<number | null>(null)
 
+  const showCenterAnimation = useCallback((type: 'play' | 'pause' | 'skip-fwd' | 'skip-back' | 'speed' | 'boost', text?: string) => {
+    setCenterIconState(type)
+    if (text) setFeedbackText(text)
+    setTimeout(() => {
+      setCenterIconState(null)
+      setFeedbackText(null)
+    }, 650)
+  }, [])
+
+  const showFeedback = useCallback((text: string) => {
+    setFeedbackText(text)
+    setTimeout(() => {
+      setFeedbackText(null)
+    }, 1600)
+  }, [])
+
   const rawSrc = (src || '').trim()
   const cleanSrc =
     rawSrc.startsWith('http://') ||
@@ -146,7 +175,9 @@ export default function SanadVideoPlayer({
 
   useEffect(() => {
     if (hasPlaybackError && (onSwitchToYoutube || fallbackYoutubeUrl)) {
-      setAutoFallbackCountdown(3)
+      const timeout = setTimeout(() => {
+        setAutoFallbackCountdown(3)
+      }, 0)
       const interval = setInterval(() => {
         setAutoFallbackCountdown((prev) => {
           if (prev === null || prev <= 1) {
@@ -159,9 +190,15 @@ export default function SanadVideoPlayer({
           return prev - 1
         })
       }, 1000)
-      return () => clearInterval(interval)
+      return () => {
+        clearTimeout(timeout)
+        clearInterval(interval)
+      }
     } else {
-      setAutoFallbackCountdown(null)
+      const timeout = setTimeout(() => {
+        setAutoFallbackCountdown(null)
+      }, 0)
+      return () => clearTimeout(timeout)
     }
   }, [hasPlaybackError, onSwitchToYoutube, fallbackYoutubeUrl])
 
@@ -192,8 +229,22 @@ export default function SanadVideoPlayer({
 
   // استعادة موضع المشاهدة والعلامات المرجعية المحفوظة لهذا الفيديو بأمان بعد تحميل الميتاداتا
   useEffect(() => {
-    setHasPlaybackError(false)
-    setPlaybackErrorMessage(null)
+    let savedBookmarks: BookmarkItem[] = []
+    try {
+      const bmKey = `sanad_bookmarks_${encodeURIComponent(src)}`
+      const savedBm = localStorage.getItem(bmKey)
+      if (savedBm) {
+        savedBookmarks = JSON.parse(savedBm)
+      }
+    } catch {
+      savedBookmarks = []
+    }
+
+    const t = setTimeout(() => {
+      setHasPlaybackError(false)
+      setPlaybackErrorMessage(null)
+      setBookmarks(savedBookmarks)
+    }, 0)
 
     try {
       const savedKey = `sanad_vid_pos_${encodeURIComponent(src)}`
@@ -207,17 +258,7 @@ export default function SanadVideoPlayer({
       pendingSeekTimeRef.current = null
     }
 
-    try {
-      const bmKey = `sanad_bookmarks_${encodeURIComponent(src)}`
-      const savedBm = localStorage.getItem(bmKey)
-      if (savedBm) {
-        setBookmarks(JSON.parse(savedBm))
-      } else {
-        setBookmarks([])
-      }
-    } catch {
-      setBookmarks([])
-    }
+    return () => clearTimeout(t)
   }, [src])
 
   // حفظ موضع المشاهدة دورياً
@@ -243,18 +284,20 @@ export default function SanadVideoPlayer({
         videoRef.current.pause()
         setIsPlaying(false)
       }
-      setSleepTimerMinutes(null)
-      setSleepTimerRemaining(null)
-      showFeedback('انتهى مؤقت المدارسة وتم إيقاف التشغيل ⏱')
-      return
+      const t = setTimeout(() => {
+        setSleepTimerMinutes(null)
+        setSleepTimerRemaining(null)
+        showFeedback('انتهى مؤقت المدارسة وتم إيقاف التشغيل ⏱')
+      }, 0)
+      return () => clearTimeout(t)
     }
 
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setSleepTimerRemaining((prev) => (prev !== null ? prev - 1 : null))
     }, 1000)
 
-    return () => clearInterval(t)
-  }, [sleepTimerRemaining])
+    return () => clearInterval(timer)
+  }, [sleepTimerRemaining, showFeedback])
 
   // إدارة إخفاء وإظهار أشرطة التحكم تلقائياً
   const resetControlsTimeout = useCallback(() => {
@@ -273,22 +316,6 @@ export default function SanadVideoPlayer({
 
   const handleMouseMove = () => {
     resetControlsTimeout()
-  }
-
-  const showCenterAnimation = (type: 'play' | 'pause' | 'skip-fwd' | 'skip-back' | 'speed' | 'boost', text?: string) => {
-    setCenterIconState(type)
-    if (text) setFeedbackText(text)
-    setTimeout(() => {
-      setCenterIconState(null)
-      setFeedbackText(null)
-    }, 650)
-  }
-
-  const showFeedback = (text: string) => {
-    setFeedbackText(text)
-    setTimeout(() => {
-      setFeedbackText(null)
-    }, 1600)
   }
 
   // تشغيل / إيقاف مؤقت
@@ -312,7 +339,7 @@ export default function SanadVideoPlayer({
         clearTimeout(hideControlsTimeoutRef.current)
       }
     }
-  }, [resetControlsTimeout])
+  }, [resetControlsTimeout, showCenterAnimation])
 
   // تقديم وتأخير 10 ثوانٍ
   const skipTime = useCallback(
@@ -324,12 +351,28 @@ export default function SanadVideoPlayer({
       showCenterAnimation(seconds > 0 ? 'skip-fwd' : 'skip-back')
       resetControlsTimeout()
     },
-    [duration, resetControlsTimeout]
+    [duration, resetControlsTimeout, showCenterAnimation]
   )
 
+  // ملء الشاشة الكامل
+  const toggleFullscreen = useCallback(async () => {
+    if (!containerRef.current) return
+    try {
+      if (!document.fullscreenElement) {
+        await containerRef.current.requestFullscreen()
+        setIsFullscreen(true)
+      } else {
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+      }
+    } catch (err) {
+      console.error('Error toggling fullscreen:', err)
+    }
+  }, [])
+
   // النقر الذكي: نقر مفرد للتشغيل، ونقر مزدوج على الجوانب للتقديم/التأخير
-  const handleVideoAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const now = Date.now()
+  const handleVideoAreaClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const now = e.timeStamp
     const rect = e.currentTarget.getBoundingClientRect()
     const clickX = e.clientX - rect.left
     const width = rect.width
@@ -363,7 +406,7 @@ export default function SanadVideoPlayer({
       }, 240)
     }
     lastClickTimeRef.current = now
-  }
+  }, [skipTime, toggleFullscreen, togglePlay])
 
   // تحديث وقت الفيديو وشريط التخزين المؤقت
   const handleTimeUpdate = () => {
@@ -706,22 +749,6 @@ export default function SanadVideoPlayer({
     }
   }
 
-  // ملء الشاشة الكامل
-  const toggleFullscreen = useCallback(async () => {
-    if (!containerRef.current) return
-    try {
-      if (!document.fullscreenElement) {
-        await containerRef.current.requestFullscreen()
-        setIsFullscreen(true)
-      } else {
-        await document.exitFullscreen()
-        setIsFullscreen(false)
-      }
-    } catch (err) {
-      console.error('Error toggling fullscreen:', err)
-    }
-  }, [])
-
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement))
@@ -828,19 +855,6 @@ export default function SanadVideoPlayer({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [togglePlay, skipTime, volume, toggleFullscreen, duration, playbackSpeed, isLooping, bookmarks, visualClarityMode])
 
-  // تنسيق الوقت بالأرقام الأنيقة (ساعة:دقيقة:ثانية)
-  const formatTime = (secs: number) => {
-    if (!secs || isNaN(secs)) return '00:00'
-    const totalSeconds = Math.floor(secs)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-
-    if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    }
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }
 
   const playedPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
