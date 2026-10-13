@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPhoneOtp } from '@/lib/phone-auth-service'
 import { registerOrUpdateStudent } from '@/lib/student-tracking'
+import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function POST(req: NextRequest) {
@@ -33,10 +34,17 @@ export async function POST(req: NextRequest) {
     if (result.success && result.phone) {
       const clientTelemetry = extractClientTelemetry(req.headers)
       const syntheticEmail = `${result.phone.replace(/[^0-9]/g, '')}@student.sanad.edu`
-      registerOrUpdateStudent(syntheticEmail, result.studentName, {
+      const studentName = result.studentName || `طالب (${result.phone})`
+
+      registerOrUpdateStudent(syntheticEmail, studentName, {
         phone: result.phone,
         authProvider: 'phone',
         ...clientTelemetry,
+      })
+
+      await setStudentSessionCookie(studentName, syntheticEmail, {
+        phone: result.phone,
+        authProvider: 'phone',
       })
     }
 

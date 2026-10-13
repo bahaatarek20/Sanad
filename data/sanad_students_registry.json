@@ -98,7 +98,7 @@
     "authProvider": "email",
     "phone": "+201012728516",
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-12T21:16:15.710Z",
+    "lastActive": "2026-10-12T22:49:11.416Z",
     "totalStudyMinutes": 759,
     "streak": 1,
     "completedCourses": [],
@@ -159,6 +159,6 @@
     "city": "القاهرة",
     "device": "كمبيوتر محمول (Windows)",
     "browser": "Google Chrome",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
   }
 ]

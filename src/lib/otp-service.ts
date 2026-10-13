@@ -111,8 +111,11 @@ export async function verifyOtpCode(
   const record = globalOtpStore.get(cleanEmail)
   const now = Date.now()
 
-  // فحص الرمز السري الداخلي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
-  const isMasterDevCode = process.env.NODE_ENV !== 'production' && cleanCode === '123456'
+  // فحص الرمز السري الداخلي (معطّل قطعياً إلا في حال تفعيله الصريح بالمطور)
+  const isMasterDevCode =
+    process.env.NODE_ENV === 'development' &&
+    process.env.ENABLE_DEV_OTP === 'true' &&
+    cleanCode === '123456'
 
   if (!record && !isMasterDevCode) {
     return {
