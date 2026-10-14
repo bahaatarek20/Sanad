@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, Compass, Flame, User, LogOut, Users, FileText, LogIn, ShieldCheck, Map, GitFork, Smartphone } from 'lucide-react'
+import { BookOpen, Compass, User, Users, FileText, LogIn, GitFork, Smartphone } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { signOutAction } from '@/app/login/actions'
 import LogoutButton from '@/components/logout-button'
@@ -83,16 +83,6 @@ export default async function Navbar() {
                 <InboxDropdown />
 
                 <div className="hidden md:flex items-center gap-1">
-                  {user.role === 'admin' && (
-                    <Link
-                      href="/admin"
-                      title="لوحة تحكم المشرف العام"
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/50 bg-linear-to-r from-amber-500/15 via-emerald-500/15 to-amber-500/15 px-2.5 py-1 text-xs font-black text-amber-900 hover:border-amber-500 hover:bg-amber-100/50 transition dark:text-amber-300 dark:border-amber-600/50 dark:hover:bg-amber-950/40 shadow-xs shrink-0"
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                      <span>لوحة التحكم (Admin Panel)</span>
-                    </Link>
-                  )}
 
                   {/* رابط كشكول الطالب الخاص */}
                   <Link
