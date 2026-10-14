@@ -83,6 +83,17 @@ export default async function Navbar() {
                 <InboxDropdown />
 
                 <div className="hidden md:flex items-center gap-1">
+                  {user.role === 'admin' && (
+                    <Link
+                      href="/admin"
+                      title="لوحة تحكم المشرف العام"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/50 bg-linear-to-r from-amber-500/15 via-emerald-500/15 to-amber-500/15 px-2.5 py-1 text-xs font-black text-amber-900 hover:border-amber-500 hover:bg-amber-100/50 transition dark:text-amber-300 dark:border-amber-600/50 dark:hover:bg-amber-950/40 shadow-xs shrink-0"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>لوحة التحكم (Admin Panel)</span>
+                    </Link>
+                  )}
+
                   {/* رابط كشكول الطالب الخاص */}
                   <Link
                     href="/dashboard"
@@ -111,12 +122,21 @@ export default async function Navbar() {
             <div className="flex items-center gap-1.5 sm:gap-2">
               <ThemeToggle />
               <Link
-                href="/login"
-                title="تسجيل الدخول أو إنشاء حساب"
-                className="flex h-8 sm:h-8.5 items-center gap-1 sm:gap-1.5 rounded-xl bg-linear-to-r from-emerald-800 to-emerald-950 px-2.5 sm:px-3.5 text-xs font-bold text-white shadow-xs hover:from-emerald-700 hover:to-emerald-900 transition cursor-pointer border border-emerald-600/30"
+                href="/login?mode=password"
+                title="تسجيل الدخول"
+                className="flex h-8 sm:h-8.5 items-center gap-1 rounded-xl border border-stone-200/90 bg-white/90 px-2 sm:px-3 text-xs font-bold text-stone-700 hover:border-emerald-700 hover:text-emerald-950 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
               >
-                <LogIn className="h-3.5 w-3.5 text-amber-300" />
-                <span>دخول / حساب جديد</span>
+                <LogIn className="h-3.5 w-3.5 text-stone-500 dark:text-stone-400" />
+                <span className="hidden sm:inline">تسجيل الدخول</span>
+                <span className="sm:hidden">دخول</span>
+              </Link>
+              <Link
+                href="/login?mode=signup"
+                title="إنشاء حساب جديد"
+                className="flex h-8 sm:h-8.5 items-center gap-1 rounded-xl bg-linear-to-r from-emerald-800 to-emerald-950 px-2.5 sm:px-3.5 text-xs font-bold text-white shadow-xs hover:from-emerald-700 hover:to-emerald-900 transition border border-emerald-600/30"
+              >
+                <User className="h-3.5 w-3.5 text-amber-300" />
+                <span>إنشاء حساب</span>
               </Link>
             </div>
           )}

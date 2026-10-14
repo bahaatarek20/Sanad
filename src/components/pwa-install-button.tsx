@@ -25,14 +25,21 @@ export default function PwaInstallButton({
     if (typeof window === 'undefined') return
 
     const t = setTimeout(() => {
-      // فحص ما إذا كان التطبيق يعمل بالفعل داخل نافذة PWA مستقلة
-      const isStandaloneMode =
-        window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as unknown as { standalone?: boolean }).standalone === true
+      // فحص ما إذا كان التطبيق مثبتاً أو يعمل بالفعل داخل نافذة PWA مستقلة
+      try {
+        const storedInstalled = localStorage.getItem('sanad_pwa_installed') === 'true'
+        const isStandaloneMode =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches ||
+          window.matchMedia('(display-mode: minimal-ui)').matches ||
+          (window.navigator as unknown as { standalone?: boolean }).standalone === true ||
+          document.referrer.startsWith('android-app://')
 
-      if (isStandaloneMode) {
-        setIsStandalone(true)
-      }
+        if (storedInstalled || isStandaloneMode) {
+          setIsStandalone(true)
+          setIsInstalled(true)
+        }
+      } catch {}
     }, 0)
 
     const handleBeforeInstall = (e: Event) => {
@@ -41,7 +48,11 @@ export default function PwaInstallButton({
     }
 
     const handleAppInstalled = () => {
+      try {
+        localStorage.setItem('sanad_pwa_installed', 'true')
+      } catch {}
       setIsInstalled(true)
+      setIsStandalone(true)
       setDeferredPrompt(null)
     }
 
@@ -55,7 +66,7 @@ export default function PwaInstallButton({
     }
   }, [])
 
-  // إذا كان التطبيق مثبتاً ويعمل كـ App مستقل لا داعي لعرض زر التثبيت
+  // إذا كان التطبيق مثبتاً أو يعمل كـ App مستقل لا داعي لعرض زر التثبيت
   if (isStandalone || isInstalled) return null
 
   const handleInstall = async () => {
@@ -64,7 +75,11 @@ export default function PwaInstallButton({
         await deferredPrompt.prompt()
         const { outcome } = await deferredPrompt.userChoice
         if (outcome === 'accepted') {
+          try {
+            localStorage.setItem('sanad_pwa_installed', 'true')
+          } catch {}
           setIsInstalled(true)
+          setIsStandalone(true)
         }
         setDeferredPrompt(null)
       } catch (e) {

@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // قائمة المشرفين المعتمدين بصلاحيات الإدارة الكاملة
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email in [
+          'bhaaljml480@gmail.com',
+          'bhaaljml48@gmail.com',
+          'bhaaljml66@gmail.com',
+          'bhaaljml3@gmail.com',
+          'bhaaljml62@gmail.com'
+        ] || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+    }
+
+    // التحقق من أن المستخدم مسجل ومطابق لبياناته
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // 1. جدول بيانات وحسابات الطلاب والمشرفين
+    match /users/{userId} {
+      // المشرف يقرأ الجميع، والطالب يقرأ حسابه فقط
+      allow read: if isAdmin() || isOwner(userId);
+
+      // إنشاء حساب جديد: يُسمح للطالب فقط مع حظر إسناد دور المشرف لنفسه
+      allow create: if isOwner(userId) && (
+        isAdmin() || (
+          request.resource.data.role == 'student' &&
+          request.resource.data.status == 'active'
+        )
+      );
+
+      // تحديث البيانات: يُمنع الطالب العادي من تعديل دوره أو حالة حظره
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.status == resource.data.status
+      );
+
+      // حذف الحسابات محصور بالمشرف فقط
+      allow delete: if isAdmin();
+    }
+
+    // 2. إحصائيات الموقع الكلية
+    match /site_stats/{statId} {
+      allow read: if true;
+      allow write: if true; // للسماح بزيادة عداد الزيارات والتسجيل تلقائياً
+    }
+
+    // 3. سجل الطلاب الإضافي القديم (للتوافق المرجعي)
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 4. ملتقى المذاكرة والفوائد
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create, update: if request.auth != null || true;
+      allow delete: if isAdmin();
+    }
+  }
+}

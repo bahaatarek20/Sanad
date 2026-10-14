@@ -147,7 +147,7 @@ export default function ClassroomView({
 
   // 1. أنماط المشغل الحديثة للمنصات التعليمية: cinema (المشغل المدمج للقاعة) أو audio (المشغل الصوتي عالي التركيز)
   const [playerMode, setPlayerMode] = useState<'cinema' | 'audio'>('cinema')
-  const [preferredVideoSource, setPreferredVideoSource] = useState<'direct' | 'youtube'>('direct')
+  const [preferredVideoSource, setPreferredVideoSource] = useState<'direct' | 'youtube'>('youtube')
   const [isTheaterExpanded, setIsTheaterExpanded] = useState(false) // وضع توسيع المسرح العريض (Full Width)
   const [autoAdvanceNext, setAutoAdvanceNext] = useState(true) // الانتقال التلقائي للمجلس التالي
   const [filterEpisodeQuery, setFilterEpisodeQuery] = useState('') // البحث في مجالس السلسلة
@@ -1185,35 +1185,6 @@ export default function ClassroomView({
                   )}
                 </button>
 
-                {/* زر التبديل بين بث سَنَد وبث YouTube لو كلاهما متاح */}
-                {isDirectUploadedVideo && embedUrl && (customEpVideoId || extractedListId || extractedVideoId) && (
-                  <div className="inline-flex items-center rounded-xl border border-stone-200 bg-white p-0.5 dark:border-stone-800 dark:bg-stone-900">
-                    <button
-                      type="button"
-                      onClick={() => setPreferredVideoSource('direct')}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                        preferredVideoSource === 'direct'
-                          ? 'bg-emerald-900 text-white dark:bg-emerald-800 shadow-xs'
-                          : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Video className="h-3 w-3" />
-                      <span>فيديو سَنَد</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreferredVideoSource('youtube')}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                        preferredVideoSource === 'youtube'
-                          ? 'bg-red-900 text-white dark:bg-red-800 shadow-xs'
-                          : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Play className="h-3 w-3 fill-current text-red-400" />
-                      <span>YouTube</span>
-                    </button>
-                  </div>
-                )}
 
                 {/* زر المشغل الصوتي إذا وُجد */}
                 {activeAudioSource && (
@@ -1274,23 +1245,6 @@ export default function ClassroomView({
                 />
               ) : embedUrl ? (
                 <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 shadow-2xl shadow-stone-950/40 flex flex-col">
-                  {/* شريط توضيح البث الاحتياطي مع زر العودة لمشغل سَنَد لو كان هناك فيديو مباشر */}
-                  {isDirectUploadedVideo && rawVideoUrl && (
-                    <div className="flex items-center justify-between bg-stone-900/95 border-b border-stone-800 px-4 py-2 text-xs z-10">
-                      <span className="flex items-center gap-1.5 text-stone-300 font-medium">
-                        <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                        أنت تشاهد حالياً عبر البث الاحتياطي على YouTube
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreferredVideoSource('direct')}
-                        className="inline-flex items-center gap-1 font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 px-3 py-1 rounded-lg transition cursor-pointer"
-                      >
-                        <Video className="h-3 w-3" />
-                        العودة لمشغل سَنَد المباشر
-                      </button>
-                    </div>
-                  )}
                   <iframe
                     ref={youtubeIframeRef}
                     key={`${embedUrl}-${currentEpisodeIndex}-${isReversedOrder}`}

@@ -10,6 +10,7 @@ const SESSION_SECRET =
 export interface StudentUser {
   id: string
   email: string
+  role?: 'student' | 'admin'
   phone?: string
   authProvider?: 'email' | 'google' | 'phone'
   avatarUrl?: string
@@ -86,9 +87,15 @@ export async function getCurrentStudentUser(): Promise<StudentUser | null> {
           return null
         }
 
+        const isAdmin =
+          ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+          cookieStore.has('sanad_admin_gate_token') ||
+          parsed.role === 'admin'
+
         return {
           id: String(parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
           email,
+          role: isAdmin ? 'admin' : 'student',
           phone: parsed.phone ? String(parsed.phone) : undefined,
           authProvider:
             parsed.authProvider === 'google' || parsed.authProvider === 'phone'
@@ -125,6 +132,7 @@ export async function setStudentSessionCookie(
     phone?: string
     authProvider?: 'email' | 'google' | 'phone'
     avatarUrl?: string
+    role?: 'student' | 'admin'
   }
 ) {
   const cookieStore = await cookies()
@@ -136,9 +144,14 @@ export async function setStudentSessionCookie(
   const phone = options?.phone || (!isEmail ? rawIdentifier : undefined)
   const cleanName = fullName.trim() || 'طالب العلم'
 
+  const isAdmin =
+    ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+    options?.role === 'admin'
+
   const studentData: Record<string, unknown> = {
     id: `student-${Buffer.from(rawIdentifier.toLowerCase()).toString('hex').slice(0, 16)}`,
     email,
+    role: isAdmin ? 'admin' : 'student',
     full_name: cleanName,
     phone,
     authProvider: options?.authProvider || (phone ? 'phone' : 'email'),
