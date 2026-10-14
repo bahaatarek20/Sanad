@@ -103,26 +103,25 @@ export default async function HomePage() {
       ═══════════════════════════════════════════════════ */}
       <section className="text-center pt-4 pb-8 sm:pt-6 sm:pb-12 space-y-8 relative">
 
-        {/* شارة الجودة والنسب */}
-        <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-amber-200/80 bg-amber-50/80 px-4 py-1.5 text-xs font-semibold text-amber-900 shadow-2xs dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-300">
+        {/* شارة الجودة */}
+        <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/80 bg-amber-50/80 px-4 py-1.5 text-xs font-semibold text-amber-900 shadow-2xs dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-300">
           <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-          <span>منصة سَنَد التعليمية • إشراف وتطوير م. بهاء طارق</span>
+          <span>العلم ينال بالتدرج والتأصيل المنهجي الرصين</span>
         </div>
 
         {/* العنوان الرئيسي المحوري */}
         <h1 className="text-4xl font-bold text-stone-900 sm:text-5xl lg:text-7xl leading-normal sm:leading-relaxed dark:text-white">
           <span className="block leading-normal pb-1">لا تَحمل همَّ البداية..</span>
           <span className="block mt-2 sm:mt-3 text-emerald-800 dark:text-emerald-400 leading-normal pb-2">
-            منصة سَنَد التعليمية رفيقك في طريق العلم
+            نحن سَنَدُك في طريق العلم
           </span>
         </h1>
 
-        {/* الوصف الديناميكي المتوافق مع محركات البحث */}
+        {/* الوصف الديناميكي */}
         <p className="mx-auto max-w-2xl text-sm sm:text-base leading-relaxed text-stone-600 dark:text-stone-300 font-medium mt-4 sm:mt-6">
-          منصة سَنَد التعليمية صُمّمت لتسندك خطوة بخطوة؛ نرتب لك المتون، ونفكك لك الألفاظ الصعبة، ونحفظ لك فوائدك في كشكول منظم،
+          منصة صُمّمت لتسندك خطوة بخطوة؛ نرتب لك المتون، ونفكك لك الألفاظ الصعبة، ونحفظ لك فوائدك في كشكول منظم،
           لنصل معاً من أول مسألة حتى إتقان الفن عبر{' '}
-          <span className="font-bold text-emerald-800 dark:text-emerald-400">{courses.length} متناً</span> تأصيلياً محققاً،
-          فكرة وتطوير وإشراف البشمهندس بهاء طارق لوجه الله تعالى.
+          <span className="font-bold text-emerald-800 dark:text-emerald-400">{courses.length} متناً</span> تأصيلياً محققاً.
         </p>
 
         {/* بطاقات المؤشرات الأربع التفاعلية الفخمة */}
