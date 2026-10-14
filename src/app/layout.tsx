@@ -41,19 +41,43 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'سند',
-    template: '%s || سند',
+    default: 'منصة سَنَد التعليمية || بإشراف وتطوير م. بهاء طارق',
+    template: '%s || منصة سَنَد التعليمية',
   },
-  applicationName: 'سند',
+  applicationName: 'منصة سَنَد التعليمية',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'سند',
+    title: 'منصة سَنَد',
   },
-  description: 'بيئة علمية رصينة، صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
-  keywords: ['متون شرعية', 'طلب العلم', 'علوم إسلامية', 'مدارسة', 'سند', 'فقه', 'عقيدة', 'نحو', 'حديث'],
-  authors: [{ name: 'منصة سَنَد لعلوم الشريعة والتأصيل' }],
-  creator: 'منصة سَنَد لعلوم الشريعة والتأصيل',
+  description:
+    'منصة سَنَد التعليمية: بيئة إسلامية رصينة لمدارسة وضبط المتون الشرعية والتأصيل المنهجي في الفنون التسعة. فكرة وتطوير وإشراف المهندس بهاء طارق (م. بهاء طارق) كصدقة جارية لوجه الله تعالى مجاناً بالكامل.',
+  keywords: [
+    'منصة سند',
+    'منصة سند التعليمية',
+    'بشمهندس بهاء طارق',
+    'م. بهاء طارق',
+    'بهاء طارق',
+    'منصة بهاء طارق',
+    'متون شرعية',
+    'طلب العلم الشرعي',
+    'مدارسة المتون',
+    'تأصيل شرعي',
+    'علوم إسلامية',
+    'فقه',
+    'عقيدة',
+    'حديث',
+    'أصول الفقه',
+    'نحو',
+    'Sanad platform',
+    'Bahaa Tarek',
+  ],
+  authors: [
+    { name: 'المهندس بهاء طارق (م. بهاء طارق)', url: 'https://sanad-edu1.vercel.app/about' },
+    { name: 'منصة سَنَد التعليمية' },
+  ],
+  creator: 'م. بهاء طارق (بشمهندس بهاء طارق)',
+  publisher: 'منصة سَنَد التعليمية',
   alternates: {
     canonical: siteUrl,
   },
@@ -75,23 +99,28 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'ar_SA',
     url: siteUrl,
-    siteName: 'منصة سَنَد',
-    title: 'سَنَد || رفيقك ومُعينك في طريق طلب العلم',
-    description: 'بيئة علمية رصينة، صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
+    siteName: 'منصة سَنَد التعليمية',
+    title: 'منصة سَنَد التعليمية || بإشراف وتطوير المهندس بهاء طارق',
+    description:
+      'منصة سَنَد التعليمية: بيئة إسلامية رصينة لمدارسة وضبط المتون الشرعية والتأصيل المنهجي في الفنون التسعة. فكرة وتطوير وإشراف المهندس بهاء طارق كصدقة جارية لوجه الله تعالى.',
     images: [
       {
         url: '/og-default.png',
         width: 1200,
         height: 630,
-        alt: 'منصة سَنَد — طريق التأصيل المنهجي',
+        alt: 'منصة سَنَد التعليمية — إشراف وهندسة م. بهاء طارق',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'سَنَد || رفيقك في طلب العلم',
-    description: 'بيئة علمية رصينة لمدارسة المتون وضبط مسالك العلوم الشرعية.',
+    title: 'منصة سَنَد التعليمية || بإشراف م. بهاء طارق',
+    description:
+      'منصة سَنَد التعليمية لمدارسة المتون الشرعية والتأصيل المنهجي، تأسيس وبرمجة المهندس بهاء طارق مجاناً بالكامل.',
     images: ['/og-default.png'],
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || 'google-site-verification=sanad-edu-bahaa-tareq',
   },
   robots: {
     index: true,
@@ -100,6 +129,8 @@ export const metadata: Metadata = {
       index: true,
       follow: true,
       'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
     },
   },
 }
@@ -112,9 +143,28 @@ const jsonLdData = {
       '@type': 'WebSite',
       '@id': `${siteUrl}/#website`,
       url: siteUrl,
-      name: 'منصة سَنَد للتعليم الشرعي والتأصيل المنهجي',
-      description: 'بيئة علمية رصينة، صُممت لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية بلا مشتتات.',
+      name: 'منصة سَنَد التعليمية',
+      alternateName: [
+        'منصة سند',
+        'منصة بهاء طارق',
+        'منصة المهندس بهاء طارق',
+        'Sanad Educational Platform',
+      ],
+      description:
+        'منصة سَنَد التعليمية: بيئة إسلامية رصينة لمدارسة المتون الشرعية وضبط الفنون التسعة. فكرة وتطوير وإشراف م. بهاء طارق.',
       inLanguage: 'ar',
+      author: {
+        '@type': 'Person',
+        name: 'بهاء طارق',
+        alternateName: ['م. بهاء طارق', 'بشمهندس بهاء طارق', 'المهندس بهاء طارق', 'Bahaa Tarek'],
+        jobTitle: 'مهندس برمجيات ومؤسس منصة سَنَد التعليمية',
+        url: `${siteUrl}/about`,
+      },
+      creator: {
+        '@type': 'Person',
+        name: 'بهاء طارق',
+        alternateName: ['م. بهاء طارق', 'المهندس بهاء طارق'],
+      },
       potentialAction: {
         '@type': 'SearchAction',
         target: {
@@ -127,12 +177,32 @@ const jsonLdData = {
     {
       '@type': 'EducationalOrganization',
       '@id': `${siteUrl}/#organization`,
-      name: 'منصة سَنَد',
-      alternateName: 'Sanad Platform',
+      name: 'منصة سَنَد التعليمية',
+      alternateName: ['منصة سند', 'منصة بهاء طارق', 'Sanad Platform'],
       url: siteUrl,
-      logo: `${siteUrl}/og-default.png`,
-      description: 'منصة إسلامية رصينة لمدارسة المتون الشرعية والتأصيل المنهجي في الفنون التسعة.',
+      logo: `${siteUrl}/icon-512.png`,
+      description:
+        'منصة تعليمية إسلامية رصينة أسسها وطورها المهندس بهاء طارق لتيسير طلب العلم ومدارسة المتون الشرعية مجاناً لوجه الله.',
       publishingPrinciples: `${siteUrl}/about`,
+      founder: {
+        '@type': 'Person',
+        name: 'بهاء طارق',
+        alternateName: ['م. بهاء طارق', 'بشمهندس بهاء طارق', 'المهندس بهاء طارق', 'Eng. Bahaa Tarek'],
+        jobTitle: 'مؤسس ومطور منصة سَنَد التعليمية',
+        url: `${siteUrl}/about`,
+      },
+      sameAs: [
+        'https://github.com/bahaatarek20/Sanad',
+      ],
+    },
+    {
+      '@type': 'Person',
+      '@id': `${siteUrl}/#founder`,
+      name: 'بهاء طارق',
+      alternateName: ['م. بهاء طارق', 'بشمهندس بهاء طارق', 'المهندس بهاء طارق', 'Bahaa Tarek'],
+      jobTitle: 'مهندس برمجيات ومؤسس منصة سَنَد',
+      description: 'مهندس برمجيات ومطور منصة سَنَد لعلوم الشريعة والتأصيل المنهجي.',
+      url: `${siteUrl}/about`,
     },
   ],
 }

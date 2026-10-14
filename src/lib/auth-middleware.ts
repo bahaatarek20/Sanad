@@ -24,12 +24,18 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isApi = pathname.startsWith('/api')
   const isPublicPage =
+    pathname === '/' ||
+    pathname.startsWith('/courses') ||
+    pathname.startsWith('/roadmap') ||
+    pathname.startsWith('/community') ||
     pathname.startsWith('/verify-ijaza') ||
     pathname.startsWith('/download') ||
     pathname.startsWith('/app') ||
     pathname === '/offline' ||
     pathname === '/about' ||
-    pathname === '/contact'
+    pathname === '/contact' ||
+    pathname === '/privacy' ||
+    pathname === '/terms'
   const isStaticFile =
     pathname === '/sw.js' ||
     pathname === '/manifest.json' ||
