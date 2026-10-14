@@ -21,7 +21,6 @@ import {
   Moon,
   Sun,
   Mail,
-  Smartphone,
   ShieldCheck,
 } from 'lucide-react'
 import LogoutButton from '@/components/logout-button'
@@ -151,12 +150,6 @@ export default function MobileMenu({
       label: 'بريد سَنَد العلمي',
       sub: 'الرسائل ورموز الأمان (Gmail)',
       icon: Mail,
-    },
-    {
-      href: '/download',
-      label: 'تحميل تطبيق سَنَد',
-      sub: 'تثبيت على الهاتف كأي تطبيق (📱 App)',
-      icon: Smartphone,
     },
   ]
 
