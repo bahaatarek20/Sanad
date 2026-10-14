@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, Compass, User, Users, FileText, LogIn, GitFork, Smartphone } from 'lucide-react'
+import { BookOpen, Compass, User, Users, FileText, LogIn, GitFork, Smartphone, ShieldCheck } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { signOutAction } from '@/app/login/actions'
 import LogoutButton from '@/components/logout-button'
@@ -18,6 +18,15 @@ export default async function Navbar() {
     const profile = getStudentProfileData(user.email)
     scholarlyId = profile?.scholarlyId
   }
+
+  const cleanUserEmail = (user?.email || '').toLowerCase().trim()
+  const isAdmin =
+    user?.role === 'admin' ||
+    cleanUserEmail === 'bhaaljml480@gmail.com' ||
+    cleanUserEmail === 'bhaaljml48@gmail.com' ||
+    cleanUserEmail === 'bhaaljml66@gmail.com' ||
+    cleanUserEmail === 'bhaaljml3@gmail.com' ||
+    cleanUserEmail === 'bhaaljml62@gmail.com'
 
   return (
     <header className="no-print sticky top-0 z-50 w-full border-b border-stone-200/80 bg-[#fdfbf7]/95 backdrop-blur-md transition-colors duration-300 dark:border-stone-800 dark:bg-[#1c1917]/95">
@@ -82,7 +91,18 @@ export default async function Navbar() {
                 <ThemeToggle />
                 <InboxDropdown />
 
-                <div className="hidden md:flex items-center gap-1">
+                <div className="hidden md:flex items-center gap-1.5">
+                  {/* زر لوحة التحكم للمشرف العام فقط */}
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      title="لوحة الإدارة والتحكم الشاملة (مشرف)"
+                      className="flex h-8 items-center gap-1.5 rounded-lg bg-linear-to-r from-amber-600 via-amber-700 to-emerald-900 px-3 text-xs font-black text-amber-100 shadow-xs hover:from-amber-500 hover:to-emerald-800 transition border border-amber-400/40"
+                    >
+                      <ShieldCheck className="h-4 w-4 text-amber-300" />
+                      <span>لوحة التحكم</span>
+                    </Link>
+                  )}
 
                   {/* رابط كشكول الطالب الخاص */}
                   <Link
@@ -135,6 +155,7 @@ export default async function Navbar() {
           <div className="lg:hidden">
             <MobileMenu
               isLoggedIn={!!user}
+              isAdmin={isAdmin}
               userName={user?.user_metadata?.full_name}
               userEmail={user?.email}
               scholarlyId={scholarlyId}

@@ -1,5 +1,28 @@
 [
   {
+    "id": "student_1792009888127_fatma",
+    "scholarlyId": "SND-1007",
+    "email": "fatmamohamed01009034136@gmail.com",
+    "name": "فاطمة محمد",
+    "authProvider": "google",
+    "ip": "156.222.99.85",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "القاهرة",
+    "device": "حاسوب [Linux]",
+    "browser": "Google Chrome",
+    "registeredAt": "2026-10-14T20:30:00.000Z",
+    "lastActive": "2026-10-14T20:33:00.000Z",
+    "totalStudyMinutes": 0,
+    "streak": 0,
+    "completedCourses": [],
+    "completedEpisodesMap": {},
+    "dailyStudyLog": {},
+    "listenedSessions": [],
+    "notesCount": 0,
+    "isBanned": false
+  },
+  {
     "countryCode": "EG",
     "completedCourses": [],
     "registeredAt": "2026-10-13T17:39:13.485Z",

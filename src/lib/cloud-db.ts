@@ -32,7 +32,7 @@ function logFirestoreNotice(err: unknown) {
 }
 
 /**
- * 1. حفظ أو تحديث طالب في Cloud Firestore
+ * 1. حفظ أو تحديث طالب في Cloud Firestore مع المزامنة المزدوجة (students + users)
  */
 export async function saveStudentToCloud(student: StudentActivityRecord): Promise<boolean> {
   try {
@@ -46,6 +46,32 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
       },
       { merge: true }
     )
+
+    // مزامنة مستند users/{uid} أيضاً إذا كان معرف الحساب موجوداً
+    if (student.id) {
+      try {
+        const userDocRef = doc(db, 'users', student.id)
+        await setDoc(
+          userDocRef,
+          {
+            uid: student.id,
+            email: student.email,
+            fullName: student.name,
+            phoneNumber: student.phone || null,
+            avatarUrl: student.avatarUrl || null,
+            status: student.isBanned ? 'banned' : 'active',
+            scholarlyId: student.scholarlyId,
+            ip: student.ip,
+            country: student.country,
+            city: student.city,
+            device: student.device,
+            browser: student.browser,
+            lastLoginAt: student.lastActive || new Date().toISOString(),
+          },
+          { merge: true }
+        )
+      } catch {}
+    }
     return true
   } catch (err) {
     logFirestoreNotice(err)
@@ -54,31 +80,90 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
 }
 
 /**
- * 2. جلب كافة الطلاب من Cloud Firestore
+ * 2. جلب كافة الطلاب من Cloud Firestore (دمج مجموعتي students و users لضمان عدم فقدان أي حساب مسجل)
  */
 export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
+  const studentsMap = new Map<string, StudentActivityRecord>()
+
+  // أ. جلب الطلاب من مجموعة students
   try {
     const colRef = collection(db, STUDENTS_COLLECTION)
-    const q = query(colRef, limit(200))
+    const q = query(colRef, limit(300))
     const snapshot = await getDocs(q)
 
-    if (snapshot.empty) {
-      return []
-    }
-
-    const students: StudentActivityRecord[] = []
     snapshot.forEach((d) => {
       const data = d.data() as StudentActivityRecord
       if (data && data.email) {
-        students.push(data)
+        studentsMap.set(data.email.toLowerCase().trim(), data)
       }
     })
-
-    return students
   } catch (err) {
     logFirestoreNotice(err)
-    return []
   }
+
+  // ب. جلب مستندات المستخدمين من مجموعة users ومطابقتها لضمان بقاء كل من سجل في Firebase Auth
+  try {
+    const usersColRef = collection(db, 'users')
+    const usersQ = query(usersColRef, limit(300))
+    const usersSnapshot = await getDocs(usersQ)
+
+    usersSnapshot.forEach((d) => {
+      const u = d.data() as Record<string, unknown>
+      const email = typeof u.email === 'string' ? u.email.toLowerCase().trim() : ''
+      if (!email) return
+
+      const existing = studentsMap.get(email)
+      const createdAtStr =
+        u.createdAt && typeof (u.createdAt as { toDate?: () => Date }).toDate === 'function'
+          ? (u.createdAt as { toDate: () => Date }).toDate().toISOString()
+          : typeof u.createdAt === 'string'
+          ? u.createdAt
+          : new Date().toISOString()
+
+      const lastLoginAtStr =
+        u.lastLoginAt && typeof (u.lastLoginAt as { toDate?: () => Date }).toDate === 'function'
+          ? (u.lastLoginAt as { toDate: () => Date }).toDate().toISOString()
+          : typeof u.lastLoginAt === 'string'
+          ? u.lastLoginAt
+          : createdAtStr
+
+      if (existing) {
+        // تحديث الحقول إذا كان مستند users يحتوي على بيانات أحدث
+        if (u.fullName && typeof u.fullName === 'string') existing.name = u.fullName
+        if (u.phoneNumber && typeof u.phoneNumber === 'string') existing.phone = u.phoneNumber
+        if (u.avatarUrl && typeof u.avatarUrl === 'string') existing.avatarUrl = u.avatarUrl
+        if (u.status === 'banned') existing.isBanned = true
+        if (u.scholarlyId && typeof u.scholarlyId === 'string') existing.scholarlyId = u.scholarlyId
+        if (lastLoginAtStr > (existing.lastActive || '')) existing.lastActive = lastLoginAtStr
+      } else {
+        const isGmail = email.endsWith('@gmail.com')
+        const newRecord: StudentActivityRecord = {
+          id: d.id || (typeof u.uid === 'string' ? u.uid : `student_${Date.now()}`),
+          scholarlyId: typeof u.scholarlyId === 'string' ? u.scholarlyId : undefined,
+          email,
+          name: (typeof u.fullName === 'string' && u.fullName.trim()) || email.split('@')[0],
+          phone: typeof u.phoneNumber === 'string' ? u.phoneNumber : undefined,
+          avatarUrl: typeof u.avatarUrl === 'string' ? u.avatarUrl : undefined,
+          authProvider: isGmail ? 'google' : u.phoneNumber ? 'phone' : 'email',
+          registeredAt: createdAtStr,
+          lastActive: lastLoginAtStr,
+          totalStudyMinutes: typeof u.totalStudyMinutes === 'number' ? u.totalStudyMinutes : 0,
+          streak: 0,
+          completedCourses: Array.isArray(u.completedCourses) ? (u.completedCourses as string[]) : [],
+          completedEpisodesMap: {},
+          dailyStudyLog: {},
+          listenedSessions: [],
+          notesCount: 0,
+          isBanned: u.status === 'banned',
+        }
+        studentsMap.set(email, newRecord)
+      }
+    })
+  } catch (err) {
+    logFirestoreNotice(err)
+  }
+
+  return Array.from(studentsMap.values())
 }
 
 /**
@@ -245,19 +330,30 @@ export async function deleteCommunityReplyFromCloud(
 const PLATFORM_STATS_COLLECTION = 'platform_stats'
 
 /**
- * 9. حفظ إحصائيات المنصة في Cloud Firestore
+ * 9. حفظ إحصائيات المنصة في Cloud Firestore (بما فيها site_stats/overview و platform_stats)
  */
 export async function savePlatformStatsToCloud(stats: Record<string, unknown>): Promise<boolean> {
   try {
-    const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
-    await setDoc(
-      docRef,
-      {
-        ...stats,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    )
+    const summaryRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
+    const siteStatsRef = doc(db, 'site_stats', 'overview')
+
+    const payload = {
+      ...stats,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await Promise.allSettled([
+      setDoc(summaryRef, payload, { merge: true }),
+      setDoc(
+        siteStatsRef,
+        {
+          totalVisits: stats.totalVisitors || stats.totalVisits || 0,
+          totalUsers: stats.totalRegisteredStudents || stats.totalUsers || 0,
+          lastUpdated: new Date().toISOString(),
+        },
+        { merge: true }
+      ),
+    ])
     return true
   } catch (err) {
     logFirestoreNotice(err)
@@ -270,6 +366,17 @@ export async function savePlatformStatsToCloud(stats: Record<string, unknown>): 
  */
 export async function getPlatformStatsFromCloud(): Promise<Record<string, unknown> | null> {
   try {
+    const siteStatsRef = doc(db, 'site_stats', 'overview')
+    const siteSnap = await getDoc(siteStatsRef)
+    if (siteSnap.exists()) {
+      const d = siteSnap.data()
+      return {
+        totalVisitors: d.totalVisits || 0,
+        totalRegisteredStudents: d.totalUsers || 0,
+        ...d,
+      }
+    }
+
     const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
     const snap = await getDoc(docRef)
     if (snap.exists()) {

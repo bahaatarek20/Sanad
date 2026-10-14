@@ -51,6 +51,7 @@ export interface StudentActivityRecord {
   device?: string // نوع الجهاز ونظام التشغيل (مثال: كمبيوتر محمول Windows)
   browser?: string // متصفح الويب (مثال: Google Chrome)
   userAgent?: string // معرف المتصفح الخام
+  role?: 'student' | 'admin' // رتبة الحساب في المنصة
 }
 
 export interface PlatformEvent {
@@ -75,6 +76,7 @@ const DATA_DIR = path.join(process.cwd(), 'data')
 const REGISTRY_FILE = path.join(DATA_DIR, 'sanad_students_registry.json')
 const UPLOAD_REGISTRY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_students_registry.json')
 const STATS_FILE = path.join(DATA_DIR, 'sanad_platform_stats.json')
+const UPLOAD_STATS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_stats.json')
 const EVENTS_FILE = path.join(DATA_DIR, 'sanad_platform_events.json')
 const UPLOAD_EVENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_events.json')
 const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
@@ -495,6 +497,17 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
     stats.totalVisitors = (stats.totalVisitors || 0) + 1
     stats.lastUpdated = new Date().toISOString()
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+
+    // مزامنة سحابية مع Firestore
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
+
     return stats.totalVisitors
   } catch {
     return 0
@@ -1286,6 +1299,16 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     console.warn('Could not fetch students from Cloud Firestore:', err)
   }
 
+  if (globalThis.__sanad_latest_registered_student__) {
+    const latestEmail = globalThis.__sanad_latest_registered_student__.email.toLowerCase()
+    const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === latestEmail)
+    if (idx === -1) {
+      mergedStudents.unshift(globalThis.__sanad_latest_registered_student__)
+    } else {
+      mergedStudents[idx] = { ...mergedStudents[idx], ...globalThis.__sanad_latest_registered_student__ }
+    }
+  }
+
   mergedStudents.forEach((st) => ensureStudentTelemetryDefaults(st))
 
   // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
@@ -1298,8 +1321,18 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   // حفظ القائمة المدمجة المحدثة
   saveAllLocalStudents(mergedStudents)
 
+  let visitorCount = localData.stats.totalVisitors || 0
+  try {
+    const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
+    const cloudStats = await getPlatformStatsFromCloud()
+    if (cloudStats && typeof cloudStats.totalVisitors === 'number' && cloudStats.totalVisitors > visitorCount) {
+      visitorCount = cloudStats.totalVisitors
+    }
+  } catch {}
+
   const stats = {
     ...localData.stats,
+    totalVisitors: visitorCount,
     totalRegisteredStudents: mergedStudents.length,
     totalCompletedCoursesCount: mergedStudents.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
     totalStudyMinutes: mergedStudents.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),

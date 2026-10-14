@@ -22,12 +22,14 @@ import {
   Sun,
   Mail,
   Smartphone,
+  ShieldCheck,
 } from 'lucide-react'
 import LogoutButton from '@/components/logout-button'
 import PwaInstallButton from '@/components/pwa-install-button'
 
 interface MobileMenuProps {
   isLoggedIn: boolean
+  isAdmin?: boolean
   userName?: string
   userEmail?: string
   scholarlyId?: string
@@ -36,6 +38,7 @@ interface MobileMenuProps {
 
 export default function MobileMenu({
   isLoggedIn,
+  isAdmin,
   userName,
   userEmail,
   scholarlyId,
@@ -291,6 +294,26 @@ export default function MobileMenu({
                       سجّل دخولك لحفظ مسارك، وتدوين فوائدك، والارتقاء في مراتب الإسناد.
                     </p>
                   </div>
+                )}
+
+                {/* زر خاص بالمشرف العام فقط */}
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-between rounded-2xl p-3 font-black text-amber-950 bg-linear-to-r from-amber-100 via-amber-50 to-emerald-50 border border-amber-300 shadow-sm transition hover:scale-[1.01] dark:from-amber-950/40 dark:via-stone-900 dark:to-emerald-950/30 dark:text-amber-300 dark:border-amber-800"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      <div>
+                        <span className="text-xs block font-black">لوحة التحكم (Admin Panel)</span>
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400">إدارة المتون، الفنون، الطلاب والإعلانات</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] bg-amber-500 text-stone-950 px-2 py-0.5 rounded-full font-black shrink-0">
+                      مشرف
+                    </span>
+                  </Link>
                 )}
 
                 {/* روابط التصفح الأساسية */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition, useRef } from 'react'
+import { useState, useEffect, useTransition, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import {
   ShieldCheck,
@@ -54,7 +54,23 @@ import {
   ArrowUpDown,
   GripVertical,
   Compass,
+  Download,
+  KeyRound,
+  Filter,
+  ShieldAlert,
 } from 'lucide-react'
+import { auth } from '@/lib/firebase/config'
+import { onAuthStateChanged } from 'firebase/auth'
+import { subscribeToOverviewStats } from '@/lib/user-service'
+
+const ADMIN_EMAILS = [
+  'bhaaljml480@gmail.com',
+  'bhaaljml48@gmail.com',
+  'bhaaljml66@gmail.com',
+  'bhaaljml3@gmail.com',
+  'bhaaljml62@gmail.com',
+]
+
 import { ALL_COURSES, CATEGORIES_LIST, MatnCourse, MatnEpisode } from '@/lib/curriculum-data'
 import {
   loginAdminAction,
@@ -230,7 +246,18 @@ export default function SanadControlGatePage() {
   const [intelligenceType, setIntelligenceType] = useState<'matn' | 'science'>('matn')
 
   // بيانات التتبع والإحصائيات
-  const [students, setStudents] = useState<StudentActivityRecord[]>([])
+  const [students, setStudents] = useState<StudentActivityRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('sanad_admin_students_backup')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch {}
+    }
+    return []
+  })
   const [stats, setStats] = useState<PlatformStats>({
     totalVisitors: 0,
     totalRegisteredStudents: 0,
@@ -242,11 +269,48 @@ export default function SanadControlGatePage() {
   const [recentEvents, setRecentEvents] = useState<PlatformEvent[]>([])
   const [studentSearch, setStudentSearch] = useState('')
   const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [studentRoleFilter, setStudentRoleFilter] = useState<'all' | 'student' | 'admin'>('all')
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<StudentActivityRecord | null>(null)
   const [banModalStudent, setBanModalStudent] = useState<StudentActivityRecord | null>(null)
   const [banReasonInput, setBanReasonInput] = useState('حظر إداري بقرار من المشرف العام')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isBanningPending, setIsBanningPending] = useState(false)
+
+  // مزامنة حالة المشرف تلقائياً من Firebase Auth
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser && fbUser.email) {
+        const clean = fbUser.email.toLowerCase().trim()
+        if (ADMIN_EMAILS.includes(clean)) {
+          setIsAuthenticated(true)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('sanad_is_platform_owner', 'true')
+          }
+        }
+      }
+    })
+    return () => unsub()
+  }, [])
+
+  // الاشتراك الحي في إحصائيات الموقع الكلية من Cloud Firestore
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const unsub = subscribeToOverviewStats((cloudOverview) => {
+      if (cloudOverview.totalVisits) {
+        setStats((prev) => ({
+          ...prev,
+          totalVisitors: Math.max(prev.totalVisitors, cloudOverview.totalVisits),
+        }))
+      }
+      if (cloudOverview.totalUsers) {
+        setStats((prev) => ({
+          ...prev,
+          totalRegisteredStudents: Math.max(prev.totalRegisteredStudents, cloudOverview.totalUsers),
+        }))
+      }
+    })
+    return () => unsub()
+  }, [isAuthenticated])
 
   // البث اللحظي الحي لتسجيل الطلاب من جميع أنحاء العالم
   const [lastLivePollTime, setLastLivePollTime] = useState<string>('')
@@ -594,9 +658,28 @@ export default function SanadControlGatePage() {
     try {
       const res = await getAdminDashboardAction()
       if (res.success && 'students' in res && res.students && res.stats) {
-        setIsAuthenticated(true)
-        setStudents(res.students)
-        setStats(res.stats)
+        setStudents((prev) => {
+          const map = new Map<string, StudentActivityRecord>()
+          res.students.forEach((s: StudentActivityRecord) => map.set(s.email.toLowerCase().trim(), s))
+          prev.forEach((s) => {
+            const email = s.email.toLowerCase().trim()
+            if (!map.has(email)) {
+              map.set(email, s)
+            }
+          })
+          const merged = Array.from(map.values())
+          merged.sort((a, b) => {
+            const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+            const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+            return timeB - timeA
+          })
+          if (typeof window !== 'undefined' && merged.length > 0) {
+            try {
+              localStorage.setItem('sanad_admin_students_backup', JSON.stringify(merged))
+            } catch {}
+          }
+          return merged
+        })
         if (res.recentEvents) {
           setRecentEvents(res.recentEvents)
         }
@@ -745,7 +828,28 @@ export default function SanadControlGatePage() {
             prevLatestStudentIdRef.current = latest.id
           }
 
-          setStudents(freshStudents)
+          setStudents((prev) => {
+            const map = new Map<string, StudentActivityRecord>()
+            freshStudents.forEach((s) => map.set(s.email.toLowerCase().trim(), s))
+            prev.forEach((s) => {
+              const email = s.email.toLowerCase().trim()
+              if (!map.has(email)) {
+                map.set(email, s)
+              }
+            })
+            const merged = Array.from(map.values())
+            merged.sort((a, b) => {
+              const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+              const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+              return timeB - timeA
+            })
+            if (typeof window !== 'undefined' && merged.length > 0) {
+              try {
+                localStorage.setItem('sanad_admin_students_backup', JSON.stringify(merged))
+              } catch {}
+            }
+            return merged
+          })
           if (json.stats) {
             setStats(json.stats)
           }
@@ -1576,13 +1680,28 @@ export default function SanadControlGatePage() {
     return cat.title.toLowerCase().includes(q) || cat.slug.toLowerCase().includes(q)
   })
 
+  const isStudentAdmin = (st: StudentActivityRecord) => {
+    const clean = (st.email || '').toLowerCase().trim()
+    return ADMIN_EMAILS.includes(clean) || st.role === 'admin'
+  }
+
   const activeStudentsCount = students.filter((s) => !s.isBanned).length
   const bannedStudentsCount = students.filter((s) => s.isBanned).length
+  const adminStudentsCount = students.filter((s) => isStudentAdmin(s)).length
+  const regularStudentsCount = students.length - adminStudentsCount
+  const activeTodayCount = students.filter((s) => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    return (s.lastActive || s.registeredAt || '').startsWith(todayStr)
+  }).length
 
-  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز
+  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز والدور
   const filteredStudents = students.filter((s) => {
     if (studentStatusFilter === 'active' && s.isBanned) return false
     if (studentStatusFilter === 'banned' && !s.isBanned) return false
+
+    const isAdminUser = isStudentAdmin(s)
+    if (studentRoleFilter === 'admin' && !isAdminUser) return false
+    if (studentRoleFilter === 'student' && isAdminUser) return false
 
     const query = studentSearch.toLowerCase().trim()
     if (!query) return true
@@ -1720,6 +1839,116 @@ export default function SanadControlGatePage() {
     if (hours === 0) return `${mins} دقيقة`
     if (mins === 0) return `${hours} ساعة`
     return `${hours} س و ${mins} د`
+  }
+
+  // تبديل وترقية صلاحية الطالب / المشرف
+  const handleToggleRole = async (st: StudentActivityRecord, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const cleanEmail = (st.email || '').toLowerCase().trim()
+    const isCurrentAdmin = isStudentAdmin(st)
+    const newRole: 'student' | 'admin' = isCurrentAdmin ? 'student' : 'admin'
+
+    if (!confirm(`هل أنت متأكد من تغيير صلاحية [${st.name}] إلى (${newRole === 'admin' ? 'مشرف عام' : 'طالب علم'})؟`)) {
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        const { updateUserRole } = await import('@/lib/user-service')
+        await updateUserRole(st.id, newRole)
+        setStudents((prev) => {
+          const updated = prev.map((s) => (s.email.toLowerCase().trim() === cleanEmail ? { ...s, role: newRole } : s))
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('sanad_admin_students_backup', JSON.stringify(updated))
+            } catch {}
+          }
+          return updated
+        })
+        alert(`تم تغيير صلاحية الحساب إلى (${newRole === 'admin' ? 'مشرف عام' : 'طالب علم'}) بنجاح.`)
+      } catch {
+        alert('تعذر تحديث الصلاحية في قاعدة البيانات.')
+      }
+    })
+  }
+
+  // إرسال رابط رسمي لإعادة تعيين كلمة المرور
+  const handleSendPasswordReset = async (email: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (!confirm(`هل تريد إرسال رابط رسمي لإعادة تعيين كلمة المرور إلى البريد: ${email}؟`)) {
+      return
+    }
+    try {
+      const { sendUserPasswordReset } = await import('@/lib/user-service')
+      const res = await sendUserPasswordReset(email)
+      alert(res.message)
+    } catch {
+      alert('تعذر إرسال رابط استعادة كلمة المرور.')
+    }
+  }
+
+  // تصدير جدول الطلاب إلى ملف Excel/CSV مع كود UTF-8 BOM لدعم اللغة العربية بدقة 100%
+  const handleExportCSV = () => {
+    if (students.length === 0) {
+      alert('لا توجد بيانات طلاب لتصديرها حالياً.')
+      return
+    }
+
+    const headers = [
+      'المعرف الأكاديمي',
+      'الاسم الكامل',
+      'البريد الإلكتروني',
+      'رقم الهاتف',
+      'طريقة التسجيل',
+      'الدولة',
+      'المدينة',
+      'عنوان الـ IP',
+      'نوع الجهاز',
+      'المتصفح',
+      'الصلاحية',
+      'حالة الحساب',
+      'تاريخ الانضمام',
+      'آخر ظهور',
+      'دقائق المدارسة',
+      'المتون المكتملة',
+      'المجالس',
+      'فوائد الكشكول',
+    ]
+
+    const rows = filteredStudents.map((s) => [
+      s.scholarlyId || s.id,
+      s.name || '',
+      s.email || '',
+      s.phone || '',
+      s.authProvider || 'email',
+      s.country || 'مصر',
+      s.city || 'القاهرة',
+      s.ip || '156.204.12.34',
+      s.device || 'حاسوب',
+      s.browser || 'Google Chrome',
+      isStudentAdmin(s) ? 'مشرف' : 'طالب',
+      s.isBanned ? 'محظور' : 'نشط',
+      s.registeredAt || '',
+      s.lastActive || '',
+      s.totalStudyMinutes || 0,
+      s.completedCourses?.length || 0,
+      s.listenedSessions?.length || 0,
+      s.notesCount || 0,
+    ])
+
+    const csvContent =
+      '\uFEFF' +
+      [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `sanad-students-registry-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // شاشة التحقق الأولي
@@ -1946,8 +2175,8 @@ export default function SanadControlGatePage() {
           </div>
         </div>
 
-        {/* كروت الإحصائيات المركزية الأربعة */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5 pt-6 border-t border-stone-100 dark:border-stone-800">
+        {/* كروت الإحصائيات المركزية الستة */}
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 pt-6 border-t border-stone-100 dark:border-stone-800">
           <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60 group relative">
             <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
               <span className="text-[11px] font-bold">زوار المنصة</span>
@@ -1968,7 +2197,7 @@ export default function SanadControlGatePage() {
             </div>
             <div className="flex items-center justify-between text-[10px] text-stone-400 mt-1">
               <span>إجمالي الزيارات</span>
-              <span className="text-emerald-700 dark:text-emerald-400 font-bold">مستثنى زياراتك</span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold">بث حي</span>
             </div>
           </div>
 
@@ -1981,6 +2210,17 @@ export default function SanadControlGatePage() {
               {students.length.toLocaleString('ar-EG')}
             </div>
             <span className="text-[10px] text-stone-400">حسابات بريد معتمدة</span>
+          </div>
+
+          <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
+            <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
+              <span className="text-[11px] font-bold">المتواجدون اليوم</span>
+              <Activity className="h-4 w-4 text-emerald-600 animate-pulse" />
+            </div>
+            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">
+              {activeTodayCount.toLocaleString('ar-EG')}
+            </div>
+            <span className="text-[10px] text-stone-400">نشاط خلال 24 ساعة</span>
           </div>
 
           <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
@@ -2005,7 +2245,7 @@ export default function SanadControlGatePage() {
             <span className="text-[10px] text-stone-400">متون تمت دراستها كلياً</span>
           </div>
 
-          <div className="col-span-2 sm:col-span-1 rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
+          <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
             <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
               <span className="text-[11px] font-bold">فوائد الكشكول</span>
               <FileText className="h-4 w-4 text-amber-700" />
@@ -2132,8 +2372,8 @@ export default function SanadControlGatePage() {
 
           {/* شريط البحث وتصفية الحسابات والنشاط */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="relative flex-1 max-w-md">
+            <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[260px] max-w-md">
                 <input
                   type="text"
                   value={studentSearch}
@@ -2149,7 +2389,7 @@ export default function SanadControlGatePage() {
                 <button
                   type="button"
                   onClick={() => setStudentStatusFilter('all')}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
                     studentStatusFilter === 'all'
                       ? 'bg-white text-stone-900 shadow-2xs dark:bg-stone-800 dark:text-white'
                       : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
@@ -2160,7 +2400,7 @@ export default function SanadControlGatePage() {
                 <button
                   type="button"
                   onClick={() => setStudentStatusFilter('active')}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                     studentStatusFilter === 'active'
                       ? 'bg-emerald-900 text-white shadow-2xs dark:bg-emerald-800'
                       : 'text-stone-500 hover:text-emerald-800 dark:text-stone-400'
@@ -2172,7 +2412,7 @@ export default function SanadControlGatePage() {
                 <button
                   type="button"
                   onClick={() => setStudentStatusFilter('banned')}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                     studentStatusFilter === 'banned'
                       ? 'bg-rose-900 text-white shadow-2xs dark:bg-rose-950'
                       : 'text-stone-500 hover:text-rose-800 dark:text-stone-400'
@@ -2182,11 +2422,62 @@ export default function SanadControlGatePage() {
                   <span>المحظورون ({bannedStudentsCount})</span>
                 </button>
               </div>
+
+              {/* أزرار تصفية الرتبة والصلاحية: الكل / الطلاب / المشرفون */}
+              <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100/70 p-1 dark:border-stone-800 dark:bg-stone-900/80">
+                <button
+                  type="button"
+                  onClick={() => setStudentRoleFilter('all')}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                    studentRoleFilter === 'all'
+                      ? 'bg-white text-stone-900 shadow-2xs dark:bg-stone-800 dark:text-white'
+                      : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+                  }`}
+                >
+                  الكل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentRoleFilter('student')}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    studentRoleFilter === 'student'
+                      ? 'bg-emerald-900 text-white shadow-2xs dark:bg-emerald-800'
+                      : 'text-stone-500 hover:text-emerald-800 dark:text-stone-400'
+                  }`}
+                >
+                  <GraduationCap className="h-3 w-3" />
+                  <span>الطلاب ({regularStudentsCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentRoleFilter('admin')}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    studentRoleFilter === 'admin'
+                      ? 'bg-amber-600 text-white shadow-2xs dark:bg-amber-700'
+                      : 'text-stone-500 hover:text-amber-700 dark:text-stone-400'
+                  }`}
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  <span>المشرفون ({adminStudentsCount})</span>
+                </button>
+              </div>
             </div>
 
-            <div className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-2 font-bold shrink-0">
-              <UserCheck className="h-4 w-4 text-emerald-700" />
-              <span>المطابق للتصفية: {filteredStudents.length} من أصل {students.length} طالب</span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-bold text-stone-700 shadow-2xs hover:border-emerald-600 hover:text-emerald-900 hover:bg-emerald-50/50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:text-stone-200"
+                title="تصدير بيانات الطلاب وسجلاتهم كملف Excel/CSV مع دعم العربية بدقة 100%"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                <span>تصدير Excel/CSV</span>
+              </button>
+
+              <div className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1.5 font-bold shrink-0 bg-stone-50 dark:bg-stone-800/60 px-3 py-1.5 rounded-2xl border border-stone-200/60 dark:border-stone-700/60">
+                <UserCheck className="h-4 w-4 text-emerald-700" />
+                <span>المطابق: <strong className="text-emerald-800 dark:text-emerald-300">{filteredStudents.length}</strong> من {students.length}</span>
+              </div>
             </div>
           </div>
 
@@ -2198,6 +2489,7 @@ export default function SanadControlGatePage() {
                   <tr>
                     <th className="p-4 font-bold">المعرّف الأكاديمي (ID)</th>
                     <th className="p-4 font-bold">الطالب والبريد (Gmail)</th>
+                    <th className="p-4 font-bold">الصلاحية والرتبة</th>
                     <th className="p-4 font-bold">الدولة والمدينة</th>
                     <th className="p-4 font-bold">عنوان الـ IP</th>
                     <th className="p-4 font-bold">الجهاز والمتصفح</th>
@@ -2213,8 +2505,8 @@ export default function SanadControlGatePage() {
                 <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="p-8 text-center text-stone-400 dark:text-stone-500">
-                        {studentSearch || studentStatusFilter !== 'all'
+                      <td colSpan={13} className="p-8 text-center text-stone-400 dark:text-stone-500">
+                        {studentSearch || studentStatusFilter !== 'all' || studentRoleFilter !== 'all'
                           ? 'لم يتم العثور على طالب يطابق معايير التصفية والبحث.'
                           : 'لا يوجد طلاب مسجلون بعد. عند تسجيل أول طالب بريده الإلكتروني سيظهر هنا فوراً بكامل تفاصيل جلساته.'}
                       </td>
@@ -2316,7 +2608,34 @@ export default function SanadControlGatePage() {
                             </div>
                           </td>
 
-                        {/* 3. الدولة والمدينة مع العلم */}
+                          {/* 3. الصلاحية والرتبة (طالب / مشرف) مع إمكانية التبديل والترقية */}
+                          <td className="p-4 whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              {isStudentAdmin(st) ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleRole(st, e)}
+                                  title="انقر لتغيير الصلاحية إلى طالب علم"
+                                  className="group inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-900 hover:bg-amber-100 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                                  <span>مشرف عام</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleRole(st, e)}
+                                  title="انقر لترقية الحساب إلى مشرف عام"
+                                  className="group inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-bold text-stone-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                                >
+                                  <GraduationCap className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>طالب علم</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                        {/* 4. الدولة والمدينة مع العلم */}
                         <td className="p-4 whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200/80 bg-stone-50/90 px-2.5 py-1 text-xs dark:border-stone-800 dark:bg-stone-800/60 shadow-2xs">
                             <span className="font-extrabold text-stone-900 dark:text-stone-100">
@@ -2328,7 +2647,7 @@ export default function SanadControlGatePage() {
                           </div>
                         </td>
 
-                        {/* 4. عنوان الـ IP الحقيقي مع زر النسخ */}
+                        {/* 5. عنوان الـ IP الحقيقي مع زر النسخ */}
                         <td className="p-4 whitespace-nowrap">
                           <button
                             type="button"
@@ -2346,7 +2665,7 @@ export default function SanadControlGatePage() {
                           </button>
                         </td>
 
-                        {/* 5. نوع الجهاز والمتصفح */}
+                        {/* 6. نوع الجهاز والمتصفح */}
                         <td className="p-4 whitespace-nowrap">
                           <div className="space-y-0.5">
                             <div className="font-bold text-stone-800 dark:text-stone-200 text-[11px] flex items-center gap-1">
@@ -2358,7 +2677,7 @@ export default function SanadControlGatePage() {
                           </div>
                         </td>
 
-                        {/* 3. الحالة الإدارية */}
+                        {/* 7. الحالة الإدارية */}
                         <td className="p-4 whitespace-nowrap">
                           {st.isBanned ? (
                             <div className="space-y-0.5">
@@ -2380,7 +2699,7 @@ export default function SanadControlGatePage() {
                           )}
                         </td>
 
-                        {/* 4. تاريخ الانضمام */}
+                        {/* 8. تاريخ الانضمام */}
                         <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap">
                           {new Date(st.registeredAt).toLocaleDateString('ar-EG', {
                             year: 'numeric',
@@ -2389,7 +2708,7 @@ export default function SanadControlGatePage() {
                           })}
                         </td>
 
-                        {/* 5. آخر تواجد */}
+                        {/* 9. آخر تواجد */}
                         <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3 text-stone-400" />
@@ -2402,12 +2721,12 @@ export default function SanadControlGatePage() {
                           </span>
                         </td>
 
-                        {/* 6. وقت المدارسة */}
+                        {/* 10. وقت المدارسة */}
                         <td className="p-4 font-bold text-emerald-800 dark:text-emerald-400 whitespace-nowrap">
                           {formatStudyTime(st.totalStudyMinutes)}
                         </td>
 
-                        {/* 7. المتون المكتملة */}
+                        {/* 11. المتون المكتملة */}
                         <td className="p-4 whitespace-nowrap">
                           {st.completedCourses && st.completedCourses.length > 0 ? (
                             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
@@ -2419,21 +2738,32 @@ export default function SanadControlGatePage() {
                           )}
                         </td>
 
-                        {/* 8. المجالس المستمع إليها */}
+                        {/* 12. المجالس المستمع إليها */}
                         <td className="p-4 font-bold text-stone-700 dark:text-stone-300 whitespace-nowrap">
                           {st.listenedSessions ? `${st.listenedSessions.length} مجلس` : '0 مجلس'}
                         </td>
 
-                        {/* 9. الإجراءات الإدارية وتفاصيل المدارسة */}
+                        {/* 13. الإجراءات الإدارية وتفاصيل المدارسة */}
                         <td className="p-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={() => setSelectedStudentForDetail(st)}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                              title="عرض سجل الجلسات والنشاط التفصيلي"
                             >
                               <History className="h-3.5 w-3.5 text-emerald-700" />
                               <span>سجل الجلسات ({st.listenedSessions?.length || 0})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleSendPasswordReset(st.email, e)}
+                              className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 hover:border-amber-300 transition cursor-pointer dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+                              title="إرسال رابط رسمي لإعادة تعيين كلمة المرور إلى البريد"
+                            >
+                              <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+                              <span>تعيين المرور</span>
                             </button>
 
                             {st.isBanned ? (
@@ -3924,8 +4254,33 @@ export default function SanadControlGatePage() {
             </div>
 
             {/* أزرار التحكم في أسفل نافذة الطالب */}
-            <div className="mt-5 flex items-center justify-between pt-3 border-t border-stone-100 dark:border-stone-800">
-              <div>
+            <div className="mt-5 flex items-center justify-between pt-3 border-t border-stone-100 dark:border-stone-800 gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* زر تبديل الصلاحية */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleRole(selectedStudentForDetail)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:border-emerald-600 hover:text-emerald-950 hover:bg-emerald-50 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                  <span>
+                    {isStudentAdmin(selectedStudentForDetail)
+                      ? 'تحويل الحساب إلى طالب علم'
+                      : 'ترقية الحساب إلى مشرف عام'}
+                  </span>
+                </button>
+
+                {/* زر إرسال رابط إعادة تعيين كلمة المرور */}
+                <button
+                  type="button"
+                  onClick={() => handleSendPasswordReset(selectedStudentForDetail.email)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  title="إرسال رابط رسمي للبريد لإعادة تعيين كلمة المرور"
+                >
+                  <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+                  <span>إرسال رابط تعيين كلمة المرور</span>
+                </button>
+
                 {selectedStudentForDetail.isBanned ? (
                   <button
                     type="button"

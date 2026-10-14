@@ -87,6 +87,34 @@ export async function syncUserToFirestore(
       console.warn('Could not increment totalUsers in site_stats:', e)
     }
 
+    // مزامنة فورية دائمة في مجموعة students لضمان ظهور الطالب في لوحة الإدارة دون انقطاع
+    try {
+      const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+      const studentDocRef = doc(db, 'students', studentDocId)
+      await setDoc(
+        studentDocRef,
+        {
+          id: uid,
+          email: cleanEmail,
+          name: data.fullName || cleanEmail.split('@')[0],
+          phone: data.phoneNumber || null,
+          avatarUrl: data.avatarUrl || null,
+          authProvider: cleanEmail.endsWith('@gmail.com') ? 'google' : data.phoneNumber ? 'phone' : 'email',
+          registeredAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+          totalStudyMinutes: 0,
+          streak: 0,
+          completedCourses: [],
+          notesCount: 0,
+          isBanned: false,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      )
+    } catch (e) {
+      console.warn('Could not sync to students collection in Firestore:', e)
+    }
+
     return {
       uid,
       fullName: data.fullName,

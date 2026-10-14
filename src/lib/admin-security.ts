@@ -190,6 +190,8 @@ export async function verifyAdminSession(): Promise<boolean> {
             'bhaaljml480@gmail.com',
             'bhaaljml48@gmail.com',
             'bhaaljml66@gmail.com',
+            'bhaaljml3@gmail.com',
+            'bhaaljml62@gmail.com',
             (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim(),
           ].filter(Boolean)
           if (authorizedAdminEmails.includes(email)) {
