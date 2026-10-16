@@ -742,6 +742,11 @@ export function registerOrUpdateStudent(
 
     saveAllLocalStudents(students)
     saveStudentToCloud(newStudent).catch(() => {})
+    import('@/lib/firebase-auth-sync')
+      .then(({ syncStudentToFirebaseAuth }) => {
+        syncStudentToFirebaseAuth(cleanEmail, undefined, studentName).catch(() => {})
+      })
+      .catch(() => {})
 
     try {
       const statsRaw = fs.readFileSync(STATS_FILE, 'utf8')

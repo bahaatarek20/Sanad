@@ -8,6 +8,7 @@ import { sendOtpToEmail, verifyOtpCode } from '@/lib/otp-service'
 import { sendOtpToPhone, verifyPhoneOtp } from '@/lib/phone-auth-service'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
+import { syncStudentToFirebaseAuth } from '@/lib/firebase-auth-sync'
 import {
   registerOrUpdateStudent,
   saveStudentLocalPassword,
@@ -90,6 +91,7 @@ export async function verifyOtpAction(formData: FormData) {
 
   registerOrUpdateStudent(email, fullName, { ...clientTelemetry, authProvider: 'email' })
   await setStudentSessionCookie(fullName, email, { authProvider: 'email' })
+  syncStudentToFirebaseAuth(email, undefined, fullName).catch(() => {})
 
   try {
     depositWelcomeMessage(email, fullName)
@@ -132,6 +134,7 @@ export async function loginWithPassword(formData: FormData) {
       const fullName = student?.name || cleanEmail.split('@')[0]
       await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
       registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+      syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
       redirectTo = '/courses'
     } else {
       errorMessage = 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.'
@@ -183,6 +186,7 @@ export async function signupWithPassword(formData: FormData) {
     saveStudentLocalPassword(cleanEmail, password, fullName)
     await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
     registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
 
     try {
       depositWelcomeMessage(cleanEmail, fullName)
@@ -399,6 +403,8 @@ export async function verifyPhoneOtpAction(formData: FormData) {
     phone: formattedPhone,
     authProvider: 'phone',
   })
+
+  syncStudentToFirebaseAuth(studentEmail, undefined, studentName).catch(() => {})
 
   revalidatePath('/', 'layout')
   redirect('/courses')
