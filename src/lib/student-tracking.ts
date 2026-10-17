@@ -86,6 +86,14 @@ const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data'
 const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
 const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
 
+export const ADMIN_EMAILS = [
+  'bhaaljml480@gmail.com',
+  'bhaaljml48@gmail.com',
+  'bhaaljml66@gmail.com',
+  'bhaaljml3@gmail.com',
+  'bhaaljml62@gmail.com',
+]
+
 const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
 const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json')
 const TMP_STATS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_stats.json')
@@ -227,6 +235,13 @@ export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
     else if (st.userAgent?.includes('Safari') && !st.userAgent?.includes('Chrome')) st.browser = 'Apple Safari'
     else if (st.userAgent?.includes('Firefox')) st.browser = 'Mozilla Firefox'
     else st.browser = 'Google Chrome'
+  }
+
+  // 4. تعيين الرتبة الافتراضية إذا لم تكن محددة مسبقاً
+  if (!st.role) {
+    const cleanEmail = (st.email || '').toLowerCase().trim()
+    const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
+    st.role = (ADMIN_EMAILS.includes(cleanEmail) || (envAdminEmail && cleanEmail === envAdminEmail)) ? 'admin' : 'student'
   }
 }
 
@@ -453,6 +468,14 @@ export function saveAllLocalStudents(students: StudentActivityRecord[]) {
   try {
     fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
   } catch {}
+
+  try {
+    const uploadDir = path.dirname(UPLOAD_REGISTRY_FILE)
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+    fs.writeFileSync(UPLOAD_REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
 }
 
 function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
@@ -607,7 +630,9 @@ export function toggleStudentBan(
       student.banReason = undefined
     }
 
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    globalThis.__sanad_registry_cache__ = undefined
+    saveAllLocalStudents(students)
+    saveStudentToCloud(student).catch(() => {})
 
     logPlatformEvent({
       type: isBanned ? 'ban' : 'unban',
@@ -621,6 +646,57 @@ export function toggleStudentBan(
     return { success: true, student }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'تعذر تحديث حالة الحظر'
+    return { success: false, error: msg }
+  }
+}
+
+// 1.8 تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) مع المزامنة الفورية الشاملة
+export function updateStudentRole(
+  emailOrId: string,
+  role: 'student' | 'admin'
+): { success: boolean; student?: StudentActivityRecord; error?: string } {
+  try {
+    ensureDataFiles()
+    const clean = emailOrId.toLowerCase().trim()
+    const students = readAllLocalStudents(true)
+
+    const idx = students.findIndex(
+      (s) =>
+        s.email?.toLowerCase().trim() === clean ||
+        s.scholarlyId?.toLowerCase().trim() === clean ||
+        s.id === clean
+    )
+    if (idx === -1) {
+      return { success: false, error: 'لم يتم العثور على حساب العضو المطلوب' }
+    }
+
+    const student = students[idx]
+    student.role = role
+
+    globalThis.__sanad_registry_cache__ = undefined
+    saveAllLocalStudents(students)
+
+    // مزامنة فورية مزدوجة مع Cloud Firestore
+    saveStudentToCloud(student).catch(() => {})
+    import('@/lib/cloud-db')
+      .then(({ updateCloudStudentRole }) => {
+        updateCloudStudentRole(student.email, student.id, role).catch(() => {})
+      })
+      .catch(() => {})
+
+    logPlatformEvent({
+      type: role === 'admin' ? 'unban' : 'ban',
+      studentEmail: student.email,
+      studentName: student.name,
+      description:
+        role === 'admin'
+          ? `ترقية العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة مشرف عام للمنصة`
+          : `تعديل رتبة العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة طالب علم`,
+    })
+
+    return { success: true, student }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'تعذر تحديث رتبة وصلاحيات العضو'
     return { success: false, error: msg }
   }
 }
@@ -1294,7 +1370,11 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
         } else {
           const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === clean)
           if (idx >= 0 && cs.lastActive && (!mergedStudents[idx].lastActive || cs.lastActive > mergedStudents[idx].lastActive)) {
+            const currentRole = mergedStudents[idx].role
             mergedStudents[idx] = { ...mergedStudents[idx], ...cs }
+            if (currentRole && !cs.role) {
+              mergedStudents[idx].role = currentRole
+            }
             ensureStudentTelemetryDefaults(mergedStudents[idx])
           }
         }

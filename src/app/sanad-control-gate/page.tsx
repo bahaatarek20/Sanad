@@ -63,6 +63,7 @@ import {
   Flame,
   Smartphone,
   Laptop,
+  Loader2,
 } from 'lucide-react'
 import { auth } from '@/lib/firebase/config'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -92,6 +93,7 @@ import {
   deleteCategoryAdminAction,
   toggleBanStudentAdminAction,
   resetVisitorCountAdminAction,
+  updateStudentRoleAdminAction,
 } from './actions'
 import type { CategoryItem } from '@/lib/courses-store'
 import type { StudentActivityRecord, PlatformStats, PlatformEvent } from '@/lib/student-tracking'
@@ -281,6 +283,18 @@ export default function SanadControlGatePage() {
   const [banReasonInput, setBanReasonInput] = useState('حظر إداري بقرار من المشرف العام')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isBanningPending, setIsBanningPending] = useState(false)
+  const [roleActionLoadingId, setRoleActionLoadingId] = useState<string | null>(null)
+  const [roleFeedbackMessage, setRoleFeedbackMessage] = useState<{
+    text: string
+    type: 'success' | 'error'
+  } | null>(null)
+
+  const showRoleToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setRoleFeedbackMessage({ text, type })
+    setTimeout(() => {
+      setRoleFeedbackMessage((prev) => (prev?.text === text ? null : prev))
+    }, 4000)
+  }
 
   // مزامنة حالة المشرف تلقائياً من Firebase Auth
   useEffect(() => {
@@ -1686,9 +1700,12 @@ export default function SanadControlGatePage() {
     return cat.title.toLowerCase().includes(q) || cat.slug.toLowerCase().includes(q)
   })
 
-  const isStudentAdmin = (st: StudentActivityRecord) => {
+  const isStudentAdmin = (st: StudentActivityRecord | null | undefined) => {
+    if (!st) return false
+    if (st.role === 'admin') return true
+    if (st.role === 'student') return false
     const clean = (st.email || '').toLowerCase().trim()
-    return ADMIN_EMAILS.includes(clean) || st.role === 'admin'
+    return ADMIN_EMAILS.includes(clean)
   }
 
   const activeStudentsCount = students.filter((s) => !s.isBanned).length
@@ -1847,35 +1864,85 @@ export default function SanadControlGatePage() {
     return `${hours} س و ${mins} د`
   }
 
-  // تبديل وترقية صلاحية الطالب / المشرف
+  // تبديل وترقية صلاحية الطالب / المشرف بسلاسة وسرعة فائقة مع حفظ دائم
   const handleToggleRole = async (st: StudentActivityRecord, e?: React.MouseEvent) => {
     e?.stopPropagation()
     const cleanEmail = (st.email || '').toLowerCase().trim()
     const isCurrentAdmin = isStudentAdmin(st)
     const newRole: 'student' | 'admin' = isCurrentAdmin ? 'student' : 'admin'
+    const targetKey = cleanEmail || st.id
 
-    if (!confirm(`هل أنت متأكد من تغيير صلاحية [${st.name}] إلى (${newRole === 'admin' ? 'مشرف عام' : 'طالب علم'})؟`)) {
-      return
+    // 1. تحديث تفاؤلي فوري في واجهة المستخدم (0 ثانية تأخير)
+    setStudents((prev) => {
+      const updated = prev.map((s) => {
+        const sClean = (s.email || '').toLowerCase().trim()
+        if (sClean === cleanEmail || s.id === st.id || (st.scholarlyId && s.scholarlyId === st.scholarlyId)) {
+          return { ...s, role: newRole }
+        }
+        return s
+      })
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('sanad_admin_students_backup', JSON.stringify(updated))
+        } catch {}
+      }
+      return updated
+    })
+
+    if (selectedStudentForDetail) {
+      const modalClean = (selectedStudentForDetail.email || '').toLowerCase().trim()
+      if (modalClean === cleanEmail || selectedStudentForDetail.id === st.id) {
+        setSelectedStudentForDetail((prev) => (prev ? { ...prev, role: newRole } : null))
+      }
     }
 
-    startTransition(async () => {
+    setRoleActionLoadingId(targetKey)
+
+    try {
+      // 2. تحديث السجل الخادمي الموثق لضمان البقاء الدائم ضد أي بولينج
+      const res = await updateStudentRoleAdminAction(cleanEmail || st.id, newRole)
+
+      // 3. تحديث موازٍ لمجموعة المستخدمين في Firebase Firestore
       try {
         const { updateUserRole } = await import('@/lib/user-service')
         await updateUserRole(st.id, newRole)
-        setStudents((prev) => {
-          const updated = prev.map((s) => (s.email.toLowerCase().trim() === cleanEmail ? { ...s, role: newRole } : s))
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('sanad_admin_students_backup', JSON.stringify(updated))
-            } catch {}
+      } catch {}
+
+      if (res && res.success) {
+        showRoleToast(
+          `تم تغيير رتبة [${st.name}] إلى (${newRole === 'admin' ? '🛡️ مشرف عام' : '🎓 طالب علم'}) بنجاح`,
+          'success'
+        )
+      } else {
+        // التراجع في حال حدوث خطأ خادمي
+        setStudents((prev) =>
+          prev.map((s) => {
+            const sClean = (s.email || '').toLowerCase().trim()
+            if (sClean === cleanEmail || s.id === st.id) {
+              return { ...s, role: isCurrentAdmin ? 'admin' : 'student' }
+            }
+            return s
+          })
+        )
+        if (selectedStudentForDetail) {
+          const modalClean = (selectedStudentForDetail.email || '').toLowerCase().trim()
+          if (modalClean === cleanEmail || selectedStudentForDetail.id === st.id) {
+            setSelectedStudentForDetail((prev) => (prev ? { ...prev, role: isCurrentAdmin ? 'admin' : 'student' } : null))
           }
-          return updated
-        })
-        alert(`تم تغيير صلاحية الحساب إلى (${newRole === 'admin' ? 'مشرف عام' : 'طالب علم'}) بنجاح.`)
-      } catch {
-        alert('تعذر تحديث الصلاحية في قاعدة البيانات.')
+        }
+        showRoleToast(res?.error || 'تعذر تعديل الصلاحية، يرجى المحاولة مجدداً', 'error')
       }
-    })
+    } catch {
+      showRoleToast('حدث خطأ أثناء حفظ الصلاحية الجديدة', 'error')
+    } finally {
+      setRoleActionLoadingId(null)
+    }
+  }
+
+  // تعيين رتبة وصلاحية محددة مباشرة (من نافذة تفاصيل العضو)
+  const handleSetExactRole = async (st: StudentActivityRecord, targetRole: 'student' | 'admin') => {
+    if (isStudentAdmin(st) === (targetRole === 'admin')) return
+    await handleToggleRole(st)
   }
 
   // إرسال رابط رسمي لإعادة تعيين كلمة المرور
@@ -2628,21 +2695,27 @@ export default function SanadControlGatePage() {
                             <button
                               type="button"
                               onClick={(e) => handleToggleRole(st, e)}
+                              disabled={roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id)}
                               title={isStudentAdmin(st) ? "انقر للتحويل إلى طالب علم" : "انقر للترقية إلى مشرف عام"}
-                              className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[10px] font-black transition cursor-pointer shadow-2xs ${
+                              className={`group inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[10px] font-black transition active:scale-95 cursor-pointer shadow-2xs ${
                                 isStudentAdmin(st)
                                   ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
                                   : 'border border-stone-200 bg-stone-50 text-stone-700 hover:border-emerald-600 hover:bg-emerald-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
-                              }`}
+                              } ${roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id) ? 'opacity-70 animate-pulse pointer-events-none' : ''}`}
                             >
-                              {isStudentAdmin(st) ? (
+                              {roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id) ? (
                                 <>
-                                  <ShieldCheck className="h-3 w-3 text-amber-600" />
+                                  <Loader2 className="h-3 w-3 animate-spin text-amber-600" />
+                                  <span>جارِ الحفظ...</span>
+                                </>
+                              ) : isStudentAdmin(st) ? (
+                                <>
+                                  <ShieldCheck className="h-3 w-3 text-amber-600 group-hover:scale-110 transition-transform" />
                                   <span>مشرف عام</span>
                                 </>
                               ) : (
                                 <>
-                                  <GraduationCap className="h-3 w-3 text-emerald-600" />
+                                  <GraduationCap className="h-3 w-3 text-emerald-600 group-hover:scale-110 transition-transform" />
                                   <span>طالب علم</span>
                                 </>
                               )}
@@ -2953,27 +3026,34 @@ export default function SanadControlGatePage() {
                           {/* 3. الصلاحية والرتبة (طالب / مشرف) مع إمكانية التبديل والترقية */}
                           <td className="p-4 whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
-                              {isStudentAdmin(st) ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleToggleRole(st, e)}
-                                  title="انقر لتغيير الصلاحية إلى طالب علم"
-                                  className="group inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-900 hover:bg-amber-100 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                                >
-                                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-                                  <span>مشرف عام</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleToggleRole(st, e)}
-                                  title="انقر لترقية الحساب إلى مشرف عام"
-                                  className="group inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-bold text-stone-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
-                                >
-                                  <GraduationCap className="h-3.5 w-3.5 text-emerald-600" />
-                                  <span>طالب علم</span>
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleRole(st, e)}
+                                disabled={roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id)}
+                                title={isStudentAdmin(st) ? "انقر لتغيير الصلاحية إلى طالب علم" : "انقر لترقية الحساب إلى مشرف عام"}
+                                className={`group inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] font-black transition active:scale-95 cursor-pointer shadow-2xs ${
+                                  isStudentAdmin(st)
+                                    ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:border-amber-400 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                    : 'border border-stone-200 bg-stone-50 text-stone-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                                } ${roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id) ? 'opacity-70 animate-pulse pointer-events-none' : ''}`}
+                              >
+                                {roleActionLoadingId === ((st.email || '').toLowerCase().trim() || st.id) ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                                    <span>جارِ الحفظ...</span>
+                                  </>
+                                ) : isStudentAdmin(st) ? (
+                                  <>
+                                    <ShieldCheck className="h-3.5 w-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+                                    <span>مشرف عام</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <GraduationCap className="h-3.5 w-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                                    <span>طالب علم</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </td>
 
@@ -4596,23 +4676,86 @@ export default function SanadControlGatePage() {
               )}
             </div>
 
+            {/* بطاقة التحكم بصلاحيات ورتبة الحساب في المنصة */}
+            <div className="mt-4 rounded-2xl border border-stone-200/90 bg-stone-50/80 p-4 dark:border-stone-850 dark:bg-stone-850/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                  <h4 className="text-xs font-black text-stone-900 dark:text-stone-100">
+                    صلاحيات الحساب ورتبته في منصة سَنَد
+                  </h4>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${
+                    isStudentAdmin(selectedStudentForDetail)
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300'
+                  }`}
+                >
+                  {isStudentAdmin(selectedStudentForDetail) ? '🛡️ مشرف عام' : '🎓 طالب علم'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* خيار طالب علم */}
+                <button
+                  type="button"
+                  onClick={() => handleSetExactRole(selectedStudentForDetail, 'student')}
+                  disabled={roleActionLoadingId === ((selectedStudentForDetail.email || '').toLowerCase().trim() || selectedStudentForDetail.id)}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-right transition cursor-pointer active:scale-98 ${
+                    !isStudentAdmin(selectedStudentForDetail)
+                      ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-200 shadow-2xs ring-2 ring-emerald-500/20'
+                      : 'border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                  } ${roleActionLoadingId === ((selectedStudentForDetail.email || '').toLowerCase().trim() || selectedStudentForDetail.id) ? 'opacity-70 pointer-events-none' : ''}`}
+                >
+                  <div className={`p-1.5 rounded-lg shrink-0 ${!isStudentAdmin(selectedStudentForDetail) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-stone-100 text-stone-400 dark:bg-stone-700'}`}>
+                    <GraduationCap className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black">طالب علم</span>
+                      {!isStudentAdmin(selectedStudentForDetail) && (
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">مُفعّل حالياً</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      تصفح المقررات، مدارسة المتون، تدوين الفوائد بالكشكول، والمشاركة في مجتمع المدارسة.
+                    </p>
+                  </div>
+                </button>
+
+                {/* خيار مشرف عام */}
+                <button
+                  type="button"
+                  onClick={() => handleSetExactRole(selectedStudentForDetail, 'admin')}
+                  disabled={roleActionLoadingId === ((selectedStudentForDetail.email || '').toLowerCase().trim() || selectedStudentForDetail.id)}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-right transition cursor-pointer active:scale-98 ${
+                    isStudentAdmin(selectedStudentForDetail)
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 shadow-2xs ring-2 ring-amber-500/20'
+                      : 'border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                  } ${roleActionLoadingId === ((selectedStudentForDetail.email || '').toLowerCase().trim() || selectedStudentForDetail.id) ? 'opacity-70 pointer-events-none' : ''}`}
+                >
+                  <div className={`p-1.5 rounded-lg shrink-0 ${isStudentAdmin(selectedStudentForDetail) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' : 'bg-stone-100 text-stone-400 dark:bg-stone-700'}`}>
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black">مشرف عام</span>
+                      {isStudentAdmin(selectedStudentForDetail) && (
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">مُفعّل حالياً</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      الوصول لبوابة الإدارة، تعديل ورفع المتون، التحكم بالأعضاء والحظر، وتعديل إحصائيات المنصة.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* أزرار التحكم في أسفل نافذة الطالب */}
             <div className="mt-5 flex items-center justify-between pt-3 border-t border-stone-100 dark:border-stone-800 gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* زر تبديل الصلاحية */}
-                <button
-                  type="button"
-                  onClick={() => handleToggleRole(selectedStudentForDetail)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:border-emerald-600 hover:text-emerald-950 hover:bg-emerald-50 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-                >
-                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-                  <span>
-                    {isStudentAdmin(selectedStudentForDetail)
-                      ? 'تحويل الحساب إلى طالب علم'
-                      : 'ترقية الحساب إلى مشرف عام'}
-                  </span>
-                </button>
-
                 {/* زر إرسال رابط إعادة تعيين كلمة المرور */}
                 <button
                   type="button"
@@ -6515,6 +6658,24 @@ export default function SanadControlGatePage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* إشعار فوري لتبديل وتحديث الصلاحيات بدون تأخير */}
+      {roleFeedbackMessage && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-9999 flex items-center gap-2.5 rounded-2xl px-5 py-3 shadow-2xl backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-4 duration-200 border ${
+            roleFeedbackMessage.type === 'success'
+              ? 'bg-stone-900/95 text-emerald-300 border-emerald-500/40 shadow-emerald-950/30'
+              : 'bg-rose-950/95 text-rose-200 border-rose-500/40 shadow-rose-950/30'
+          }`}
+        >
+          {roleFeedbackMessage.type === 'success' ? (
+            <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+          ) : (
+            <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
+          )}
+          <span className="text-xs font-black">{roleFeedbackMessage.text}</span>
         </div>
       )}
     </div>

@@ -7,7 +7,13 @@ import {
   verifyAdminSession,
   revokeAdminSession,
 } from '@/lib/admin-security'
-import { getAdminDashboardData, getAdminDashboardDataAsync, toggleStudentBan, resetVisitorCount } from '@/lib/student-tracking'
+import {
+  getAdminDashboardData,
+  getAdminDashboardDataAsync,
+  toggleStudentBan,
+  updateStudentRole,
+  resetVisitorCount,
+} from '@/lib/student-tracking'
 import {
   getActiveCourses,
   saveCourseToServer,
@@ -354,3 +360,27 @@ export async function resetVisitorCountAdminAction(targetCount: number = 0) {
   revalidatePath('/')
   return { success: true, totalVisitors: updatedCount }
 }
+
+/**
+ * 13. تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) وحفظها فورياً
+ */
+export async function updateStudentRoleAdminAction(
+  studentEmailOrId: string,
+  role: 'student' | 'admin'
+) {
+  const isValid = await verifyAdminSession()
+  if (!isValid) {
+    return { success: false, error: 'غير مصرح بتعديل رتب وصلاحيات الأعضاء' }
+  }
+
+  const result = updateStudentRole(studentEmailOrId, role)
+
+  revalidatePath('/sanad-control-gate')
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/community')
+  revalidatePath('/courses')
+
+  return result
+}
+

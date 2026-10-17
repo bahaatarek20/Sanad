@@ -60,6 +60,7 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
             phoneNumber: student.phone || null,
             avatarUrl: student.avatarUrl || null,
             status: student.isBanned ? 'banned' : 'active',
+            role: student.role || 'student',
             scholarlyId: student.scholarlyId,
             ip: student.ip,
             country: student.country,
@@ -133,6 +134,7 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
         if (u.phoneNumber && typeof u.phoneNumber === 'string') existing.phone = u.phoneNumber
         if (u.avatarUrl && typeof u.avatarUrl === 'string') existing.avatarUrl = u.avatarUrl
         if (u.status === 'banned') existing.isBanned = true
+        if (u.role === 'admin' || u.role === 'student') existing.role = u.role
         if (u.scholarlyId && typeof u.scholarlyId === 'string') existing.scholarlyId = u.scholarlyId
         if (lastLoginAtStr > (existing.lastActive || '')) existing.lastActive = lastLoginAtStr
       } else {
@@ -145,6 +147,7 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
           phone: typeof u.phoneNumber === 'string' ? u.phoneNumber : undefined,
           avatarUrl: typeof u.avatarUrl === 'string' ? u.avatarUrl : undefined,
           authProvider: isGmail ? 'google' : u.phoneNumber ? 'phone' : 'email',
+          role: (u.role === 'admin' || u.role === 'student') ? u.role : undefined,
           registeredAt: createdAtStr,
           lastActive: lastLoginAtStr,
           totalStudyMinutes: typeof u.totalStudyMinutes === 'number' ? u.totalStudyMinutes : 0,
@@ -388,3 +391,30 @@ export async function getPlatformStatsFromCloud(): Promise<Record<string, unknow
     return null
   }
 }
+
+/**
+ * 11. تحديث رتبة وصلاحية العضو في Cloud Firestore (مجموعتي students و users)
+ */
+export async function updateCloudStudentRole(
+  email: string,
+  id: string | undefined,
+  role: 'student' | 'admin'
+): Promise<boolean> {
+  try {
+    const studentDocId = email.replace(/[.#$[\]]/g, '_')
+    const studentDocRef = doc(db, STUDENTS_COLLECTION, studentDocId)
+    await setDoc(studentDocRef, { role, updatedAt: new Date().toISOString() }, { merge: true })
+
+    if (id) {
+      try {
+        const userDocRef = doc(db, 'users', id)
+        await setDoc(userDocRef, { role, lastUpdated: new Date().toISOString() }, { merge: true })
+      } catch {}
+    }
+    return true
+  } catch (err) {
+    logFirestoreNotice(err)
+    return false
+  }
+}
+

@@ -1,5 +1,21 @@
 [
   {
+    "type": "unban",
+    "studentEmail": "bhaaljml3@gmail.com",
+    "studentName": "test 1",
+    "description": "ترقية العضو [test 1] [SND-1006] إلى رتبة مشرف عام للمنصة",
+    "id": "ev_1792204319171_x1ww",
+    "timestamp": "2026-10-17T02:31:59.171Z"
+  },
+  {
+    "type": "ban",
+    "studentEmail": "bhaaljml3@gmail.com",
+    "studentName": "test 1",
+    "description": "تعديل رتبة العضو [test 1] [SND-1006] إلى رتبة طالب علم",
+    "id": "ev_1792204319094_m1l9",
+    "timestamp": "2026-10-17T02:31:59.094Z"
+  },
+  {
     "type": "listen",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",

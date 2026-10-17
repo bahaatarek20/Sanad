@@ -20,7 +20,8 @@
     "dailyStudyLog": {},
     "listenedSessions": [],
     "notesCount": 0,
-    "isBanned": false
+    "isBanned": false,
+    "role": "student"
   },
   {
     "countryCode": "EG",
@@ -47,7 +48,8 @@
       "2026-10-13": 2
     },
     "streak": 1,
-    "listenedSessions": []
+    "listenedSessions": [],
+    "role": "admin"
   },
   {
     "id": "student_1791906352772_8y2di",
@@ -71,7 +73,8 @@
     "dailyStudyLog": {},
     "listenedSessions": [],
     "notesCount": 0,
-    "isBanned": false
+    "isBanned": false,
+    "role": "admin"
   },
   {
     "id": "E8MImpveY1VKdvtFGMKuv2v",
@@ -94,7 +97,8 @@
     "listenedSessions": [],
     "notesCount": 0,
     "isBanned": false,
-    "ip": "156.204.12.34"
+    "ip": "156.204.12.34",
+    "role": "student"
   },
   {
     "id": "wk8sW6PrGcUyJGVtXMWufL",
@@ -117,7 +121,8 @@
     "listenedSessions": [],
     "notesCount": 0,
     "isBanned": false,
-    "ip": "156.204.12.34"
+    "ip": "156.204.12.34",
+    "role": "student"
   },
   {
     "id": "student_1791330362861_vfqfa",
@@ -145,7 +150,8 @@
     "listenedSessions": [],
     "notesCount": 0,
     "isBanned": false,
-    "lastStudiedDate": "2026-10-07"
+    "lastStudiedDate": "2026-10-07",
+    "role": "admin"
   },
   {
     "id": "student_1790694776796_phone",
@@ -170,7 +176,8 @@
     "dailyStudyLog": {},
     "listenedSessions": [],
     "notesCount": 0,
-    "isBanned": false
+    "isBanned": false,
+    "role": "student"
   },
   {
     "id": "student_1790473248076_cpkmr",
@@ -207,7 +214,8 @@
     "countryCode": "EG",
     "city": "الجيزة",
     "device": "كمبيوتر محمول (Windows)",
-    "browser": "Microsoft Edge"
+    "browser": "Microsoft Edge",
+    "role": "admin"
   },
   {
     "id": "student_1790470821796_fqawb",
@@ -287,6 +295,7 @@
     "city": "القاهرة",
     "device": "كمبيوتر محمول (Windows)",
     "browser": "Google Chrome",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "role": "admin"
   }
 ]
