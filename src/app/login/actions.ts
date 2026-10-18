@@ -11,6 +11,7 @@ import { extractClientTelemetry } from '@/lib/telemetry-helper'
 import { syncStudentToFirebaseAuth } from '@/lib/firebase-auth-sync'
 import {
   registerOrUpdateStudent,
+  registerOrUpdateStudentAsync,
   saveStudentLocalPassword,
   verifyStudentLocalPassword,
   getStudentProfileData,
@@ -89,7 +90,7 @@ export async function verifyOtpAction(formData: FormData) {
   const fullName = student?.name || email.split('@')[0]
   const clientTelemetry = extractClientTelemetry(await headers())
 
-  registerOrUpdateStudent(email, fullName, { ...clientTelemetry, authProvider: 'email' })
+  await registerOrUpdateStudentAsync(email, fullName, { ...clientTelemetry, authProvider: 'email' })
   await setStudentSessionCookie(fullName, email, { authProvider: 'email' })
   syncStudentToFirebaseAuth(email, undefined, fullName).catch(() => {})
 
@@ -133,7 +134,7 @@ export async function loginWithPassword(formData: FormData) {
       const student = getStudentProfileData(cleanEmail)
       const fullName = student?.name || cleanEmail.split('@')[0]
       await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
-      registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+      await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
       syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
       redirectTo = '/courses'
     } else {
@@ -185,7 +186,7 @@ export async function signupWithPassword(formData: FormData) {
 
     saveStudentLocalPassword(cleanEmail, password, fullName)
     await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
-    registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
     syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
 
     try {
@@ -393,7 +394,7 @@ export async function verifyPhoneOtpAction(formData: FormData) {
   const studentEmail = `${formattedPhone.replace(/[^0-9]/g, '')}@student.sanad.edu`
   const studentName = `طالب (${formattedPhone})`
 
-  registerOrUpdateStudent(studentEmail, studentName, {
+  await registerOrUpdateStudentAsync(studentEmail, studentName, {
     phone: formattedPhone,
     authProvider: 'phone',
     ...clientTelemetry,

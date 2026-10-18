@@ -86,12 +86,10 @@ const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data'
 const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
 const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
 
+export const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
+
 export const ADMIN_EMAILS = [
   'bhaaljml480@gmail.com',
-  'bhaaljml48@gmail.com',
-  'bhaaljml66@gmail.com',
-  'bhaaljml3@gmail.com',
-  'bhaaljml62@gmail.com',
 ]
 
 const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
@@ -237,11 +235,13 @@ export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
     else st.browser = 'Google Chrome'
   }
 
-  // 4. تعيين الرتبة الافتراضية إذا لم تكن محددة مسبقاً
-  if (!st.role) {
-    const cleanEmail = (st.email || '').toLowerCase().trim()
+  // 4. تعيين الرتبة وصلاحية المشرف الأعلى
+  const cleanEmail = (st.email || '').toLowerCase().trim()
+  if (cleanEmail === SUPER_ADMIN_EMAIL) {
+    st.role = 'admin'
+  } else if (!st.role) {
     const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
-    st.role = (ADMIN_EMAILS.includes(cleanEmail) || (envAdminEmail && cleanEmail === envAdminEmail)) ? 'admin' : 'student'
+    st.role = (envAdminEmail && cleanEmail === envAdminEmail) ? 'admin' : 'student'
   }
 }
 
@@ -448,6 +448,9 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
     }
     if (s.isBanned === undefined) {
       s.isBanned = false
+    }
+    if (s.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
+      s.role = 'admin'
     }
     ensureStudentTelemetryDefaults(s)
   }
@@ -701,10 +704,10 @@ export function toggleStudentBan(
 }
 
 // 1.8 تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) مع المزامنة الفورية الشاملة
-export function updateStudentRole(
+export async function updateStudentRole(
   emailOrId: string,
   role: 'student' | 'admin'
-): { success: boolean; student?: StudentActivityRecord; error?: string } {
+): Promise<{ success: boolean; student?: StudentActivityRecord; error?: string }> {
   try {
     ensureDataFiles()
     const clean = emailOrId.toLowerCase().trim()
@@ -721,18 +724,29 @@ export function updateStudentRole(
     }
 
     const student = students[idx]
+
+    // حماية مطلقة لصاحب المنصة والمشرف الأعلى المهندس بهاء طارق
+    if (student.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL && role !== 'admin') {
+      return {
+        success: false,
+        error: 'عذراً، لا يمكن إلغاء صلاحيات المشرف العام وصاحب المنصة (المهندس بهاء طارق). صلاحيته مطلقة ودائمة.',
+      }
+    }
+
     student.role = role
 
     globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
 
-    // مزامنة فورية مزدوجة مع Cloud Firestore
-    saveStudentToCloud(student).catch(() => {})
-    import('@/lib/cloud-db')
-      .then(({ updateCloudStudentRole }) => {
-        updateCloudStudentRole(student.email, student.id, role).catch(() => {})
-      })
-      .catch(() => {})
+    // مزامنة فورية مؤكدة مع Cloud Firestore مع انتظار النتيجة قبل إنهاء الدالة لمنع فقدان البيانات عند تجميد الحاويات
+    try {
+      await saveStudentToCloud(student)
+    } catch {}
+
+    try {
+      const { updateCloudStudentRole } = await import('@/lib/cloud-db')
+      await updateCloudStudentRole(student.email, student.id, role)
+    } catch {}
 
     logPlatformEvent({
       type: role === 'admin' ? 'unban' : 'ban',
@@ -912,6 +926,21 @@ export function registerOrUpdateStudent(
 
     return newStudent
   }
+}
+
+// 2.1 تسجيل أو تحديث حساب طالب مسجل مع الانتظار الإلزامي للمزامنة السحابية (للحماية من تجميد حاويات السيرفرلس)
+export async function registerOrUpdateStudentAsync(
+  email: string,
+  name?: string,
+  meta?: Parameters<typeof registerOrUpdateStudent>[2]
+): Promise<StudentActivityRecord> {
+  const student = registerOrUpdateStudent(email, name, meta)
+  try {
+    await saveStudentToCloud(student)
+  } catch (err) {
+    console.warn('[registerOrUpdateStudentAsync] Cloud sync notice:', err)
+  }
+  return student
 }
 
 // 2.5 جلب بيانات الحساب العلمي للطالب (السجل الكامل المشفر)

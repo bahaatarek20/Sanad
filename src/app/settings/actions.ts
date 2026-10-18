@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
-import { registerOrUpdateStudent, saveStudentLocalPassword } from '@/lib/student-tracking'
+import { registerOrUpdateStudentAsync, saveStudentLocalPassword } from '@/lib/student-tracking'
 
 // 1. تعديل الاسم
 export async function updateProfileAction(formData: FormData) {
@@ -17,7 +17,7 @@ export async function updateProfileAction(formData: FormData) {
   try {
     // تحديث السجل
     await setStudentSessionCookie(fullName, email)
-    registerOrUpdateStudent(email, fullName)
+    await registerOrUpdateStudentAsync(email, fullName)
   } catch (err) {
     console.error('Settings update error:', err)
   }
@@ -73,11 +73,11 @@ export async function updatePhoneAction(formData: FormData) {
     return redirect(`/settings?error=${encodeURIComponent('رقم الهاتف المدخل غير صالح.')}`)
   }
 
-  const { getStudentProfileData } = await import('@/lib/student-tracking')
+  const { getStudentProfileData, registerOrUpdateStudentAsync } = await import('@/lib/student-tracking')
   const student = getStudentProfileData(email)
   const fullName = student?.name || email.split('@')[0]
 
-  registerOrUpdateStudent(email, fullName, { phone: formattedPhone })
+  await registerOrUpdateStudentAsync(email, fullName, { phone: formattedPhone })
   await setStudentSessionCookie(fullName, email, {
     phone: formattedPhone,
     authProvider: student?.authProvider || 'email',
@@ -103,11 +103,11 @@ export async function updateAvatarAction(formData: FormData) {
     return redirect(`/settings?error=${encodeURIComponent('يرجى اختيار صورة رمزية أو رابط صورة صالح.')}`)
   }
 
-  const { getStudentProfileData } = await import('@/lib/student-tracking')
+  const { getStudentProfileData, registerOrUpdateStudentAsync } = await import('@/lib/student-tracking')
   const student = getStudentProfileData(email)
   const fullName = student?.name || email.split('@')[0]
 
-  registerOrUpdateStudent(email, fullName, { avatarUrl })
+  await registerOrUpdateStudentAsync(email, fullName, { avatarUrl })
   await setStudentSessionCookie(fullName, email, {
     phone: student?.phone,
     authProvider: student?.authProvider || 'email',

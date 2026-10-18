@@ -28,12 +28,10 @@ export interface SanadUser {
   completedCourses?: string[]
 }
 
+export const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
+
 export const ADMIN_EMAILS = [
   'bhaaljml480@gmail.com',
-  'bhaaljml48@gmail.com',
-  'bhaaljml66@gmail.com',
-  'bhaaljml3@gmail.com',
-  'bhaaljml62@gmail.com',
 ]
 
 /**
@@ -50,7 +48,7 @@ export async function syncUserToFirestore(
   }
 ): Promise<SanadUser> {
   const cleanEmail = (data.email || '').toLowerCase().trim()
-  const isDefaultAdmin = ADMIN_EMAILS.includes(cleanEmail)
+  const isDefaultAdmin = cleanEmail === SUPER_ADMIN_EMAIL
   const userRef = doc(db, 'users', uid)
   const existingSnap = await getDoc(userRef)
 
@@ -206,6 +204,14 @@ export async function verifyUserAccount(uid: string): Promise<{
 export async function updateUserRole(uid: string, newRole: 'student' | 'admin'): Promise<boolean> {
   try {
     const userRef = doc(db, 'users', uid)
+    const snap = await getDoc(userRef)
+    if (snap.exists()) {
+      const data = snap.data() as SanadUser
+      if (data.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL && newRole !== 'admin') {
+        console.warn('Cannot demote super admin bhaaljml480@gmail.com')
+        return false
+      }
+    }
     await updateDoc(userRef, { role: newRole })
     return true
   } catch (err) {

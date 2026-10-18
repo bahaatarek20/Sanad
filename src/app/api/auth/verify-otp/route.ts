@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPhoneOtp } from '@/lib/phone-auth-service'
-import { registerOrUpdateStudent } from '@/lib/student-tracking'
+import { registerOrUpdateStudentAsync } from '@/lib/student-tracking'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       const syntheticEmail = `${result.phone.replace(/[^0-9]/g, '')}@student.sanad.edu`
       const studentName = result.studentName || `طالب (${result.phone})`
 
-      registerOrUpdateStudent(syntheticEmail, studentName, {
+      await registerOrUpdateStudentAsync(syntheticEmail, studentName, {
         phone: result.phone,
         authProvider: 'phone',
         ...clientTelemetry,

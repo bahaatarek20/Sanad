@@ -373,7 +373,7 @@ export async function updateStudentRoleAdminAction(
     return { success: false, error: 'غير مصرح بتعديل رتب وصلاحيات الأعضاء' }
   }
 
-  const result = updateStudentRole(studentEmailOrId, role)
+  const result = await updateStudentRole(studentEmailOrId, role)
 
   revalidatePath('/sanad-control-gate')
   revalidatePath('/admin')

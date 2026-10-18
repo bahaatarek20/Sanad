@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { recordVisitorHit, registerOrUpdateStudent, ADMIN_EMAILS } from '@/lib/student-tracking'
+import { recordVisitorHit, registerOrUpdateStudentAsync, ADMIN_EMAILS } from '@/lib/student-tracking'
 import { verifySessionToken } from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
           const email = String(student.email).trim().toLowerCase()
           const clientTelemetry = extractClientTelemetry(request.headers)
           const authProvider = (student.authProvider === 'google' || student.authProvider === 'phone') ? student.authProvider : 'email'
-          registerOrUpdateStudent(email, (student.full_name || student.name) as string, {
+          await registerOrUpdateStudentAsync(email, (student.full_name || student.name) as string, {
             phone: student.phone as string,
             authProvider,
             avatarUrl: student.avatarUrl as string,

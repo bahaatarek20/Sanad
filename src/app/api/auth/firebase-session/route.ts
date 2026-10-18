@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { registerOrUpdateStudent, isStudentBanned } from '@/lib/student-tracking'
+import { registerOrUpdateStudentAsync, isStudentBanned } from '@/lib/student-tracking'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const clientTelemetry = extractClientTelemetry(request.headers)
 
     // 3. تسجيل أو تحديث سجل الطالب في المنصة وسحابة Firestore مع ربط المعرف الرسمي
-    const student = registerOrUpdateStudent(email, fullName, {
+    const student = await registerOrUpdateStudentAsync(email, fullName, {
       id: verifiedGoogleUser.localId,
       phone,
       authProvider: provider,
