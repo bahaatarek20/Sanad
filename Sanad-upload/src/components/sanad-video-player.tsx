@@ -11,9 +11,7 @@ import {
   VolumeX,
   Maximize2,
   Minimize2,
-  Tv,
-  Clock,
-  Sliders,
+  Settings,
   ChevronRight,
   ChevronLeft,
   Repeat,
@@ -26,17 +24,13 @@ import {
   Bookmark,
   BookmarkPlus,
   Eye,
-  Rocket,
   Trash2,
-  ExternalLink,
-  Headphones,
-  ListVideo,
-  FastForward,
-  Award,
   Sparkles,
+  Award,
+  Sliders,
+  Tv,
 } from 'lucide-react'
 
-// التصريح العام لكائن YouTube في المتصفح
 declare global {
   interface Window {
     YT?: any
@@ -56,9 +50,9 @@ export interface BookmarkItem {
 }
 
 export interface SanadVideoPlayerProps {
-  src?: string // رابط الفيديو المباشر (MP4 / WebM / إلخ)
-  youtubeId?: string // معرف فيديو YouTube
-  youtubeUrl?: string // رابط فيديو YouTube
+  src?: string
+  youtubeId?: string
+  youtubeUrl?: string
   title: string
   subtitle?: string
   subtitlesUrl?: string
@@ -67,7 +61,7 @@ export interface SanadVideoPlayerProps {
   isCompleted?: boolean
   autoAdvanceNext?: boolean
   chapters?: ChapterItem[]
-  introDuration?: number // ثواني لتخطي المقدمة
+  introDuration?: number
   onToggleComplete?: (epNum: number) => void
   onNextEpisode?: () => void
   onPrevEpisode?: () => void
@@ -81,7 +75,6 @@ export interface SanadVideoPlayerProps {
   initialSeekTime?: number
 }
 
-// دالة مساعدة لتنسيق الوقت بالدقائق والثواني
 export function formatTime(secs: number): string {
   if (!secs || isNaN(secs) || !isFinite(secs)) return '00:00'
   const totalSeconds = Math.floor(secs)
@@ -95,7 +88,6 @@ export function formatTime(secs: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-// استخراج معرف YouTube من أي رابط أو نص
 export function extractYouTubeId(urlOrId?: string): string | null {
   if (!urlOrId) return null
   const trimmed = urlOrId.trim()
@@ -106,7 +98,6 @@ export function extractYouTubeId(urlOrId?: string): string | null {
   return match ? match[1] : null
 }
 
-// التحقق هل الرابط هو فيديو مباشر على السيرفر
 export function isDirectVideoUrl(url?: string): boolean {
   if (!url) return false
   const trimmed = url.trim().toLowerCase()
@@ -153,24 +144,20 @@ export default function SanadVideoPlayer({
   const playerId = useId().replace(/:/g, '')
   const ytElementId = `sanad-yt-frame-${playerId}`
 
-  // استنتاج المحرك المناسب: YouTube أو الفيديو المباشر
   const detectedYtId = extractYouTubeId(youtubeId || youtubeUrl || (isDirectVideoUrl(src) ? undefined : src))
   const cleanDirectSrc = src && isDirectVideoUrl(src) ? src.trim() : undefined
 
-  // الحالة النشطة الحالية للمصدر (direct أو youtube)
   const [activeEngine, setActiveEngine] = useState<'direct' | 'youtube'>(() => {
     if (cleanDirectSrc) return 'direct'
     if (detectedYtId) return 'youtube'
     return cleanDirectSrc ? 'direct' : 'youtube'
   })
 
-  // المراجع للعناصر
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const ytPlayerRef = useRef<any>(null)
   const progressBarRef = useRef<HTMLDivElement>(null)
 
-  // المؤقتات والتفاعلات
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastClickTimeRef = useRef<number>(0)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -181,7 +168,6 @@ export default function SanadVideoPlayer({
   const lastDragEndTimeRef = useRef<number>(0)
   const pendingSeekTimeRef = useRef<number | null>(initialSeekTime || null)
 
-  // حالات التشغيل الأساسية
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
@@ -197,7 +183,7 @@ export default function SanadVideoPlayer({
     return 1
   })
   const [isMuted, setIsMuted] = useState(false)
-  const [audioBoost, setAudioBoost] = useState<number>(1) // 1 = 100%, 1.5 = 150%, 2 = 200%
+  const [audioBoost, setAudioBoost] = useState<number>(1)
   const [playbackSpeed, setPlaybackSpeed] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -207,64 +193,56 @@ export default function SanadVideoPlayer({
     }
     return 1
   })
-  const [customSpeedInput, setCustomSpeedInput] = useState('')
 
-  // حالات الواجهة والعرض
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isControlsVisible, setIsControlsVisible] = useState(true)
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverPosition, setHoverPosition] = useState<number | null>(null)
-  const [showSpeedMenu, setShowSpeedMenu] = useState(false)
-  const [showTimerMenu, setShowTimerMenu] = useState(false)
-  const [showChaptersMenu, setShowChaptersMenu] = useState(false)
+
+  // قائمة الإعدادات الموحدة الأنيقة
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+  const [settingsView, setSettingsView] = useState<'main' | 'speed' | 'timer' | 'clarity'>('main')
+
   const [showBookmarksModal, setShowBookmarksModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
-  const [isPiPActive, setIsPiPActive] = useState(false)
   const [isLooping, setIsLooping] = useState(false)
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true)
 
-  // مؤقت النوم والمدارسة
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null)
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null)
 
-  // الوقفات والعلامات المرجعية
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([])
   const [snapshotToast, setSnapshotToast] = useState(false)
 
-  // تحسين وضوح السبورة والقراءة الليلية
   const [visualClarityMode, setVisualClarityMode] = useState<'normal' | 'clarity' | 'reading'>('normal')
 
-  // شاشة إتمام المجلس
   const [showCompletionScreen, setShowCompletionScreen] = useState(false)
   const [completionCountdown, setCompletionCountdown] = useState<number | null>(null)
 
-  // التأثيرات والرسوم المتحركة التفاعلية
   const [rippleSide, setRippleSide] = useState<'left' | 'right' | null>(null)
   const [centerIconState, setCenterIconState] = useState<
     'play' | 'pause' | 'skip-fwd' | 'skip-back' | 'speed' | 'boost' | null
   >(null)
   const [feedbackText, setFeedbackText] = useState<string | null>(null)
 
-  // إدارة الأخطاء والاستدراك التلقائي
   const [hasPlaybackError, setHasPlaybackError] = useState(false)
   const [playbackErrorMessage, setPlaybackErrorMessage] = useState<string | null>(null)
-  const [autoFallbackCountdown, setAutoFallbackCountdown] = useState<number | null>(null)
 
-  // مراجع Web Audio API لتضخيم الصوت الرقمي
   const audioContextRef = useRef<AudioContext | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const filterNodeRef = useRef<BiquadFilterNode | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
 
-  // سرعات التشغيل المتاحة حسب المصدر
   const speedPresets =
     activeEngine === 'youtube'
       ? [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
-      : [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4]
+      : [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
 
-  const storageKey = detectedYtId ? `sanad_yt_${detectedYtId}` : cleanDirectSrc ? `sanad_src_${encodeURIComponent(cleanDirectSrc)}` : null
+  const storageKey = detectedYtId
+    ? `sanad_yt_${detectedYtId}`
+    : cleanDirectSrc
+    ? `sanad_src_${encodeURIComponent(cleanDirectSrc)}`
+    : null
 
-  // إظهار إشعار أو أيقونة في وسط الشاشة
   const showCenterAnimation = useCallback(
     (type: 'play' | 'pause' | 'skip-fwd' | 'skip-back' | 'speed' | 'boost', text?: string) => {
       setCenterIconState(type)
@@ -284,7 +262,6 @@ export default function SanadVideoPlayer({
     }, 1800)
   }, [])
 
-  // إعادة ضبط مؤقت إخفاء أشرطة التحكم تلقائياً
   const resetControlsTimeout = useCallback(() => {
     setIsControlsVisible(true)
     if (hideControlsTimeoutRef.current) {
@@ -293,9 +270,7 @@ export default function SanadVideoPlayer({
     if (isPlaying) {
       hideControlsTimeoutRef.current = setTimeout(() => {
         setIsControlsVisible(false)
-        setShowSpeedMenu(false)
-        setShowTimerMenu(false)
-        setShowChaptersMenu(false)
+        setShowSettingsMenu(false)
       }, 2600)
     }
   }, [isPlaying])
@@ -304,9 +279,7 @@ export default function SanadVideoPlayer({
     resetControlsTimeout()
   }
 
-  // ==========================================
   // استرجاع الموضع المحفوظ والوقفات
-  // ==========================================
   useEffect(() => {
     if (!storageKey) return
     try {
@@ -321,7 +294,7 @@ export default function SanadVideoPlayer({
     } catch {}
   }, [storageKey])
 
-  // حفظ الموضع تلقائياً أثناء المشاهدة
+  // حفظ الموضع تلقائياً
   useEffect(() => {
     if (!storageKey || currentTime <= 5) return
     try {
@@ -334,7 +307,7 @@ export default function SanadVideoPlayer({
   }, [currentTime, duration, storageKey])
 
   // ==========================================
-  // تكامل YouTube IFrame API للمحرك
+  // تكامل YouTube IFrame API
   // ==========================================
   useEffect(() => {
     if (activeEngine !== 'youtube' || !detectedYtId) return
@@ -346,7 +319,6 @@ export default function SanadVideoPlayer({
     const initYouTubePlayer = () => {
       if (!isSubscribed || !window.YT || !window.YT.Player) return
 
-      // تنظيف أي مشغل سابق
       if (ytPlayerRef.current) {
         try {
           ytPlayerRef.current.destroy()
@@ -359,13 +331,13 @@ export default function SanadVideoPlayer({
           videoId: detectedYtId,
           playerVars: {
             autoplay: 0,
-            controls: 0, // إخفاء عناصر تحكم يوتيوب بالكامل
+            controls: 0,
             modestbranding: 1,
             rel: 0,
             showinfo: 0,
             playsinline: 1,
-            disablekb: 1, // إسناد التحكم الكامل للكيبورد لواجهة سند
-            fs: 0, // نتحكم في ملء الشاشة عبر الحاوية
+            disablekb: 1,
+            fs: 0,
             iv_load_policy: 3,
             enablejsapi: 1,
             origin: typeof window !== 'undefined' ? window.location.origin : undefined,
@@ -377,12 +349,10 @@ export default function SanadVideoPlayer({
               const dur = event.target.getDuration() || 0
               if (dur > 0) setDuration(dur)
 
-              // تطبيق الإعدادات المحفوظة
               event.target.setVolume(Math.round(volume * 100))
               if (isMuted) event.target.mute()
               if (playbackSpeed !== 1) event.target.setPlaybackRate(playbackSpeed)
 
-              // القفز إلى الموضع المحفوظ
               if (pendingSeekTimeRef.current && pendingSeekTimeRef.current > 5) {
                 event.target.seekTo(pendingSeekTimeRef.current, true)
                 setCurrentTime(pendingSeekTimeRef.current)
@@ -414,7 +384,7 @@ export default function SanadVideoPlayer({
               setIsLoading(false)
               setHasPlaybackError(true)
               setPlaybackErrorMessage(
-                'تعذر تشغيل هذا المقطع عبر YouTube (قد يكون الفيديو خاصاً أو مقيداً جغرافياً أو محظور التضمين).'
+                'تعذر تشغيل هذا المقطع عبر YouTube (قد يكون الفيديو خاصاً أو مقيداً جغرافياً).'
               )
             },
           },
@@ -453,7 +423,6 @@ export default function SanadVideoPlayer({
     }
   }, [activeEngine, detectedYtId, ytElementId])
 
-  // مزامنة وقت YouTube والـ Buffering مع شريط الواجهة أثناء التشغيل
   useEffect(() => {
     if (activeEngine !== 'youtube' || !isPlaying) return
 
@@ -475,9 +444,7 @@ export default function SanadVideoPlayer({
     return () => clearInterval(interval)
   }, [activeEngine, isPlaying, duration])
 
-  // ==========================================
-  // معالجة انتهاء المجلس (Lesson End)
-  // ==========================================
+  // معالجة انتهاء المجلس
   const handleVideoEnd = useCallback(() => {
     if (isLooping) {
       if (activeEngine === 'youtube' && ytPlayerRef.current) {
@@ -494,13 +461,11 @@ export default function SanadVideoPlayer({
     if (onVideoEnded) onVideoEnded()
     if (onToggleComplete) onToggleComplete(currentEpisodeIndex + 1)
 
-    // تشغيل عد تنازلي للانتقال التلقائي للدرس التالي
     if (autoAdvanceNext && onNextEpisode && currentEpisodeIndex < totalLessonsCount - 1) {
       setCompletionCountdown(6)
     }
   }, [isLooping, activeEngine, onVideoEnded, onToggleComplete, currentEpisodeIndex, autoAdvanceNext, onNextEpisode, totalLessonsCount])
 
-  // عداد الانتقال التلقائي للدرس التالي
   useEffect(() => {
     if (completionCountdown === null) return
     if (completionCountdown <= 0) {
@@ -518,7 +483,7 @@ export default function SanadVideoPlayer({
   }, [completionCountdown, onNextEpisode])
 
   // ==========================================
-  // عمليات التشغيل الموحدة (Unified Playback API)
+  // عمليات التشغيل الموحدة
   // ==========================================
   const togglePlay = useCallback(() => {
     if (activeEngine === 'youtube') {
@@ -553,7 +518,6 @@ export default function SanadVideoPlayer({
     resetControlsTimeout()
   }, [activeEngine, isPlaying, resetControlsTimeout, showCenterAnimation])
 
-  // القفز في الوقت (Seek) بدقة بالغة
   const performSeek = useCallback(
     (targetTime: number) => {
       const realDur = duration || 0
@@ -583,17 +547,15 @@ export default function SanadVideoPlayer({
     [activeEngine, duration, resetControlsTimeout]
   )
 
-  // التقديم والتأخير بثوانٍ محددة (+/- 5, 10, 15)
   const skipTime = useCallback(
     (seconds: number) => {
       const nextTime = Math.max(0, Math.min(duration, currentTime + seconds))
       performSeek(nextTime)
-      showCenterAnimation(seconds > 0 ? 'skip-fwd' : 'skip-back', `${seconds > 0 ? '+' : ''}${seconds} ثوانٍ`)
+      showCenterAnimation(seconds > 0 ? 'skip-fwd' : 'skip-back', `${seconds > 0 ? '+' : ''}${seconds} ث`)
     },
     [currentTime, duration, performSeek, showCenterAnimation]
   )
 
-  // التحكم بمستوى الصوت
   const handleVolumeChange = (newVol: number) => {
     const clamped = Math.max(0, Math.min(1, newVol))
     setVolume(clamped)
@@ -631,10 +593,9 @@ export default function SanadVideoPlayer({
     }
   }
 
-  // تضخيم الصوت الرقمي (Audio Boost حتى 200% لفيديوهات السيرفر)
   const handleToggleAudioBoost = () => {
     if (activeEngine === 'youtube') {
-      showFeedback('تضخيم الصوت الرقمي متاح للفيديوهات المباشرة فقط 🔊')
+      showFeedback('تضخيم الصوت متاح للفيديوهات المباشرة')
       return
     }
 
@@ -651,7 +612,6 @@ export default function SanadVideoPlayer({
         const gain = ctx.createGain()
         const filter = ctx.createBiquadFilter()
 
-        // تعزيز نبرة الشارح وتوضيح مخارج الحروف (2.2kHz)
         filter.type = 'peaking'
         filter.frequency.value = 2200
         filter.gain.value = 3.5
@@ -673,15 +633,14 @@ export default function SanadVideoPlayer({
         }
         gainNodeRef.current.gain.value = nextBoost
       }
-      showCenterAnimation('boost', `مضخم الصوت الرقمي: ${Math.round(nextBoost * 100)}% 🔊`)
+      showCenterAnimation('boost', `تضخيم الصوت: ${Math.round(nextBoost * 100)}% 🔊`)
     } catch {
-      showCenterAnimation('boost', `مضخم الصوت الرقمي: ${Math.round(nextBoost * 100)}% 🔊`)
+      showCenterAnimation('boost', `تضخيم الصوت: ${Math.round(nextBoost * 100)}% 🔊`)
     }
   }
 
-  // ضبط السرعة وتخزينها
   const handleSpeedSelect = (speed: number) => {
-    const maxAllowed = activeEngine === 'youtube' ? 2.0 : 4.0
+    const maxAllowed = activeEngine === 'youtube' ? 2.0 : 3.5
     const clamped = Math.max(0.25, Math.min(maxAllowed, Number(speed.toFixed(2))))
     setPlaybackSpeed(clamped)
     try {
@@ -696,29 +655,10 @@ export default function SanadVideoPlayer({
       videoRef.current.playbackRate = clamped
     }
 
-    setShowSpeedMenu(false)
-    showCenterAnimation('speed', clamped >= 2 ? `سرعة فائقة: ${clamped}x 🚀` : `السرعة: ${clamped}x`)
+    showCenterAnimation('speed', `${clamped}x`)
     resetControlsTimeout()
   }
 
-  // تعديل السرعة تدريجياً بمقدار +/- 0.1x
-  const adjustSpeedDelta = (delta: number) => {
-    const current = Number(playbackSpeed.toFixed(1))
-    const next = Number((current + delta).toFixed(1))
-    handleSpeedSelect(next)
-  }
-
-  // تطبيق سرعة مخصصة أدخلها المستخدم
-  const handleApplyCustomSpeed = (e: React.FormEvent) => {
-    e.preventDefault()
-    const val = parseFloat(customSpeedInput)
-    if (!isNaN(val) && val > 0) {
-      handleSpeedSelect(val)
-      setCustomSpeedInput('')
-    }
-  }
-
-  // ملء الشاشة الكامل (على مستوى حاوية المشغل لتبقى عناصر التحكم ظاهرة)
   const toggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return
     try {
@@ -742,39 +682,18 @@ export default function SanadVideoPlayer({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
-  // وضع صورة داخل صورة (PiP)
-  const togglePiP = async () => {
-    if (activeEngine === 'youtube') {
-      showFeedback('وضع PiP المباشر مدعوم للفيديوهات المرفوعة')
-      return
-    }
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture()
-        setIsPiPActive(false)
-      } else if (videoRef.current && document.pictureInPictureEnabled) {
-        await videoRef.current.requestPictureInPicture()
-        setIsPiPActive(true)
-      }
-    } catch (err) {
-      console.error('PiP toggle error:', err)
-    }
-  }
-
-  // تكرار المجلس (Loop)
   const toggleLoop = () => {
     const next = !isLooping
     setIsLooping(next)
     if (videoRef.current) {
       videoRef.current.loop = next
     }
-    showFeedback(next ? 'تم تفعيل تكرار المجلس للمراجعة 🔁' : 'تم إلغاء التكرار')
+    showFeedback(next ? 'تكرار المجلس مفعل 🔁' : 'إلغاء التكرار')
   }
 
-  // أخذ لقطة شاشة من الشرح للكشكول (Canvas Snapshot)
   const handleCaptureSnapshot = () => {
     if (activeEngine === 'youtube') {
-      showFeedback('التقاط الشاشة الفوري متاح للفيديوهات المباشرة')
+      showFeedback('التقاط الشاشة متاح للفيديوهات المرفوعة')
       return
     }
     if (!videoRef.current) return
@@ -792,18 +711,17 @@ export default function SanadVideoPlayer({
         a.download = `sanad-${title.replace(/[^a-zA-Z0-9_\u0600-\u06FF]/g, '_')}-${Math.floor(currentTime)}s.jpg`
         a.click()
         setSnapshotToast(true)
-        setTimeout(() => setSnapshotToast(false), 3000)
+        setTimeout(() => setSnapshotToast(false), 2500)
       }
     } catch {
-      showFeedback('تعذر حفظ اللقطة تلقائياً')
+      showFeedback('تعذر حفظ اللقطة')
     }
   }
 
-  // إضافة وقفة علمية مرجعية
   const handleAddBookmark = () => {
     const sec = Math.floor(currentTime)
     if (bookmarks.some((b) => Math.abs(b.time - sec) < 2)) {
-      showFeedback('يوجد وقفة مرجعية مسجلة في هذا الموضع بالفعل 🔖')
+      showFeedback('وقفة مسجلة مسبقاً 🔖')
       return
     }
 
@@ -819,7 +737,7 @@ export default function SanadVideoPlayer({
         localStorage.setItem(`bm_${storageKey}`, JSON.stringify(updated))
       } catch {}
     }
-    showFeedback(`تم حفظ الوقفة عند ${formatTime(sec)} 🔖`)
+    showFeedback(`حُفظت وقفة عند ${formatTime(sec)} 🔖`)
   }
 
   const handleDeleteBookmark = (id: string) => {
@@ -833,7 +751,6 @@ export default function SanadVideoPlayer({
     showFeedback('تم حذف الوقفة')
   }
 
-  // تبديل وضوح السبورة والمخطوطات
   const toggleVisualClarity = () => {
     const next =
       visualClarityMode === 'normal'
@@ -844,10 +761,10 @@ export default function SanadVideoPlayer({
     setVisualClarityMode(next)
     showFeedback(
       next === 'clarity'
-        ? 'وضع وضوح السبورة والمخطوطات (تباين عالٍ) 🌟'
+        ? 'وضع وضوح السبورة (تباين عالٍ) 🌟'
         : next === 'reading'
-        ? 'وضع القراءة الليلية الهادئة (حماية العين) 🌙'
-        : 'إعادة الألوان القياسية'
+        ? 'وضع القراءة الليلية 🌙'
+        : 'الألوان القياسية'
     )
   }
 
@@ -862,7 +779,7 @@ export default function SanadVideoPlayer({
     }
   }
 
-  // مؤقت النوم والمدارسة (Sleep Timer)
+  // مؤقت النوم والمدارسة
   useEffect(() => {
     if (sleepTimerRemaining === null) return
     if (sleepTimerRemaining <= 0) {
@@ -875,7 +792,7 @@ export default function SanadVideoPlayer({
       const t = setTimeout(() => {
         setSleepTimerMinutes(null)
         setSleepTimerRemaining(null)
-        showFeedback('انتهى مؤقت المدارسة وتم إيقاف التشغيل هدوءاً ⏱')
+        showFeedback('انتهى مؤقت المدارسة ⏱')
       }, 0)
       return () => clearTimeout(t)
     }
@@ -887,9 +804,7 @@ export default function SanadVideoPlayer({
     return () => clearInterval(timer)
   }, [sleepTimerRemaining, activeEngine, showFeedback])
 
-  // ==========================================
-  // النقر الذكي والنقر المزدوج (Double-tap Seek)
-  // ==========================================
+  // النقر المزدوج الذكي
   const handleVideoAreaClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const now = e.timeStamp
@@ -898,39 +813,33 @@ export default function SanadVideoPlayer({
       const width = rect.width
       const clickRatio = clickX / width
 
-      if (now - lastClickTimeRef.current < 320) {
-        // نقر مزدوج
+      if (now - lastClickTimeRef.current < 300) {
         if (clickTimeoutRef.current) {
           clearTimeout(clickTimeoutRef.current)
           clickTimeoutRef.current = null
         }
 
         if (clickRatio < 0.35) {
-          // تأخير 10 ثوانٍ
           skipTime(-10)
           setRippleSide('left')
-          setTimeout(() => setRippleSide(null), 550)
+          setTimeout(() => setRippleSide(null), 500)
         } else if (clickRatio > 0.65) {
-          // تقديم 10 ثوانٍ
           skipTime(10)
           setRippleSide('right')
-          setTimeout(() => setRippleSide(null), 550)
+          setTimeout(() => setRippleSide(null), 500)
         } else {
-          // نقر بالمنتصف: ملء الشاشة
           toggleFullscreen()
         }
       } else {
-        // نقر مفرد
         clickTimeoutRef.current = setTimeout(() => {
           togglePlay()
-        }, 240)
+        }, 220)
       }
       lastClickTimeRef.current = now
     },
     [skipTime, toggleFullscreen, togglePlay]
   )
 
-  // حساب وقت القفز عند النقر أو السحب على شريط التقدم
   const calculateSeekTime = useCallback(
     (clientX: number) => {
       if (!progressBarRef.current || !duration || !isFinite(duration) || duration <= 0) return null
@@ -1002,9 +911,7 @@ export default function SanadVideoPlayer({
     setHoverPosition(null)
   }
 
-  // ==========================================
-  // اختصارات لوحة المفاتيح الأكاديمية الذكية
-  // ==========================================
+  // اختصارات لوحة المفاتيح
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement
@@ -1019,7 +926,6 @@ export default function SanadVideoPlayer({
 
       const key = e.key.toLowerCase()
 
-      // القفز بالنسبة المئوية عبر الأرقام 0-9
       if (/^[0-9]$/.test(key) && duration > 0) {
         e.preventDefault()
         const targetSec = (Number(key) / 10) * duration
@@ -1076,20 +982,6 @@ export default function SanadVideoPlayer({
           e.preventDefault()
           toggleVisualClarity()
           break
-        case '+':
-        case '=':
-        case ']':
-        case '>':
-          e.preventDefault()
-          adjustSpeedDelta(0.1)
-          break
-        case '-':
-        case '_':
-        case '[':
-        case '<':
-          e.preventDefault()
-          adjustSpeedDelta(-0.1)
-          break
         case '?':
           e.preventDefault()
           setShowShortcutsModal((prev) => !prev)
@@ -1105,17 +997,13 @@ export default function SanadVideoPlayer({
     volume,
     toggleFullscreen,
     duration,
-    playbackSpeed,
     isLooping,
-    bookmarks,
-    visualClarityMode,
     performSeek,
     handleVolumeChange,
     toggleMute,
     handleCaptureSnapshot,
     handleAddBookmark,
     toggleVisualClarity,
-    adjustSpeedDelta,
     showFeedback,
   ])
 
@@ -1128,24 +1016,21 @@ export default function SanadVideoPlayer({
       onMouseLeave={() => {
         if (isPlaying) {
           setIsControlsVisible(false)
-          setShowSpeedMenu(false)
-          setShowTimerMenu(false)
-          setShowChaptersMenu(false)
+          setShowSettingsMenu(false)
         }
       }}
-      className={`group relative aspect-video w-full overflow-hidden rounded-3xl bg-stone-950 select-none shadow-2xl transition-all ${
+      className={`group relative aspect-video w-full overflow-hidden rounded-2xl sm:rounded-3xl bg-stone-950 select-none shadow-2xl transition-all ${
         isFullscreen
           ? 'rounded-none h-screen w-screen border-0'
-          : 'border border-stone-800/90 dark:border-stone-800'
+          : 'border border-stone-800/80 dark:border-stone-800'
       }`}
     >
-      {/* ===================== منطقة الفيديو التفاعلية ===================== */}
+      {/* ===================== منطقة الفيديو ===================== */}
       <div
         onClick={handleVideoAreaClick}
         style={{ filter: getVideoFilterStyle() }}
         className="relative h-full w-full cursor-pointer flex items-center justify-center bg-black transition-[filter] duration-300"
       >
-        {/* المحرك 1: فيديو السيرفر المباشر (HTML5 Video) */}
         {activeEngine === 'direct' && cleanDirectSrc && (
           <video
             ref={videoRef}
@@ -1186,79 +1071,65 @@ export default function SanadVideoPlayer({
             onPause={() => setIsPlaying(false)}
             onEnded={handleVideoEnd}
             onError={() => {
-              console.warn('SanadVideoPlayer: Direct video playback failed for:', cleanDirectSrc)
               if (detectedYtId || fallbackYoutubeUrl) {
                 setActiveEngine('youtube')
                 return
               }
               setIsLoading(false)
               setHasPlaybackError(true)
-              setPlaybackErrorMessage('الملف غير متوفر على هذا الخادم أو ترميزه غير مدعوم في متصفحك.')
+              setPlaybackErrorMessage('الملف غير متوفر على هذا الخادم أو صيغته غير مدعومة.')
             }}
             className="h-full w-full object-contain pointer-events-none"
-          >
-            {subtitlesUrl && subtitlesEnabled && (
-              <track kind="subtitles" src={subtitlesUrl} srcLang="ar" label="العربية" default />
-            )}
-          </video>
+          />
         )}
 
-        {/* المحرك 2: فيديو YouTube IFrame API المعزول */}
         {activeEngine === 'youtube' && detectedYtId && (
           <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
             <div id={ytElementId} className="h-full w-full pointer-events-none scale-[1.01]" />
           </div>
         )}
 
-        {/* مؤشر التحميل والتهيئة (Islamic Loading Skeleton) */}
+        {/* مؤشر التحميل الأنيق */}
         {isLoading && !hasPlaybackError && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs pointer-events-none animate-in fade-in duration-200">
-            <div className="relative flex h-16 w-16 items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-              <div className="h-10 w-10 rounded-full bg-linear-to-tr from-emerald-900 to-amber-600/50 flex items-center justify-center text-amber-300 shadow-lg">
-                <Sparkles className="h-5 w-5 animate-pulse" />
-              </div>
-            </div>
-            <span className="mt-3 text-xs font-bold text-amber-200/90 tracking-wide">
-              جاري تحضير مجلس العلم...
-            </span>
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/50 pointer-events-none animate-in fade-in duration-200">
+            <div className="h-8 w-8 rounded-full border-2 border-emerald-500/20 border-t-amber-400 animate-spin" />
           </div>
         )}
 
-        {/* وميض النقر المزدوج (Ripple Seek Feedback) */}
+        {/* وميض النقر المزدوج (Ripple) */}
         {rippleSide === 'left' && (
-          <div className="absolute inset-y-0 left-0 w-1/3 flex items-center justify-center bg-white/10 backdrop-blur-xs rounded-r-full pointer-events-none animate-in fade-in zoom-in-75 duration-200">
-            <div className="flex flex-col items-center gap-1 text-white font-black text-sm drop-shadow-lg">
-              <RotateCcw className="h-8 w-8 animate-spin" />
-              <span>10- ثوانٍ</span>
+          <div className="absolute inset-y-0 left-0 w-1/4 flex items-center justify-center bg-white/10 rounded-r-full pointer-events-none animate-in fade-in zoom-in-75 duration-200">
+            <div className="flex flex-col items-center gap-1 text-white font-bold text-xs drop-shadow">
+              <RotateCcw className="h-6 w-6" />
+              <span>10-</span>
             </div>
           </div>
         )}
 
         {rippleSide === 'right' && (
-          <div className="absolute inset-y-0 right-0 w-1/3 flex items-center justify-center bg-white/10 backdrop-blur-xs rounded-l-full pointer-events-none animate-in fade-in zoom-in-75 duration-200">
-            <div className="flex flex-col items-center gap-1 text-white font-black text-sm drop-shadow-lg">
-              <RotateCw className="h-8 w-8 animate-spin" />
-              <span>10+ ثوانٍ</span>
+          <div className="absolute inset-y-0 right-0 w-1/4 flex items-center justify-center bg-white/10 rounded-l-full pointer-events-none animate-in fade-in zoom-in-75 duration-200">
+            <div className="flex flex-col items-center gap-1 text-white font-bold text-xs drop-shadow">
+              <RotateCw className="h-6 w-6" />
+              <span>10+</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* الرسوم المتحركة في وسط الشاشة عند التفاعل (Center Animations) */}
+      {/* الرسوم المتحركة في وسط الشاشة عند التفاعل (Center Animation) */}
       {(centerIconState || feedbackText) && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-in zoom-in-50 fade-in duration-200">
-          <div className="flex flex-col items-center gap-2 rounded-3xl bg-black/85 backdrop-blur-md px-6 py-4 text-white border border-amber-400/50 shadow-2xl">
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-in zoom-in-50 fade-in duration-150">
+          <div className="flex flex-col items-center gap-1.5 rounded-2xl bg-black/80 backdrop-blur-md px-5 py-3 text-white border border-white/10 shadow-2xl">
             {centerIconState === 'play' && (
-              <Play className="h-10 w-10 fill-current text-amber-300 translate-x-0.5" />
+              <Play className="h-7 w-7 fill-current text-amber-300 translate-x-0.5" />
             )}
-            {centerIconState === 'pause' && <Pause className="h-10 w-10 fill-current text-amber-300" />}
-            {centerIconState === 'skip-fwd' && <RotateCw className="h-10 w-10 text-amber-300" />}
-            {centerIconState === 'skip-back' && <RotateCcw className="h-10 w-10 text-amber-300" />}
-            {centerIconState === 'speed' && <Zap className="h-10 w-10 text-amber-300" />}
-            {centerIconState === 'boost' && <Volume2 className="h-10 w-10 text-emerald-400" />}
+            {centerIconState === 'pause' && <Pause className="h-7 w-7 fill-current text-amber-300" />}
+            {centerIconState === 'skip-fwd' && <RotateCw className="h-7 w-7 text-amber-300" />}
+            {centerIconState === 'skip-back' && <RotateCcw className="h-7 w-7 text-amber-300" />}
+            {centerIconState === 'speed' && <Zap className="h-7 w-7 text-amber-300" />}
+            {centerIconState === 'boost' && <Volume2 className="h-7 w-7 text-emerald-400" />}
             {feedbackText && (
-              <span className="text-xs sm:text-sm font-black text-amber-200 tracking-wide text-center">
+              <span className="text-xs font-bold text-amber-200 tracking-wide text-center">
                 {feedbackText}
               </span>
             )}
@@ -1266,7 +1137,7 @@ export default function SanadVideoPlayer({
         </div>
       )}
 
-      {/* زر تخطي المقدمة (Skip Intro Button) */}
+      {/* زر تخطي المقدمة الصغير */}
       {introDuration && currentTime < introDuration && duration > introDuration && (
         <button
           type="button"
@@ -1275,214 +1146,56 @@ export default function SanadVideoPlayer({
             performSeek(introDuration)
             showFeedback('تم تخطي المقدمة ⏭️')
           }}
-          className="absolute bottom-20 right-5 z-30 inline-flex items-center gap-2 rounded-2xl bg-black/85 hover:bg-black text-amber-300 border border-amber-400/60 px-4 py-2 text-xs font-black shadow-2xl backdrop-blur-md transition transform hover:scale-105 cursor-pointer"
+          className="absolute bottom-16 right-4 z-30 inline-flex items-center gap-1.5 rounded-xl bg-black/80 hover:bg-black text-amber-300 border border-amber-400/50 px-3 py-1.5 text-xs font-bold shadow-xl backdrop-blur-md transition cursor-pointer"
         >
-          <FastForward className="h-4 w-4 fill-current text-amber-400" />
-          <span>تخطي مقدمة المجلس</span>
+          <span>تخطي المقدمة</span>
+          <ChevronLeft className="h-3.5 w-3.5" />
         </button>
       )}
 
       {/* تنبيه لقطة الشاشة */}
       {snapshotToast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-2xl bg-emerald-900/95 border border-emerald-400/60 px-4 py-2 text-xs font-bold text-white shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-          <Check className="h-4 w-4 text-amber-300" />
-          <span>تم التقاط الشاشة وحفظها للكشكول بنجاح! 📸</span>
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 px-3 py-1.5 text-xs font-bold text-emerald-200 shadow-xl backdrop-blur-md animate-in fade-in">
+          <Check className="h-3.5 w-3.5 text-amber-300" />
+          <span>تم حفظ لقطة الشاشة 📸</span>
         </div>
       )}
 
-      {/* ===================== واجهة استدراك الأخطاء الذكية ===================== */}
-      {hasPlaybackError && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-stone-950/95 p-6 text-center backdrop-blur-md animate-in fade-in duration-300"
-        >
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
-            <Tv className="h-7 w-7 animate-pulse" />
-          </div>
-          <h3 className="text-base sm:text-lg font-black text-white mb-1.5">
-            تعذر تشغيل هذا المصدر مباشرة
-          </h3>
-          <p className="max-w-md text-xs text-stone-300 mb-4 leading-relaxed">
-            {playbackErrorMessage || 'قد يكون الملف محجوباً أو أن المتصفح يحتاج استخدام المصدر البديل.'}
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-lg">
-            {activeEngine === 'direct' && detectedYtId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setHasPlaybackError(false)
-                  setActiveEngine('youtube')
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 px-5 py-2.5 text-xs sm:text-sm font-black text-white shadow-xl transition cursor-pointer hover:scale-105"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                <span>⚡ الانتقال لبث YouTube المباشر</span>
-              </button>
-            )}
-
-            {activeEngine === 'youtube' && cleanDirectSrc && (
-              <button
-                type="button"
-                onClick={() => {
-                  setHasPlaybackError(false)
-                  setActiveEngine('direct')
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-700 hover:bg-emerald-600 px-5 py-2.5 text-xs sm:text-sm font-black text-white shadow-xl transition cursor-pointer"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                <span>الانتقال لفيديو السيرفر المباشر HD</span>
-              </button>
-            )}
-
-            {onSwitchToAudio && audioUrl && (
-              <button
-                type="button"
-                onClick={onSwitchToAudio}
-                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 px-4 py-2 text-xs font-bold text-emerald-200 transition cursor-pointer"
-              >
-                <Headphones className="h-4 w-4 text-emerald-400" />
-                <span>الاستماع للصوتية (MP3) 🎧</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setHasPlaybackError(false)
-                if (activeEngine === 'youtube' && ytPlayerRef.current) {
-                  ytPlayerRef.current.seekTo(0, true)
-                  ytPlayerRef.current.playVideo()
-                } else if (videoRef.current) {
-                  videoRef.current.currentTime = 0
-                  videoRef.current.load()
-                  videoRef.current.play().catch(() => {})
-                }
-              }}
-              className="inline-flex items-center gap-2 rounded-2xl border border-stone-700 bg-stone-900/90 hover:bg-stone-800 px-3.5 py-2 text-xs font-bold text-stone-300 transition cursor-pointer"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>إعادة المحاولة 🔄</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== شاشة إتمام المجلس الفاخرة (End Screen) ===================== */}
-      {showCompletionScreen && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-stone-950/95 p-6 text-center backdrop-blur-md animate-in fade-in duration-300"
-        >
-          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-linear-to-tr from-emerald-600 to-amber-500 text-stone-950 shadow-2xl shadow-emerald-500/30 border-2 border-amber-300">
-            <Award className="h-8 w-8" />
-          </div>
-
-          <h3 className="font-amiri text-xl sm:text-2xl font-black text-amber-300 mb-1">
-            الحمد لله تم إتمام هذا المجلس بنجاح
-          </h3>
-          <p className="max-w-md text-xs sm:text-sm text-stone-300 mb-5 leading-relaxed">
-            «{title}» • كُتب لك حضور هذا المجلس في صحيفة إنجازك الأكاديمي.
-          </p>
-
-          {completionCountdown !== null && onNextEpisode && (
-            <div className="mb-5 inline-flex items-center gap-2 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 px-4 py-1.5 text-xs font-bold text-emerald-200">
-              <Sparkles className="h-4 w-4 text-amber-300 animate-spin" />
-              <span>الانتقال التلقائي للمجلس التالي خلال ({completionCountdown}) ثوانٍ...</span>
-              <button
-                type="button"
-                onClick={() => setCompletionCountdown(null)}
-                className="mr-2 text-[11px] text-stone-400 hover:text-white underline cursor-pointer"
-              >
-                إلغاء
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {onNextEpisode && currentEpisodeIndex < totalLessonsCount - 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCompletionScreen(false)
-                  setCompletionCountdown(null)
-                  onNextEpisode()
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-emerald-600 via-amber-600 to-amber-500 hover:scale-105 px-6 py-2.5 text-xs sm:text-sm font-black text-stone-950 shadow-2xl transition cursor-pointer"
-              >
-                <span>الانتقال للمجلس التالي</span>
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowCompletionScreen(false)
-                setCompletionCountdown(null)
-                performSeek(0)
-                togglePlay()
-              }}
-              className="inline-flex items-center gap-2 rounded-2xl border border-stone-700 bg-stone-900/90 hover:bg-stone-800 px-4 py-2.5 text-xs font-bold text-stone-200 transition cursor-pointer"
-            >
-              <RotateCcw className="h-4 w-4 text-amber-400" />
-              <span>إعادة مدارسة المجلس ↺</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowCompletionScreen(false)}
-              className="rounded-2xl border border-stone-800 bg-stone-950 px-4 py-2.5 text-xs font-medium text-stone-400 hover:text-white transition cursor-pointer"
-            >
-              إغلاق الشاشة
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* زر التشغيل الكبير الأنيق في الوسط عند الإيقاف المؤقت */}
+      {/* زر التشغيل الدائري الهادئ في الوسط عند الإيقاف المؤقت */}
       {!isPlaying && !isLoading && !hasPlaybackError && !showCompletionScreen && (
         <div
           onClick={togglePlay}
-          className="absolute inset-0 z-10 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/40 transition"
+          className="absolute inset-0 z-10 flex items-center justify-center cursor-pointer bg-black/25 hover:bg-black/35 transition"
         >
           <button
             type="button"
-            className="flex h-20 w-20 items-center justify-center rounded-3xl bg-linear-to-tr from-emerald-800 via-amber-500 to-amber-400 text-stone-950 shadow-2xl hover:scale-108 transition transform cursor-pointer border-2 border-amber-300/70"
-            title="تشغيل الدرس (Space)"
+            className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-linear-to-tr from-emerald-800 to-amber-500 text-stone-950 shadow-2xl hover:scale-108 transition transform cursor-pointer border-2 border-amber-300/80"
+            title="تشغيل (Space)"
           >
-            <Play className="h-9 w-9 fill-current translate-x-0.5 text-stone-950" />
+            <Play className="h-6 w-6 sm:h-7 sm:w-7 fill-current translate-x-0.5 text-stone-950" />
           </button>
         </div>
       )}
 
-      {/* ===================== الشريط العلوي الفاخر (Top Bar) ===================== */}
+      {/* ===================== الشريط العلوي النقي (Top Bar) ===================== */}
       <div
-        className={`absolute top-0 right-0 left-0 z-20 flex items-center justify-between p-4 sm:p-5 bg-gradient-to-b from-black/95 via-black/80 to-transparent transition-opacity duration-300 ${
+        className={`absolute top-0 right-0 left-0 z-20 flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3.5 bg-gradient-to-b from-black/85 via-black/40 to-transparent transition-opacity duration-300 ${
           isControlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-950 text-amber-300 font-black text-xs border border-emerald-500/60 shadow-md">
+        <div className="flex items-center gap-2 truncate max-w-[80%]">
+          <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-lg bg-emerald-950 text-amber-300 font-bold text-[10px] sm:text-xs border border-emerald-500/50 shrink-0">
             {currentEpisodeIndex + 1}
           </span>
-          <div className="space-y-0.5">
-            <h3 className="text-xs sm:text-sm font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="text-[11px] font-medium text-stone-200 drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]">
-                {subtitle}
-              </p>
-            )}
-          </div>
+          <h3 className="text-xs sm:text-sm font-bold text-white truncate drop-shadow">
+            {title}
+          </h3>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* شارة مؤقت المدارسة إن كان نشطاً */}
+        <div className="flex items-center gap-1.5 shrink-0">
           {sleepTimerRemaining !== null && (
-            <span className="inline-flex items-center gap-1 rounded-xl bg-amber-500/30 border border-amber-400/60 px-2.5 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md shadow-md">
-              <Clock className="h-3 w-3 animate-spin" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 border border-amber-400/50 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 backdrop-blur-md">
+              <Timer className="h-2.5 w-2.5" />
               <span>
                 {Math.floor(sleepTimerRemaining / 60)}:
                 {String(sleepTimerRemaining % 60).padStart(2, '0')}
@@ -1490,143 +1203,28 @@ export default function SanadVideoPlayer({
             </span>
           )}
 
-          {/* شارة السرعة الحالية */}
-          {playbackSpeed !== 1 && (
-            <span
-              className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-black shadow-md ${
-                playbackSpeed >= 2.5
-                  ? 'bg-amber-400 text-stone-950 shadow-amber-400/30 animate-pulse'
-                  : 'bg-amber-400 text-stone-950'
-              }`}
-            >
-              {playbackSpeed >= 2.5 ? <Rocket className="h-3 w-3" /> : <Zap className="h-3 w-3 fill-current" />}
-              <span>{playbackSpeed}x</span>
-            </span>
-          )}
-
-          {/* شارة نوع المصدر وإمكانية التبديل بينهما */}
-          {cleanDirectSrc && detectedYtId ? (
+          {cleanDirectSrc && detectedYtId && (
             <button
               type="button"
               onClick={() => {
                 setActiveEngine(activeEngine === 'direct' ? 'youtube' : 'direct')
-                showFeedback(
-                  activeEngine === 'direct'
-                    ? 'التحويل إلى بث YouTube المباشر'
-                    : 'التحويل إلى فيديو السيرفر المباشر HD'
-                )
+                showFeedback(activeEngine === 'direct' ? 'بث YouTube ⇄' : 'HD المباشر ⇄')
               }}
-              title="التبديل بين فيديو السيرفر وبث YouTube"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-stone-900/90 hover:bg-black border border-stone-700/80 px-3 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md transition shadow-md cursor-pointer"
+              className="text-[10px] font-bold text-stone-300 hover:text-white bg-black/50 hover:bg-black/70 border border-stone-700/70 rounded-full px-2 py-0.5 backdrop-blur-md transition cursor-pointer"
             >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  activeEngine === 'direct' ? 'bg-emerald-400' : 'bg-red-500'
-                } animate-pulse`}
-              />
-              <span>{activeEngine === 'direct' ? 'HD سَنَد المباشر ⇄' : 'بث YouTube ⇄'}</span>
-            </button>
-          ) : activeEngine === 'direct' ? (
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-emerald-400/50 px-3 py-1 text-[11px] font-bold text-emerald-300 backdrop-blur-md shadow-md">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>HD • فيديو سَنَد المباشر</span>
-            </span>
-          ) : (
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-red-500/50 px-3 py-1 text-[11px] font-bold text-red-300 backdrop-blur-md shadow-md">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span>بث YouTube المعتمد</span>
-            </span>
-          )}
-
-          {/* زر وضع وضوح السبورة والمخطوطات */}
-          <button
-            type="button"
-            onClick={toggleVisualClarity}
-            title={
-              visualClarityMode === 'clarity'
-                ? 'إلغاء وضع وضوح السبورة'
-                : 'تحسين وضوح السبورة والمخطوطات باهتة الإضاءة (C)'
-            }
-            className={`flex h-8 w-8 items-center justify-center rounded-xl backdrop-blur-md transition cursor-pointer border ${
-              visualClarityMode === 'clarity'
-                ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-md font-bold'
-                : visualClarityMode === 'reading'
-                ? 'bg-amber-950 text-amber-300 border-amber-500 font-bold'
-                : 'bg-stone-900/80 hover:bg-black text-stone-300 hover:text-white border-stone-700/80'
-            }`}
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-
-          {/* زر الوقفات والعلامات المرجعية */}
-          <button
-            type="button"
-            onClick={() => setShowBookmarksModal(true)}
-            title="عرض الوقفات والعلامات المرجعية المحفوظة (B)"
-            className={`relative flex h-8 w-8 items-center justify-center rounded-xl backdrop-blur-md transition cursor-pointer border ${
-              bookmarks.length > 0
-                ? 'bg-stone-900/90 text-amber-300 border-amber-400/50 hover:bg-black'
-                : 'bg-stone-900/80 hover:bg-black text-stone-300 hover:text-white border-stone-700/80'
-            }`}
-          >
-            <Bookmark className="h-4 w-4" />
-            {bookmarks.length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-stone-950 font-black text-[9px]">
-                {bookmarks.length}
-              </span>
-            )}
-          </button>
-
-          {/* زر وضع المسرح العريض */}
-          {onToggleTheaterExpanded && (
-            <button
-              type="button"
-              onClick={onToggleTheaterExpanded}
-              title={isTheaterExpanded ? 'تصغير الشاشة للحجم القياسي' : 'توسيع الشاشة بنمط المسرح'}
-              className="hidden sm:inline-flex items-center gap-1 rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 border border-stone-700/80 px-2.5 py-1 text-xs font-bold backdrop-blur-md transition cursor-pointer"
-            >
-              <Tv className="h-3.5 w-3.5 text-amber-300" />
-              <span>{isTheaterExpanded ? 'حجم قياسي' : 'عرض عريض'}</span>
+              {activeEngine === 'direct' ? 'سَنَد HD ⇄' : 'YouTube ⇄'}
             </button>
           )}
-
-          {/* زر لقطة الشاشة السريعة للشرح */}
-          <button
-            type="button"
-            onClick={handleCaptureSnapshot}
-            title={
-              activeEngine === 'youtube'
-                ? 'التقاط الشاشة مدعوم للفيديوهات المرفوعة على السيرفر'
-                : 'أخذ لقطة شاشة للشرح وحفظها للكشكول (S)'
-            }
-            className={`flex h-8 w-8 items-center justify-center rounded-xl backdrop-blur-md transition cursor-pointer border ${
-              activeEngine === 'youtube'
-                ? 'opacity-40 cursor-not-allowed bg-stone-900/40 border-stone-800 text-stone-500'
-                : 'bg-stone-900/80 hover:bg-black text-stone-300 hover:text-white border-stone-700/80'
-            }`}
-          >
-            <Camera className="h-4 w-4" />
-          </button>
-
-          {/* زر دليل الاختصارات */}
-          <button
-            type="button"
-            onClick={() => setShowShortcutsModal(true)}
-            title="دليل اختصارات لوحة المفاتيح (?)"
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-300 hover:text-white border border-stone-700/80 backdrop-blur-md transition cursor-pointer"
-          >
-            <Keyboard className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
-      {/* ===================== الشريط السفلي المتكامل لعناصر التحكم (Bottom Bar) ===================== */}
+      {/* ===================== الشريط السفلي الأنيق غير المزدحم (Bottom Bar) ===================== */}
       <div
-        className={`absolute bottom-0 right-0 left-0 z-20 flex flex-col justify-end p-3 sm:p-5 bg-gradient-to-t from-black/98 via-black/85 to-transparent transition-opacity duration-300 space-y-2.5 ${
+        className={`absolute bottom-0 right-0 left-0 z-20 flex flex-col justify-end px-3 py-1.5 sm:px-4 sm:py-2.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 space-y-1 ${
           isControlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* 1. شريط التقدم التفاعلي (Interactive Timeline Scrubber) */}
+        {/* 1. شريط التقدم النحيف (Slim Scrubber) */}
         <div
           ref={progressBarRef}
           dir="ltr"
@@ -1634,77 +1232,41 @@ export default function SanadVideoPlayer({
           onMouseDown={handleProgressMouseDown}
           onMouseMove={handleProgressBarHover}
           onMouseLeave={handleProgressBarLeave}
-          className="group/progress relative h-2.5 hover:h-3.5 w-full cursor-pointer rounded-full bg-stone-700/80 hover:bg-stone-600/80 transition-all shadow-inner select-none"
+          className="group/progress relative h-1 hover:h-2 w-full cursor-pointer rounded-full bg-white/20 transition-all select-none"
         >
-          {/* شريط التحميل المسبق (Buffered) */}
+          {/* المخزن مؤقتاً */}
           <div
-            className="absolute top-0 bottom-0 left-0 rounded-full bg-white/30 transition-all duration-200"
+            className="absolute top-0 bottom-0 left-0 rounded-full bg-white/30 transition-all duration-150"
             style={{ width: `${bufferedPercent}%` }}
           />
 
-          {/* شريط المشاهدة المنجز (Played) بتدرج زمردي وذهبي مشع */}
+          {/* المنجز */}
           <div
-            className="absolute top-0 bottom-0 left-0 rounded-full bg-linear-to-r from-emerald-500 via-amber-400 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)]"
+            className="absolute top-0 bottom-0 left-0 rounded-full bg-linear-to-r from-emerald-500 via-amber-400 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
             style={{ width: `${playedPercent}%` }}
           />
 
-          {/* فصول المجلس (Chapters Markers) إن وجدت */}
+          {/* مؤشرات الوقفات */}
           {duration > 0 &&
-            chapters.map((ch, idx) => {
-              const pos = (ch.time / duration) * 100
-              return (
-                <div
-                  key={idx}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    performSeek(ch.time)
-                    showFeedback(`فصل: ${ch.title}`)
-                  }}
-                  title={`فصل: ${ch.title} (${formatTime(ch.time)})`}
-                  style={{ left: `${pos}%` }}
-                  className="group/ch absolute top-0 bottom-0 z-10 w-1 bg-black/60 hover:w-1.5 hover:bg-amber-300 transition-all cursor-pointer"
-                >
-                  <div className="absolute -top-7 -translate-x-1/2 hidden group-hover/ch:block rounded-md bg-stone-900 border border-amber-400/50 px-2 py-0.5 text-[10px] font-bold text-amber-300 whitespace-nowrap shadow-xl pointer-events-none">
-                    {ch.title}
-                  </div>
-                </div>
-              )
-            })}
+            bookmarks.map((bm) => (
+              <div
+                key={bm.id}
+                style={{ left: `${(bm.time / duration) * 100}%` }}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-2 w-1 bg-amber-400 rounded-full z-10"
+                title={bm.label}
+              />
+            ))}
 
-          {/* العلامات المرجعية والوقفات العلمية على خط الزمن */}
-          {duration > 0 &&
-            bookmarks.map((bm) => {
-              const pos = (bm.time / duration) * 100
-              return (
-                <div
-                  key={bm.id}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    performSeek(bm.time)
-                    showFeedback(`انتقال للوقفة: ${bm.label} 🔖`)
-                  }}
-                  title={bm.label}
-                  style={{ left: `${pos}%` }}
-                  className="group/bm absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 cursor-pointer p-1"
-                >
-                  <div className="h-3 w-1.5 rounded-full bg-amber-400 hover:h-4 hover:w-2 hover:bg-amber-300 transition-all shadow-[0_0_8px_rgba(251,191,36,0.9)]" />
-                  <div className="absolute -top-7 -translate-x-1/2 hidden group-hover/bm:block rounded-md bg-stone-900 border border-amber-400/50 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 whitespace-nowrap shadow-xl pointer-events-none">
-                    {bm.label}
-                  </div>
-                </div>
-              )
-            })}
-
-          {/* مقبض المؤشر الدائري المتوهج */}
+          {/* مقبض دائري مشع عند المرور */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 h-4.5 w-4.5 rounded-full bg-white border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-2xl opacity-0 group-hover/progress:opacity-100 transition-opacity"
-            style={{ left: `calc(${playedPercent}% - 9px)` }}
+            className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-white border border-amber-400 opacity-0 group-hover/progress:opacity-100 transition-opacity"
+            style={{ left: `calc(${playedPercent}% - 6px)` }}
           />
 
-          {/* تلميح الوقت العائم عند تحريك الفأرة على الشريط (Hover Tooltip) */}
+          {/* تلميح الوقت العائم */}
           {hoverTime !== null && hoverPosition !== null && (
             <div
-              className="absolute -top-9 -translate-x-1/2 rounded-xl bg-stone-900/95 border border-amber-400/50 px-2.5 py-1 text-xs font-mono font-bold text-amber-300 shadow-2xl pointer-events-none backdrop-blur-md"
+              className="absolute -top-7 -translate-x-1/2 rounded-md bg-stone-900 border border-stone-700 px-1.5 py-0.5 text-[10px] font-mono font-bold text-amber-300 shadow-xl pointer-events-none"
               style={{ left: `${hoverPosition}px` }}
             >
               {formatTime(hoverTime)}
@@ -1712,81 +1274,58 @@ export default function SanadVideoPlayer({
           )}
         </div>
 
-        {/* 2. أزرار وأدوات التحكم الرئيسية عالية التباين */}
-        <div className="flex items-center justify-between text-white text-xs pt-1">
-          {/* الجزء الأيمن (التحكم بالتشغيل والتنقل والصوت) */}
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-            {/* زر التشغيل / الإيقاف المؤقت */}
+        {/* 2. صف أدوات التحكم الوحيد (Single Sleek Controls Row) */}
+        <div className="flex items-center justify-between text-white pt-0.5">
+          {/* الجانب الأيمن (التحكم بالتشغيل والصوت والتوقيت) */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* تشغيل / إيقاف مؤقت */}
             <button
               type="button"
               onClick={togglePlay}
+              className="p-1 sm:p-1.5 text-stone-200 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
               title={isPlaying ? 'إيقاف مؤقت (Space)' : 'تشغيل (Space)'}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-900/85 hover:bg-black text-white transition cursor-pointer border border-stone-700/80 shadow-md"
             >
               {isPlaying ? (
                 <Pause className="h-4.5 w-4.5 fill-current" />
               ) : (
-                <Play className="h-4.5 w-4.5 fill-current translate-x-0.5 text-amber-300" />
+                <Play className="h-4.5 w-4.5 fill-current text-amber-300" />
               )}
             </button>
 
-            {/* أزرار التقديم والتأخير 10 ثوانٍ */}
+            {/* تأخير 10 ثوانٍ */}
             <button
               type="button"
               onClick={() => skipTime(-10)}
-              title="تأخير 10 ثوانٍ (سهم يسار)"
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white transition cursor-pointer border border-stone-700/70"
+              className="p-1 sm:p-1.5 text-stone-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+              title="تأخير 10 ثوانٍ (J)"
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
+
+            {/* تقديم 10 ثوانٍ */}
             <button
               type="button"
               onClick={() => skipTime(10)}
-              title="تقديم 10 ثوانٍ (سهم يمين)"
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white transition cursor-pointer border border-stone-700/70"
+              className="p-1 sm:p-1.5 text-stone-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+              title="تقديم 10 ثوانٍ (L)"
             >
-              <RotateCw className="h-4 w-4" />
+              <RotateCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
 
-            {/* التنقل بين المجالس السابقة والتالية */}
-            {onPrevEpisode && (
-              <button
-                type="button"
-                disabled={currentEpisodeIndex === 0}
-                onClick={onPrevEpisode}
-                title="المجلس السابق"
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer border border-stone-700/70"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-
-            {onNextEpisode && (
-              <button
-                type="button"
-                disabled={currentEpisodeIndex >= totalLessonsCount - 1}
-                onClick={onNextEpisode}
-                title="المجلس التالي"
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer border border-stone-700/70"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-
-            {/* التحكم بالصوت مع شريط انزلاقي ومضخم الصوت */}
-            <div className="group/volume flex items-center gap-1.5 pl-1">
+            {/* التحكم بالصوت */}
+            <div className="group/vol flex items-center gap-1">
               <button
                 type="button"
                 onClick={toggleMute}
-                title={isMuted ? 'إلغاء كتم الصوت (M)' : 'كتم الصوت (M)'}
-                className="text-stone-300 hover:text-white transition cursor-pointer"
+                className="p-1 sm:p-1.5 text-stone-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                title={isMuted ? 'إلغاء الكتم (M)' : 'كتم الصوت (M)'}
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="h-4.5 w-4.5 text-rose-400" />
+                  <VolumeX className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400" />
                 ) : volume < 0.5 ? (
-                  <Volume1 className="h-4.5 w-4.5" />
+                  <Volume1 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 ) : (
-                  <Volume2 className="h-4.5 w-4.5 text-emerald-400" />
+                  <Volume2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
                 )}
               </button>
 
@@ -1797,453 +1336,460 @@ export default function SanadVideoPlayer({
                 step={0.05}
                 value={isMuted ? 0 : volume}
                 onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="w-0 group-hover/volume:w-16 focus:w-16 h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-emerald-400 transition-all duration-200"
+                className="w-0 group-hover/vol:w-12 sm:group-hover/vol:w-16 focus:w-12 sm:focus:w-16 h-1 bg-stone-600 rounded-lg appearance-none cursor-pointer accent-emerald-400 transition-all duration-200"
               />
-
-              {/* زر مضخم الصوت الرقمي (Audio Boost حتى 200%) */}
-              <button
-                type="button"
-                onClick={handleToggleAudioBoost}
-                title={
-                  activeEngine === 'youtube'
-                    ? 'مضخم الصوت الرقمي متاح للفيديوهات المرفوعة مباشرة'
-                    : 'تضخيم الصوت الرقمي وتحسين مخارج الحروف للتسجيلات المنخفضة (150% / 200%)'
-                }
-                className={`text-[10px] font-black rounded-lg px-2 py-0.5 transition cursor-pointer border ${
-                  audioBoost > 1
-                    ? 'bg-emerald-500 text-stone-950 border-emerald-400 shadow-md font-black'
-                    : activeEngine === 'youtube'
-                    ? 'opacity-40 bg-stone-900/60 border-stone-800 text-stone-500 cursor-not-allowed'
-                    : 'bg-stone-900/80 hover:bg-black text-stone-200 border-stone-700/80'
-                }`}
-              >
-                {Math.round(audioBoost * 100)}%
-              </button>
             </div>
 
-            {/* عداد الوقت الرقمي عالي التباين LTR */}
+            {/* عداد الوقت الرقمي */}
             <div
               dir="ltr"
-              className="flex items-center gap-1 text-[11px] font-mono font-bold text-stone-200 pr-1 drop-shadow-md"
+              className="text-[10px] sm:text-[11px] font-mono text-stone-300 px-1 select-none"
             >
-              <span className="text-amber-300">{formatTime(currentTime)}</span>
-              <span>/</span>
-              <span>{formatTime(duration)}</span>
+              <span className="text-amber-300 font-bold">{formatTime(currentTime)}</span>
+              <span className="opacity-60"> / </span>
+              <span className="opacity-80">{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* الجزء الأيسر (السرعة، الوقفات، الفصول، المؤقت، PiP، ملء الشاشة) */}
-          <div className="flex items-center gap-2 relative">
-            {/* زر قائمة فصول المجلس إن توفرت */}
-            {chapters.length > 0 && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowChaptersMenu(!showChaptersMenu)}
-                  title="فصول ومحاور المجلس"
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition cursor-pointer border ${
-                    showChaptersMenu
-                      ? 'bg-amber-400 text-stone-950 border-amber-300 font-bold shadow-md'
-                      : 'bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white border-stone-700/80'
-                  }`}
-                >
-                  <ListVideo className="h-4 w-4" />
-                </button>
-
-                {showChaptersMenu && (
-                  <div className="absolute bottom-full left-0 mb-2 flex flex-col gap-1 rounded-2xl border border-stone-700 bg-stone-900/98 p-2.5 backdrop-blur-xl shadow-2xl z-30 animate-in fade-in zoom-in-95 min-w-[220px] max-h-56 overflow-y-auto">
-                    <span className="text-[10px] font-bold text-amber-300 text-center pb-1 border-b border-stone-800">
-                      📑 فصول ومسائل المجلس
-                    </span>
-                    {chapters.map((ch, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          performSeek(ch.time)
-                          setShowChaptersMenu(false)
-                          showFeedback(`انتقال إلى: ${ch.title}`)
-                        }}
-                        className="flex items-center justify-between gap-2 p-1.5 rounded-lg text-right text-xs hover:bg-white/10 text-stone-200 cursor-pointer transition"
-                      >
-                        <span className="line-clamp-1">{ch.title}</span>
-                        <span className="font-mono text-[10px] text-amber-300 shrink-0">
-                          {formatTime(ch.time)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* زر إضافة وقفة علمية مرجعية سريعة (B) */}
+          {/* الجانب الأيسر (الوقفات، الإعدادات الموحدة، والملء) */}
+          <div className="flex items-center gap-0.5 sm:gap-1.5 relative">
+            {/* زر وقفة سريعة */}
             <button
               type="button"
               onClick={handleAddBookmark}
-              title="إضافة وقفة علمية مرجعية عند هذه الدقيقة (B)"
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-amber-300 border border-stone-700/80 transition cursor-pointer"
+              className="p-1 sm:p-1.5 text-stone-300 hover:text-amber-300 hover:bg-white/10 rounded-lg transition cursor-pointer"
+              title="حفظ وقفة عند هذه اللحظة (B)"
             >
-              <BookmarkPlus className="h-4 w-4" />
+              <BookmarkPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
 
-            {/* زر تكرار المجلس للمراجعة (Loop) */}
-            <button
-              type="button"
-              onClick={toggleLoop}
-              title={isLooping ? 'إلغاء تكرار المجلس (R)' : 'تكرار هذا المجلس للحفظ والمراجعة (R)'}
-              className={`flex h-8 w-8 items-center justify-center rounded-xl transition cursor-pointer border ${
-                isLooping
-                  ? 'bg-amber-400 text-stone-950 border-amber-300 font-bold shadow-md'
-                  : 'bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white border-stone-700/80'
-              }`}
-            >
-              <Repeat className="h-4 w-4" />
-            </button>
+            {/* زر قائمة الوقفات إن وجدت */}
+            {bookmarks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowBookmarksModal(true)}
+                className="relative p-1 sm:p-1.5 text-amber-300 hover:bg-white/10 rounded-lg transition cursor-pointer"
+                title="عرض الوقفات المحفوظة"
+              >
+                <Bookmark className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="absolute top-0 right-0 h-3 w-3 bg-amber-400 text-stone-950 font-black text-[8px] rounded-full flex items-center justify-center">
+                  {bookmarks.length}
+                </span>
+              </button>
+            )}
 
-            {/* قائمة مؤقت النوم والمدارسة */}
+            {/* ترس الإعدادات الموحد الفاخر (Settings Gear) */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowTimerMenu(!showTimerMenu)}
-                title="مؤقت إيقاف التشغيل التلقائي للمدارسة"
-                className={`flex h-8 w-8 items-center justify-center rounded-xl transition cursor-pointer border ${
-                  sleepTimerMinutes !== null
-                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-md font-bold'
-                    : 'bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white border-stone-700/80'
+                onClick={() => {
+                  setShowSettingsMenu(!showSettingsMenu)
+                  setSettingsView('main')
+                }}
+                className={`p-1 sm:p-1.5 rounded-lg transition cursor-pointer ${
+                  showSettingsMenu
+                    ? 'text-amber-300 bg-white/15'
+                    : 'text-stone-300 hover:text-white hover:bg-white/10'
                 }`}
+                title="إعدادات المشغل والسرعة"
               >
-                <Timer className="h-4 w-4" />
+                <Settings className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${showSettingsMenu ? 'rotate-45' : ''} transition-transform duration-200`} />
               </button>
 
-              {showTimerMenu && (
-                <div className="absolute bottom-full left-0 mb-2 flex flex-col gap-1 rounded-2xl border border-stone-700 bg-stone-900/98 p-2 backdrop-blur-xl shadow-2xl z-30 animate-in fade-in zoom-in-95 min-w-[145px]">
-                  <span className="text-[10px] font-bold text-amber-300 text-center pb-1 border-b border-stone-800">
-                    ⏱ إيقاف تلقائي بعد
-                  </span>
-                  {[15, 30, 45, 60].map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        setSleepTimerMinutes(m)
-                        setSleepTimerRemaining(m * 60)
-                        setShowTimerMenu(false)
-                        showFeedback(`سيتم الإيقاف بعد ${m} دقيقة`)
-                      }}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-bold transition text-right cursor-pointer ${
-                        sleepTimerMinutes === m
-                          ? 'bg-amber-400 text-stone-950'
-                          : 'text-stone-300 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      {m} دقيقة
-                    </button>
-                  ))}
-                  {sleepTimerMinutes !== null && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSleepTimerMinutes(null)
-                        setSleepTimerRemaining(null)
-                        setShowTimerMenu(false)
-                        showFeedback('تم إلغاء المؤقت')
-                      }}
-                      className="rounded-lg px-2.5 py-1 text-xs font-bold text-rose-400 hover:bg-rose-950/40 transition text-right cursor-pointer pt-1 border-t border-stone-800"
-                    >
-                      إلغاء المؤقت ✕
-                    </button>
+              {/* النافذة المنبثقة للإعدادات (Unified Settings Popover) */}
+              {showSettingsMenu && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute bottom-full left-0 mb-2 w-56 rounded-2xl border border-stone-700 bg-stone-900/95 p-2 backdrop-blur-xl shadow-2xl z-40 text-xs animate-in fade-in zoom-in-95 text-stone-200 space-y-1"
+                >
+                  {settingsView === 'main' ? (
+                    <>
+                      <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-stone-800 px-1 text-[11px] font-bold text-amber-300">
+                        <span>إعدادات المشغل</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowSettingsMenu(false)}
+                          className="text-stone-400 hover:text-white p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {/* 1. سرعة التشغيل */}
+                      <button
+                        type="button"
+                        onClick={() => setSettingsView('speed')}
+                        className="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Sliders className="h-3.5 w-3.5 text-stone-400" />
+                          <span>سرعة التشغيل</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-amber-300 bg-stone-800 px-1.5 py-0.5 rounded">
+                          {playbackSpeed}x
+                        </span>
+                      </button>
+
+                      {/* 2. مضخم الصوت الرقمي */}
+                      <div className="p-1.5 rounded-lg hover:bg-white/5 transition flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Volume2 className="h-3.5 w-3.5 text-stone-400" />
+                          <span>مضخم الصوت</span>
+                        </div>
+                        {activeEngine === 'direct' ? (
+                          <div className="flex gap-1">
+                            {[1, 1.5, 2].map((b) => (
+                              <button
+                                key={b}
+                                type="button"
+                                onClick={() => {
+                                  setAudioBoost(b)
+                                  if (gainNodeRef.current) gainNodeRef.current.gain.value = b
+                                  showFeedback(`مضخم الصوت: ${Math.round(b * 100)}%`)
+                                }}
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition ${
+                                  audioBoost === b
+                                    ? 'bg-emerald-500 text-stone-950'
+                                    : 'bg-stone-800 text-stone-400 hover:text-white'
+                                }`}
+                              >
+                                {Math.round(b * 100)}%
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[9px] text-stone-500">للمرفوع فقط</span>
+                        )}
+                      </div>
+
+                      {/* 3. مؤقت المدارسة */}
+                      <button
+                        type="button"
+                        onClick={() => setSettingsView('timer')}
+                        className="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Timer className="h-3.5 w-3.5 text-stone-400" />
+                          <span>مؤقت المدارسة</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-stone-400">
+                          {sleepTimerMinutes ? `${sleepTimerMinutes} د` : 'متوقف'}
+                        </span>
+                      </button>
+
+                      {/* 4. وضوح السبورة */}
+                      <button
+                        type="button"
+                        onClick={toggleVisualClarity}
+                        className="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-3.5 w-3.5 text-stone-400" />
+                          <span>وضوح السبورة</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-stone-400">
+                          {visualClarityMode === 'clarity'
+                            ? 'تباين عالٍ 🌟'
+                            : visualClarityMode === 'reading'
+                            ? 'ليلي 🌙'
+                            : 'قياسي'}
+                        </span>
+                      </button>
+
+                      {/* 5. تكرار المجلس */}
+                      <button
+                        type="button"
+                        onClick={toggleLoop}
+                        className="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Repeat className="h-3.5 w-3.5 text-stone-400" />
+                          <span>تكرار المجلس (Loop)</span>
+                        </div>
+                        <span className={`text-[10px] font-bold ${isLooping ? 'text-amber-300' : 'text-stone-500'}`}>
+                          {isLooping ? 'مفعل ✓' : 'متوقف'}
+                        </span>
+                      </button>
+
+                      {/* 6. لقطة شاشة */}
+                      {activeEngine === 'direct' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCaptureSnapshot()
+                            setShowSettingsMenu(false)
+                          }}
+                          className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer"
+                        >
+                          <Camera className="h-3.5 w-3.5 text-stone-400" />
+                          <span>حفظ لقطة شاشة للكشكول</span>
+                        </button>
+                      )}
+
+                      {/* 7. دليل الاختصارات */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowShortcutsModal(true)
+                          setShowSettingsMenu(false)
+                        }}
+                        className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 transition text-right cursor-pointer pt-1 border-t border-stone-800 text-stone-400 hover:text-white"
+                      >
+                        <Keyboard className="h-3.5 w-3.5" />
+                        <span>اختصارات لوحة المفاتيح</span>
+                      </button>
+                    </>
+                  ) : settingsView === 'speed' ? (
+                    <>
+                      <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-stone-800 px-1 text-[11px] font-bold text-amber-300">
+                        <button
+                          type="button"
+                          onClick={() => setSettingsView('main')}
+                          className="hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          <span>عودة</span>
+                        </button>
+                        <span>سرعة التشغيل</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 pt-0.5">
+                        {speedPresets.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => {
+                              handleSpeedSelect(s)
+                              setShowSettingsMenu(false)
+                            }}
+                            className={`rounded-lg py-1 text-center font-bold text-xs transition cursor-pointer ${
+                              playbackSpeed === s
+                                ? 'bg-amber-400 text-stone-950 font-black'
+                                : 'hover:bg-white/10 text-stone-300'
+                            }`}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-stone-800 px-1 text-[11px] font-bold text-amber-300">
+                        <button
+                          type="button"
+                          onClick={() => setSettingsView('main')}
+                          className="hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          <span>عودة</span>
+                        </button>
+                        <span>مؤقت المدارسة</span>
+                      </div>
+                      <div className="flex flex-col gap-1 pt-0.5">
+                        {[15, 30, 45, 60].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              setSleepTimerMinutes(m)
+                              setSleepTimerRemaining(m * 60)
+                              setShowSettingsMenu(false)
+                              showFeedback(`إيقاف بعد ${m} دقيقة`)
+                            }}
+                            className={`p-1.5 rounded-lg text-right text-xs transition cursor-pointer ${
+                              sleepTimerMinutes === m
+                                ? 'bg-amber-400 text-stone-950 font-bold'
+                                : 'hover:bg-white/10 text-stone-300'
+                            }`}
+                          >
+                            {m} دقيقة
+                          </button>
+                        ))}
+                        {sleepTimerMinutes !== null && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSleepTimerMinutes(null)
+                              setSleepTimerRemaining(null)
+                              setShowSettingsMenu(false)
+                              showFeedback('تم إلغاء المؤقت')
+                            }}
+                            className="p-1.5 rounded-lg text-right text-xs text-rose-400 hover:bg-rose-950/40 transition cursor-pointer border-t border-stone-800 mt-1"
+                          >
+                            إلغاء المؤقت ✕
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
             </div>
 
-            {/* زر تشغيل/إيقاف التفريغ النصي والترجمة (CC) */}
-            {subtitlesUrl && (
+            {/* المجلس التالي */}
+            {onNextEpisode && currentEpisodeIndex < totalLessonsCount - 1 && (
               <button
                 type="button"
-                onClick={() => {
-                  setSubtitlesEnabled(!subtitlesEnabled)
-                  showFeedback(subtitlesEnabled ? 'تم إيقاف التفريغ النصي' : 'تم تفعيل التفريغ النصي')
-                }}
-                title={subtitlesEnabled ? 'إخفاء التفريغ النصي (CC)' : 'إظهار التفريغ النصي (CC)'}
-                className={`flex h-8 px-2 items-center justify-center rounded-xl text-xs font-black transition cursor-pointer border ${
-                  subtitlesEnabled
-                    ? 'bg-amber-400 text-stone-950 border-amber-300 font-bold shadow-md shadow-amber-400/20'
-                    : 'bg-stone-900/80 hover:bg-black text-stone-400 hover:text-white border-stone-700/80'
-                }`}
+                onClick={onNextEpisode}
+                className="p-1 sm:p-1.5 text-stone-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                title="المجلس التالي"
               >
-                CC
+                <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             )}
 
-            {/* زر وقائمة سرعة التشغيل الموسعة */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                title="سرعة التشغيل المخصصة"
-                className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-black transition cursor-pointer border ${
-                  playbackSpeed !== 1
-                    ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-md shadow-amber-400/20'
-                    : 'bg-stone-900/80 hover:bg-black text-white border-stone-700/80'
-                }`}
-              >
-                {playbackSpeed >= 2.5 ? (
-                  <Rocket className="h-3 w-3" />
-                ) : (
-                  <Sliders className="h-3 w-3" />
-                )}
-                <span>{playbackSpeed}x</span>
-              </button>
-
-              {/* نافذة خيارات السرعة المتطورة */}
-              {showSpeedMenu && (
-                <div className="absolute bottom-full left-0 mb-2 flex flex-col gap-2 rounded-2xl border border-stone-700 bg-stone-900/98 p-2.5 backdrop-blur-xl shadow-2xl z-30 animate-in fade-in zoom-in-95 min-w-[220px]">
-                  {/* رأس القائمة مع أزرار الزيادة والنقصان 0.1x */}
-                  <div className="flex items-center justify-between pb-2 border-b border-stone-800 text-[11px] font-bold text-stone-300 px-1">
-                    <span className="text-amber-300 font-black">السرعة: {playbackSpeed}x</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => adjustSpeedDelta(-0.1)}
-                        className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-800 text-stone-200 hover:bg-amber-400 hover:text-stone-950 font-black text-sm transition cursor-pointer"
-                        title="إبطاء 0.1x (-)"
-                      >
-                        -
-                      </button>
-                      <span className="text-[10px] font-mono text-stone-400 font-bold">0.1x</span>
-                      <button
-                        type="button"
-                        onClick={() => adjustSpeedDelta(0.1)}
-                        className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-800 text-stone-200 hover:bg-amber-400 hover:text-stone-950 font-black text-sm transition cursor-pointer"
-                        title="تسريع 0.1x (+)"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* شبكة السرعات السريعة */}
-                  <div className="grid grid-cols-4 gap-1 pt-1">
-                    {speedPresets.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => handleSpeedSelect(s)}
-                        className={`rounded-lg px-1.5 py-1 text-xs font-bold transition text-center cursor-pointer ${
-                          playbackSpeed === s
-                            ? 'bg-amber-400 text-stone-950 font-black shadow-xs'
-                            : 'text-stone-300 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        {s}x
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* إدخال سرعة مخصصة يدوياً */}
-                  <form onSubmit={handleApplyCustomSpeed} className="pt-2 border-t border-stone-800 flex gap-1">
-                    <input
-                      type="number"
-                      step="0.05"
-                      min="0.25"
-                      max={activeEngine === 'youtube' ? '2.0' : '4.0'}
-                      placeholder="سرعة مخصصة.."
-                      value={customSpeedInput}
-                      onChange={(e) => setCustomSpeedInput(e.target.value)}
-                      className="flex-1 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1 text-xs text-white placeholder-stone-500 focus:outline-none focus:border-amber-400"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-amber-400 px-2 py-1 text-xs font-bold text-stone-950 hover:bg-amber-300 transition cursor-pointer"
-                    >
-                      تطبيق
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
-
-            {/* زر صورة داخل صورة (PiP) */}
-            <button
-              type="button"
-              onClick={togglePiP}
-              title={
-                activeEngine === 'youtube'
-                  ? 'وضع PiP متاح للفيديوهات المرفوعة على السيرفر'
-                  : 'تشغيل في نافذة عائمة (Picture in Picture)'
-              }
-              className={`flex h-8 w-8 items-center justify-center rounded-xl transition cursor-pointer border ${
-                isPiPActive
-                  ? 'bg-emerald-600 text-white border-emerald-400 shadow-md font-bold'
-                  : activeEngine === 'youtube'
-                  ? 'opacity-40 bg-stone-900/60 border-stone-800 text-stone-500 cursor-not-allowed'
-                  : 'bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white border-stone-700/80'
-              }`}
-            >
-              <Tv className="h-4 w-4" />
-            </button>
-
-            {/* زر ملء الشاشة (Fullscreen) */}
+            {/* ملء الشاشة الكامل */}
             <button
               type="button"
               onClick={toggleFullscreen}
-              title={isFullscreen ? 'الخروج من ملء الشاشة (F)' : 'ملء الشاشة الكامل (F)'}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900/80 hover:bg-black text-stone-200 hover:text-white transition cursor-pointer border border-stone-700/80 shadow-md"
+              className="p-1 sm:p-1.5 text-stone-200 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+              title={isFullscreen ? 'الخروج من ملء الشاشة (F)' : 'ملء الشاشة (F)'}
             >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              {isFullscreen ? (
+                <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              ) : (
+                <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ===================== نافذة الوقفات والعلامات المرجعية ===================== */}
+      {/* ===================== النوافذ المنبثقة ===================== */}
+      {/* نافذة الوقفات */}
       {showBookmarksModal && (
         <div
           onClick={() => setShowBookmarksModal(false)}
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl border border-stone-700 bg-stone-900 p-5 text-white shadow-2xl space-y-4"
+            className="w-full max-w-sm rounded-2xl border border-stone-700 bg-stone-900 p-4 text-white shadow-2xl space-y-3"
           >
-            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Bookmark className="h-5 w-5 text-amber-400" />
-                <h4 className="text-sm font-black text-amber-300">الوقفات والعلامات المرجعية</h4>
-              </div>
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+              <h4 className="text-xs font-bold text-amber-300">الوقفات والعلامات المرجعية</h4>
               <button
                 type="button"
                 onClick={() => setShowBookmarksModal(false)}
-                className="rounded-lg p-1 text-stone-400 hover:text-white cursor-pointer"
+                className="text-stone-400 hover:text-white p-1"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {bookmarks.length === 0 ? (
-              <div className="text-center py-6 space-y-2 text-stone-400">
-                <BookmarkPlus className="h-10 w-10 mx-auto text-stone-600" />
-                <p className="text-xs">لم تسجل وقفات بعد في هذا المجلس</p>
-                <p className="text-[11px] text-stone-500">
-                  اضغط حرف (B) أثناء استماعك للمتن لحفظ وقفة عند فائدة أو مسألة مهمة
-                </p>
-              </div>
+              <p className="text-center py-4 text-xs text-stone-500">لم تُحفظ وقفات بعد (اضغط B لحفظ وقفة)</p>
             ) : (
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {bookmarks.map((bm) => (
                   <div
                     key={bm.id}
-                    className="flex items-center justify-between p-2 rounded-xl bg-stone-800/80 border border-stone-700/60 hover:border-amber-400/50 transition"
+                    className="flex items-center justify-between p-1.5 rounded-lg bg-stone-800 text-xs"
                   >
                     <button
                       type="button"
                       onClick={() => {
                         performSeek(bm.time)
                         setShowBookmarksModal(false)
-                        showFeedback(`انتقال إلى: ${bm.label}`)
                       }}
-                      className="flex items-center gap-2 text-right cursor-pointer flex-1"
+                      className="text-right cursor-pointer text-amber-300 font-mono font-bold"
                     >
-                      <span className="font-mono text-xs font-bold text-amber-300 bg-stone-900 px-2 py-0.5 rounded-lg border border-stone-700">
-                        {formatTime(bm.time)}
-                      </span>
-                      <span className="text-xs text-stone-200 font-medium line-clamp-1">
-                        {bm.label}
-                      </span>
+                      {formatTime(bm.time)}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteBookmark(bm.id)}
-                      title="حذف الوقفة"
-                      className="text-stone-400 hover:text-rose-400 p-1 cursor-pointer transition"
+                      className="text-stone-500 hover:text-rose-400 p-1"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  handleAddBookmark()
-                  setShowBookmarksModal(false)
-                }}
-                className="flex-1 rounded-2xl bg-amber-400 py-2 text-xs font-black text-stone-950 hover:bg-amber-300 transition cursor-pointer"
-              >
-                حفظ وقفة عند اللحظة الحالية +
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowBookmarksModal(false)}
-                className="rounded-2xl border border-stone-700 bg-stone-800 px-3 py-2 text-xs font-bold text-stone-300 hover:bg-stone-700 transition cursor-pointer"
-              >
-                إغلاق
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* ===================== نافذة اختصارات لوحة المفاتيح الأكاديمية ===================== */}
+      {/* نافذة اختصارات لوحة المفاتيح */}
       {showShortcutsModal && (
         <div
           onClick={() => setShowShortcutsModal(false)}
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl border border-stone-700 bg-stone-900 p-5 text-white shadow-2xl space-y-4"
+            className="w-full max-w-sm rounded-2xl border border-stone-700 bg-stone-900 p-4 text-white shadow-2xl space-y-3"
           >
-            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Keyboard className="h-5 w-5 text-amber-400" />
-                <h4 className="text-sm font-black text-amber-300">اختصارات المدارسة الذكية</h4>
-              </div>
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+              <h4 className="text-xs font-bold text-amber-300">اختصارات لوحة المفاتيح</h4>
               <button
                 type="button"
                 onClick={() => setShowShortcutsModal(false)}
-                className="rounded-lg p-1 text-stone-400 hover:text-white cursor-pointer"
+                className="text-stone-400 hover:text-white p-1"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-2 text-xs">
+            <div className="space-y-1.5 text-xs">
               {[
-                { keys: 'المسافة / K', desc: 'تشغيل / إيقاف مؤقت' },
+                { keys: 'Space / K', desc: 'تشغيل / إيقاف' },
                 { keys: '→ / L', desc: 'تقديم 10 ثوانٍ' },
                 { keys: '← / J', desc: 'تأخير 10 ثوانٍ' },
-                { keys: 'نقر مزدوج يمين/يسار', desc: 'تقديم/تأخير 10 ثوانٍ سريع' },
-                { keys: '↑ / ↓', desc: 'رفع / خفض الصوت' },
-                { keys: 'M', desc: 'كتم / تشغيل الصوت' },
-                { keys: 'F', desc: 'ملء الشاشة الكامل' },
-                { keys: '+ / - أو ] / [', desc: 'تعديل السرعة تدريجياً (0.1x)' },
-                { keys: 'R', desc: 'تكرار المجلس للمراجعة (Loop)' },
-                { keys: 'S', desc: 'التقاط صورة من الشرح للكشكول' },
-                { keys: 'B', desc: 'إضافة وقفة علمية مرجعية (Bookmark)' },
-                { keys: 'C', desc: 'تحسين وضوح السبورة والمخطوطات' },
-                { keys: '0 - 9', desc: 'انتقال لنسبة مئوية من الدرس (10%..90%)' },
+                { keys: 'M', desc: 'كتم / إلغاء الكتم' },
+                { keys: 'F', desc: 'ملء الشاشة' },
+                { keys: 'R', desc: 'تكرار المجلس' },
+                { keys: 'B', desc: 'حفظ وقفة' },
+                { keys: 'C', desc: 'وضوح السبورة' },
               ].map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between py-1 border-b border-stone-800/60">
+                <div key={idx} className="flex items-center justify-between py-1 border-b border-stone-800/50">
                   <span className="text-stone-300">{item.desc}</span>
-                  <kbd className="rounded-lg bg-stone-800 px-2 py-0.5 font-mono text-[11px] font-bold text-amber-300 border border-stone-700">
+                  <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
                     {item.keys}
                   </kbd>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* شاشة إتمام المجلس */}
+      {showCompletionScreen && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-stone-950/95 p-4 text-center backdrop-blur-md animate-in fade-in"
+        >
+          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-stone-950 shadow-xl border border-amber-300">
+            <Award className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-amber-300 mb-1">الحمد لله تم إتمام هذا المجلس</h3>
+          <p className="text-xs text-stone-300 mb-4">«{title}»</p>
+
+          <div className="flex gap-2">
+            {onNextEpisode && currentEpisodeIndex < totalLessonsCount - 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompletionScreen(false)
+                  onNextEpisode()
+                }}
+                className="rounded-xl bg-amber-400 px-4 py-2 text-xs font-bold text-stone-950 hover:bg-amber-300 transition cursor-pointer"
+              >
+                المجلس التالي ←
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setShowShortcutsModal(false)}
-              className="w-full rounded-2xl bg-amber-400 py-2 text-xs font-black text-stone-950 hover:bg-amber-300 transition cursor-pointer"
+              onClick={() => {
+                setShowCompletionScreen(false)
+                performSeek(0)
+                togglePlay()
+              }}
+              className="rounded-xl border border-stone-700 bg-stone-800 px-3 py-2 text-xs font-bold text-stone-200 transition cursor-pointer"
             >
-              فهمت، عودة للمدارسة ✓
+              إعادة المدارسة ↺
             </button>
           </div>
         </div>
