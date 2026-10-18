@@ -438,6 +438,14 @@ export default function ClassroomView({
 
   const isDirectUploadedVideo = Boolean(rawVideoUrl)
 
+  const effectiveYouTubeId =
+    customEpVideoId ||
+    (currentCourse.videoList && currentCourse.videoList.length > 0
+      ? currentCourse.videoList[effectiveEpisodeIndex] || currentCourse.videoList[0]
+      : undefined) ||
+    resolvedPlaylistVideo?.id ||
+    extractedVideoId
+
 
   // ===================== المشغل الصوتي المتقدم (HTML5 Audio) =====================
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -1208,11 +1216,13 @@ export default function ClassroomView({
           {/* ===================== الحاوية البصرية لمشغل الفيديو ===================== */}
           {playerMode === 'cinema' && (
             <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl shadow-stone-900/10 dark:shadow-stone-950/70 border border-stone-200/60 dark:border-stone-800">
-              {isDirectUploadedVideo && rawVideoUrl && preferredVideoSource !== 'youtube' ? (
+              {rawVideoUrl || effectiveYouTubeId || embedUrl ? (
                 <SanadVideoPlayer
-                  key={`${rawVideoUrl}-${currentEpisodeIndex}`}
-                  src={rawVideoUrl}
-                  title={currentEpisodeData?.title || `المجلس ${currentEpisodeIndex + 1}`}
+                  key={`sanad-player-${rawVideoUrl || effectiveYouTubeId || embedUrl}-${currentEpisodeIndex}`}
+                  src={rawVideoUrl || undefined}
+                  youtubeId={effectiveYouTubeId || undefined}
+                  youtubeUrl={directYouTubeUrl || embedUrl || undefined}
+                  title={currentEpisodeData?.title || resolvedPlaylistVideo?.title || `المجلس ${currentEpisodeIndex + 1}`}
                   subtitle={`«${currentCourse.title}» • ${currentCourse.instructor || 'الشارح المعتمد'}`}
                   currentEpisodeIndex={currentEpisodeIndex}
                   totalLessonsCount={totalLessonsCount}
@@ -1243,35 +1253,6 @@ export default function ClassroomView({
                   isTheaterExpanded={isTheaterExpanded}
                   onToggleTheaterExpanded={() => setIsTheaterExpanded(!isTheaterExpanded)}
                 />
-              ) : embedUrl ? (
-                <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 shadow-2xl shadow-stone-950/40 flex flex-col">
-                  <iframe
-                    ref={youtubeIframeRef}
-                    key={`${embedUrl}-${currentEpisodeIndex}-${isReversedOrder}`}
-                    src={embedUrl}
-                    title={currentEpisodeData?.title || resolvedPlaylistVideo?.title || course.title}
-                    className="h-full w-full border-0 flex-1"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
-                  {/* شريط الإسناد ورابط الفتح المباشر عند تعذر تشغيل أي iframe في بعض المتصفحات أو الحجب */}
-                  <div className="flex items-center justify-between bg-stone-900/95 px-4 py-2 text-xs border-t border-stone-800 text-stone-300 shrink-0">
-                    <span className="text-[11px] text-stone-400 truncate max-w-[200px]">
-                      {currentEpisodeData?.title || `المجلس ${currentEpisodeIndex + 1}`}
-                    </span>
-                    {(directYouTubeUrl || playlistYouTubeUrl) && (
-                      <a
-                        href={directYouTubeUrl || playlistYouTubeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 transition"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        <span>فتح المقطع على YouTube مباشرة ↗</span>
-                      </a>
-                    )}
-                  </div>
-                </div>
               ) : (
                 <div className="relative aspect-video w-full flex flex-col items-center justify-center rounded-3xl border border-stone-800 bg-stone-950 p-6 text-center text-stone-400 space-y-3">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 border border-stone-800 text-amber-400">

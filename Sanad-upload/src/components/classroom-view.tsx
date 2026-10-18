@@ -53,16 +53,22 @@ import {
   ChevronUp,
   AlertCircle,
   ArrowUpRight,
+  ArrowLeft,
   GitBranch,
+  HelpCircle,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
 import { resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import ScholarlyStationsModal from '@/components/scholarly-stations-modal'
 import VerifiedDigitalIjaza from '@/components/verified-digital-ijaza'
+import CourseQuizModal from '@/components/course-quiz-modal'
 import { issueCourseCertificateAction } from '@/app/actions/certificate-actions'
 import { VerifiedCertificate } from '@/lib/certificate-service'
 import SanadPdfReaderModal from '@/components/sanad-pdf-reader-modal'
 import SanadVideoPlayer from '@/components/sanad-video-player'
+import SpacedRepetitionTab from '@/components/spaced-repetition-tab'
+import VerifiedSourcesTab from '@/components/verified-sources-tab'
+import MatnQuickBriefModal from '@/components/matn-quick-brief-modal'
 import {
   toggleCourseCompletion,
   addCourseNote,
@@ -104,7 +110,8 @@ export default function ClassroomView({
   isLoggedIn = false,
 }: ClassroomViewProps) {
   const [currentCourse, setCurrentCourse] = useState<MatnCourse>(course)
-  const [activeTab, setActiveTab] = useState<'notes' | 'ai'>('notes')
+  const [activeTab, setActiveTab] = useState<'notes' | 'ai' | 'spaced' | 'sources'>('notes')
+  const [isQuickBriefOpen, setIsQuickBriefOpen] = useState(false)
   const [isCompleted, setIsCompleted] = useState<boolean>(initialIsCompleted)
   const [notes, setNotes] = useState<NoteItem[]>(initialNotes)
   const [noteContent, setNoteContent] = useState('')
@@ -112,11 +119,6 @@ export default function ClassroomView({
   const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null)
   const [isCertModalOpen, setIsCertModalOpen] = useState<boolean>(false)
   const [showCelebrationToast, setShowCelebrationToast] = useState<boolean>(false)
-
-  // دعم التشغيل بدون إنترنت (PWA Offline Companion)
-  const [isSavedOffline, setIsSavedOffline] = useState(false)
-  const [offlineSaveToast, setOfflineSaveToast] = useState<string | null>(null)
-
   // نظام الإجازات والشهادات الرقمية الموثقة (Verified Digital Ijaza)
   const [isDirectIjazaOpen, setIsDirectIjazaOpen] = useState(false)
   const [directIjazaCert, setDirectIjazaCert] = useState<VerifiedCertificate | null>(null)
@@ -131,96 +133,33 @@ export default function ClassroomView({
   const hasUncompletedPrereqs = uncompletedPrerequisites.length > 0
   const allPrereqsDone = hasPrerequisites && uncompletedPrerequisites.length === 0
   const [isProgressionOpen, setIsProgressionOpen] = useState(true)
+  const [isQuizOpen, setIsQuizOpen] = useState(false)
 
-  // فحص هل المتن محفوظ أوفلاين
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sanad_offline_courses')
-      if (stored) {
-        const list = JSON.parse(stored)
-        if (list.some((c: any) => c.slug === course.slug)) {
-          setIsSavedOffline(true)
-        }
-      }
-    } catch {}
-  }, [course.slug])
-
-  // حفظ المتن ومجالسه للعمل بدون إنترنت
-  const handleSaveCourseOffline = async () => {
-    try {
-      const stored = localStorage.getItem('sanad_offline_courses')
-      const courses: any[] = stored ? JSON.parse(stored) : []
-      const existingIdx = courses.findIndex((c: any) => c.slug === currentCourse.slug)
-
-      const itemToSave = {
-        slug: currentCourse.slug,
-        title: currentCourse.title,
-        category: currentCourse.category,
-        instructor: currentCourse.instructor,
-        author: currentCourse.author,
-        totalEpisodes: currentCourse.episodes?.length || 1,
-        savedAt: new Date().toLocaleDateString('ar-SA'),
-      }
-
-      if (existingIdx >= 0) {
-        courses[existingIdx] = itemToSave
-      } else {
-        courses.push(itemToSave)
-      }
-
-      localStorage.setItem('sanad_offline_courses', JSON.stringify(courses))
-      setIsSavedOffline(true)
-
-      if (typeof window !== 'undefined' && 'caches' in window) {
-        try {
-          const cache = await caches.open('sanad-scholarly-cache-v1')
-          await cache.add(window.location.pathname)
-        } catch {}
-      }
-
-      setOfflineSaveToast(`تم حفظ متن «${currentCourse.title}» للعمل دون إنترنت بنجاح في المسجد والأسفار`)
-      setTimeout(() => setOfflineSaveToast(null), 5000)
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  // فتح وإصدار الإجازة الموثقة مباشرة
+  // فتح وإصدار الإجازة الموثقة مباشرة أو فحص استحقاقها عبر اختبار الضبط (80%)
   const handleOpenDirectIjaza = async () => {
-    setIsIssuingDirectIjaza(true)
-    try {
-      const studentName = 'طالب العلم'
-      const res = await issueCourseCertificateAction(currentCourse.slug, studentName)
-      if (res.success && res.certificate) {
-        setDirectIjazaCert(res.certificate)
-        setIsDirectIjazaOpen(true)
-        try {
-          const localCerts = localStorage.getItem('sanad_my_certificates')
-          const certsList = localCerts ? JSON.parse(localCerts) : []
-          if (!certsList.some((c: any) => c.id === res.certificate.id)) {
-            localStorage.setItem('sanad_my_certificates', JSON.stringify([res.certificate, ...certsList]))
-          }
-        } catch {}
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsIssuingDirectIjaza(false)
+    if (directIjazaCert) {
+      setIsDirectIjazaOpen(true)
+      return
     }
+    // فتح اختبار الضبط أولاً للتحقق العلمي قبل منح الإجازة
+    setIsQuizOpen(true)
   }
 
   // 1. أنماط المشغل الحديثة للمنصات التعليمية: cinema (المشغل المدمج للقاعة) أو audio (المشغل الصوتي عالي التركيز)
   const [playerMode, setPlayerMode] = useState<'cinema' | 'audio'>('cinema')
-  const [preferredVideoSource, setPreferredVideoSource] = useState<'direct' | 'youtube'>('direct')
+  const [preferredVideoSource, setPreferredVideoSource] = useState<'direct' | 'youtube'>('youtube')
   const [isTheaterExpanded, setIsTheaterExpanded] = useState(false) // وضع توسيع المسرح العريض (Full Width)
   const [autoAdvanceNext, setAutoAdvanceNext] = useState(true) // الانتقال التلقائي للمجلس التالي
   const [filterEpisodeQuery, setFilterEpisodeQuery] = useState('') // البحث في مجالس السلسلة
   const [mountedOrigin, setMountedOrigin] = useState('') // نطاق المصدر للتحقق من أمان التضمين
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.origin) {
-      setMountedOrigin(window.location.origin)
-    }
+    const t = setTimeout(() => {
+      if (typeof window !== 'undefined' && window.location.origin) {
+        setMountedOrigin(window.location.origin)
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // عداد مدارسة الدرس الحالي الحقيقي بالثواني
@@ -228,7 +167,10 @@ export default function ClassroomView({
 
   // مزامنة المتن مباشرة مع بيانات الخادم المعتمدة
   useEffect(() => {
-    setCurrentCourse(course)
+    const t = setTimeout(() => {
+      setCurrentCourse(course)
+    }, 0)
+    return () => clearTimeout(t)
   }, [course])
 
   // حالة الحفظ التلقائي (Auto-save)
@@ -280,39 +222,42 @@ export default function ClassroomView({
 
   // تحميل التقدم وموضع المشاهدة عند البدء
   useEffect(() => {
-    try {
-      const storedCompleted = localStorage.getItem('sanad_completed_courses')
-      if (storedCompleted) {
-        const list: string[] = JSON.parse(storedCompleted)
-        if (list.includes(currentCourse.slug)) {
-          setIsCompleted(true)
+    const t = setTimeout(() => {
+      try {
+        const storedCompleted = localStorage.getItem('sanad_completed_courses')
+        if (storedCompleted) {
+          const list: string[] = JSON.parse(storedCompleted)
+          if (list.includes(currentCourse.slug)) {
+            setIsCompleted(true)
+          }
         }
-      }
 
-      const storedPos = localStorage.getItem(`sanad_pos_${currentCourse.slug}`)
-      if (storedPos && Number(storedPos) > 30) {
-        setSavedPosition(Number(storedPos))
-        setShowResumePrompt(true)
-      }
+        const storedPos = localStorage.getItem(`sanad_pos_${currentCourse.slug}`)
+        if (storedPos && Number(storedPos) > 30) {
+          setSavedPosition(Number(storedPos))
+          setShowResumePrompt(true)
+        }
 
-      const storedEpisodes = localStorage.getItem(`sanad_episodes_${currentCourse.slug}`)
-      if (storedEpisodes) {
-        const parsed: number[] = JSON.parse(storedEpisodes)
-        setCompletedEpisodes((prev) => new Set([...Array.from(prev), ...parsed]))
-      }
+        const storedEpisodes = localStorage.getItem(`sanad_episodes_${currentCourse.slug}`)
+        if (storedEpisodes) {
+          const parsed: number[] = JSON.parse(storedEpisodes)
+          setCompletedEpisodes((prev) => new Set([...Array.from(prev), ...parsed]))
+        }
 
-      const storedNotes = localStorage.getItem(`sanad_notes_${currentCourse.slug}`)
-      if (storedNotes) {
-        const localNotes: NoteItem[] = JSON.parse(storedNotes)
-        setNotes((prev) => {
-          const existingIds = new Set(prev.map((n) => n.id))
-          const newUnique = localNotes.filter((n) => !existingIds.has(n.id))
-          return [...prev, ...newUnique]
-        })
+        const storedNotes = localStorage.getItem(`sanad_notes_${currentCourse.slug}`)
+        if (storedNotes) {
+          const localNotes: NoteItem[] = JSON.parse(storedNotes)
+          setNotes((prev) => {
+            const existingIds = new Set(prev.map((n) => n.id))
+            const newUnique = localNotes.filter((n) => !existingIds.has(n.id))
+            return [...prev, ...newUnique]
+          })
+        }
+      } catch {
+        // LocalStorage fallback
       }
-    } catch {
-      // LocalStorage fallback
-    }
+    }, 0)
+    return () => clearTimeout(t)
   }, [currentCourse.slug])
 
   const [isReversedOrder, setIsReversedOrder] = useState<boolean>(currentCourse.reversePlaylist || false)
@@ -449,10 +394,8 @@ export default function ClassroomView({
   const customEpVideoRaw = currentEpisodeData?.youtubeUrl || currentEpisodeData?.youtubeId || currentEpisodeData?.videoUrl
   const customEpVideoId = extractCustomVideoId(customEpVideoRaw)
 
-  // نطاق البث النشط (نستخدم نطاق youtube.com الأصلي لتمرير كوكيز المتصفح وتفادي روبوت التحقق)
-  const embedBaseDomain = 'https://www.youtube.com'
-
-  const originParam = mountedOrigin ? `&origin=${encodeURIComponent(mountedOrigin)}` : ''
+  // نطاق البث النشط: نستخدم youtube-nocookie.com لضمان التوافق مع كافة المتصفحات دون قيود الكوكيز
+  const embedBaseDomain = 'https://www.youtube-nocookie.com'
 
   let embedUrl = ''
   let directYouTubeUrl = ''
@@ -461,7 +404,7 @@ export default function ClassroomView({
   const resolvedPlaylistVideo = playlistVideos[effectiveEpisodeIndex]
 
   if (customEpVideoId) {
-    embedUrl = `${embedBaseDomain}/embed/${customEpVideoId}?rel=0&modestbranding=1&enablejsapi=1&playsinline=1${originParam}`
+    embedUrl = `${embedBaseDomain}/embed/${customEpVideoId}?rel=0&modestbranding=1&playsinline=1`
     directYouTubeUrl = customEpVideoRaw?.startsWith('http')
       ? customEpVideoRaw
       : `https://www.youtube.com/watch?v=${customEpVideoId}`
@@ -470,20 +413,20 @@ export default function ClassroomView({
     }
   } else if (currentCourse.videoList && currentCourse.videoList.length > 0) {
     const videoId = currentCourse.videoList[effectiveEpisodeIndex] || currentCourse.videoList[0]
-    embedUrl = `${embedBaseDomain}/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1&playsinline=1${originParam}`
+    embedUrl = `${embedBaseDomain}/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`
     directYouTubeUrl = `https://www.youtube.com/watch?v=${videoId}`
   } else if (resolvedPlaylistVideo?.id) {
     // تشغيل الفيديو الفعلي الحقيقي لهذا المجلس داخل قائمة التشغيل
     const vId = resolvedPlaylistVideo.id
-    embedUrl = `${embedBaseDomain}/embed/${vId}?list=${extractedListId}&index=${effectiveEpisodeIndex + 1}&rel=0&modestbranding=1&enablejsapi=1&playsinline=1${originParam}`
+    embedUrl = `${embedBaseDomain}/embed/${vId}?list=${extractedListId}&index=${effectiveEpisodeIndex + 1}&rel=0&modestbranding=1&playsinline=1`
     directYouTubeUrl = `https://www.youtube.com/watch?v=${vId}&list=${extractedListId}&index=${effectiveEpisodeIndex + 1}`
     playlistYouTubeUrl = `https://www.youtube.com/playlist?list=${extractedListId}`
   } else if (isPlaylist) {
-    embedUrl = `${embedBaseDomain}/embed/videoseries?list=${extractedListId}&index=${effectiveEpisodeIndex}&rel=0&modestbranding=1&enablejsapi=1&playsinline=1${originParam}`
+    embedUrl = `${embedBaseDomain}/embed/videoseries?list=${extractedListId}&index=${effectiveEpisodeIndex}&rel=0&modestbranding=1&playsinline=1`
     directYouTubeUrl = `https://www.youtube.com/watch?list=${extractedListId}&index=${effectiveEpisodeIndex + 1}`
     playlistYouTubeUrl = `https://www.youtube.com/playlist?list=${extractedListId}`
   } else {
-    embedUrl = `${embedBaseDomain}/embed/${extractedVideoId}?rel=0&modestbranding=1&enablejsapi=1&playsinline=1${originParam}`
+    embedUrl = `${embedBaseDomain}/embed/${extractedVideoId}?rel=0&modestbranding=1&playsinline=1`
     directYouTubeUrl = `https://www.youtube.com/watch?v=${extractedVideoId}`
   }
 
@@ -494,6 +437,14 @@ export default function ClassroomView({
     (isDirectVideoUrl(currentCourse.youtubeId) ? currentCourse.youtubeId : undefined)
 
   const isDirectUploadedVideo = Boolean(rawVideoUrl)
+
+  const effectiveYouTubeId =
+    customEpVideoId ||
+    (currentCourse.videoList && currentCourse.videoList.length > 0
+      ? currentCourse.videoList[effectiveEpisodeIndex] || currentCourse.videoList[0]
+      : undefined) ||
+    resolvedPlaylistVideo?.id ||
+    extractedVideoId
 
 
   // ===================== المشغل الصوتي المتقدم (HTML5 Audio) =====================
@@ -849,24 +800,28 @@ export default function ClassroomView({
           </div>
         </div>
 
-        {/* أزرار العمل بدون إنترنت والإجازة والشهادة الموثقة */}
+        {/* زر الإجازة والشهادة الموثقة + زر المراجعة السريعة والخلاصة */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* زر حفظ المتن للمدارسة بلا إنترنت في المسجد والسفر */}
           <button
             type="button"
-            onClick={handleSaveCourseOffline}
-            className={`inline-flex items-center gap-1.5 rounded-2xl px-3.5 py-2 text-xs font-bold transition cursor-pointer border ${
-              isSavedOffline
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700'
-                : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 dark:text-stone-300 dark:border-stone-700'
-            }`}
-            title="حفظ المتن ومجالسه للعمل بدون إنترنت في المساجد والأسفار"
+            onClick={() => setIsQuickBriefOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-amber-50/80 px-3.5 py-2 text-xs font-black text-amber-950 hover:bg-amber-100 hover:border-amber-400 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+            title="عرض أهم مسائل ومقاصد المتن وطريقة ضبطه الموصى بها"
           >
-            <DownloadCloud className="h-4 w-4" />
-            <span>{isSavedOffline ? 'محفوظ للمسجد والسفر ✅' : 'حفظ المتن بلا نت 📥'}</span>
+            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <span>خلاصة ومراجعة سريعة ⚡</span>
           </button>
 
-          {/* زر الإجازة والشهادة الموثقة برمز QR وكود تجزئة */}
+          <button
+            type="button"
+            onClick={() => setIsQuizOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-300/80 bg-emerald-50/80 px-3.5 py-2 text-xs font-black text-emerald-950 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+            title="اختبار ضبط مسائل المتن واستحقاق الإجازة الموثقة (نسبة الاجتياز 80%)"
+          >
+            <HelpCircle className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+            <span>اختبار الضبط 📝</span>
+          </button>
+
           <button
             type="button"
             onClick={handleOpenDirectIjaza}
@@ -879,14 +834,6 @@ export default function ClassroomView({
           </button>
         </div>
       </div>
-
-      {/* إشعار حفظ المتن في وضع عدم الاتصال */}
-      {offlineSaveToast && (
-        <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-xs font-bold text-emerald-950 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 flex items-center gap-2">
-          <DownloadCloud className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span>{offlineSaveToast}</span>
-        </div>
-      )}
 
       {/* تنبيه استئناف موضع المشاهدة */}
       {showResumePrompt && savedPosition && (
@@ -945,7 +892,7 @@ export default function ClassroomView({
                     ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
                     : 'bg-teal-50 text-teal-900 border-teal-300 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800'
                 }`}>
-                  {progression.stageLabel}
+                  {progression.stageName}
                 </span>
                 {hasUncompletedPrereqs && (
                   <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-950 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 animate-pulse">
@@ -1043,7 +990,7 @@ export default function ClassroomView({
                                 </span>
                               )}
                             </div>
-                            {prereq.isHostedOnPlatform && prereq.slug ? (
+                            {prereq.isAvailableOnPlatform && prereq.slug ? (
                               <Link
                                 href={`/courses/${prereq.slug}`}
                                 className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
@@ -1094,7 +1041,7 @@ export default function ClassroomView({
                       «{currentCourse.title}»
                     </h4>
                     <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-1 font-medium leading-relaxed">
-                      {progression.pedagogicalRole || currentCourse.description || 'متن معتمد في السلم التأصيلي.'}
+                      {currentCourse.pedagogicalRole || currentCourse.description || 'متن معتمد في السلم التأصيلي.'}
                     </p>
                   </div>
                 </div>
@@ -1129,7 +1076,7 @@ export default function ClassroomView({
                           <p className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">
                             خطوتك المنهجية التالية بعد استكمال وضبط هذا المتن
                           </p>
-                          {nextCourse.isHostedOnPlatform && nextCourse.slug ? (
+                          {nextCourse.isAvailableOnPlatform && nextCourse.slug ? (
                             <Link
                               href={`/courses/${nextCourse.slug}`}
                               className="inline-flex items-center gap-1 text-[11px] font-black text-teal-800 hover:text-teal-950 transition dark:text-teal-400"
@@ -1246,35 +1193,6 @@ export default function ClassroomView({
                   )}
                 </button>
 
-                {/* زر التبديل بين بث سَنَد وبث YouTube لو كلاهما متاح */}
-                {isDirectUploadedVideo && embedUrl && (customEpVideoId || extractedListId || extractedVideoId) && (
-                  <div className="inline-flex items-center rounded-xl border border-stone-200 bg-white p-0.5 dark:border-stone-800 dark:bg-stone-900">
-                    <button
-                      type="button"
-                      onClick={() => setPreferredVideoSource('direct')}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                        preferredVideoSource === 'direct'
-                          ? 'bg-emerald-900 text-white dark:bg-emerald-800 shadow-xs'
-                          : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Video className="h-3 w-3" />
-                      <span>فيديو سَنَد</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreferredVideoSource('youtube')}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                        preferredVideoSource === 'youtube'
-                          ? 'bg-red-900 text-white dark:bg-red-800 shadow-xs'
-                          : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Play className="h-3 w-3 fill-current text-red-400" />
-                      <span>YouTube</span>
-                    </button>
-                  </div>
-                )}
 
                 {/* زر المشغل الصوتي إذا وُجد */}
                 {activeAudioSource && (
@@ -1298,11 +1216,13 @@ export default function ClassroomView({
           {/* ===================== الحاوية البصرية لمشغل الفيديو ===================== */}
           {playerMode === 'cinema' && (
             <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl shadow-stone-900/10 dark:shadow-stone-950/70 border border-stone-200/60 dark:border-stone-800">
-              {isDirectUploadedVideo && rawVideoUrl && preferredVideoSource !== 'youtube' ? (
+              {rawVideoUrl || effectiveYouTubeId || embedUrl ? (
                 <SanadVideoPlayer
-                  key={`${rawVideoUrl}-${currentEpisodeIndex}`}
-                  src={rawVideoUrl}
-                  title={currentEpisodeData?.title || `المجلس ${currentEpisodeIndex + 1}`}
+                  key={`sanad-player-${rawVideoUrl || effectiveYouTubeId || embedUrl}-${currentEpisodeIndex}`}
+                  src={rawVideoUrl || undefined}
+                  youtubeId={effectiveYouTubeId || undefined}
+                  youtubeUrl={directYouTubeUrl || embedUrl || undefined}
+                  title={currentEpisodeData?.title || resolvedPlaylistVideo?.title || `المجلس ${currentEpisodeIndex + 1}`}
                   subtitle={`«${currentCourse.title}» • ${currentCourse.instructor || 'الشارح المعتمد'}`}
                   currentEpisodeIndex={currentEpisodeIndex}
                   totalLessonsCount={totalLessonsCount}
@@ -1333,36 +1253,6 @@ export default function ClassroomView({
                   isTheaterExpanded={isTheaterExpanded}
                   onToggleTheaterExpanded={() => setIsTheaterExpanded(!isTheaterExpanded)}
                 />
-              ) : embedUrl && (customEpVideoId || extractedListId || extractedVideoId) ? (
-                <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 shadow-2xl shadow-stone-950/40 flex flex-col">
-                  {/* شريط توضيح البث الاحتياطي مع زر العودة لمشغل سَنَد لو كان هناك فيديو مباشر */}
-                  {isDirectUploadedVideo && rawVideoUrl && (
-                    <div className="flex items-center justify-between bg-stone-900/95 border-b border-stone-800 px-4 py-2 text-xs z-10">
-                      <span className="flex items-center gap-1.5 text-stone-300 font-medium">
-                        <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                        أنت تشاهد حالياً عبر البث الاحتياطي على YouTube
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreferredVideoSource('direct')}
-                        className="inline-flex items-center gap-1 font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 px-3 py-1 rounded-lg transition cursor-pointer"
-                      >
-                        <Video className="h-3 w-3" />
-                        العودة لمشغل سَنَد المباشر
-                      </button>
-                    </div>
-                  )}
-                  <iframe
-                    ref={youtubeIframeRef}
-                    key={`${embedUrl}-${currentEpisodeIndex}-${isReversedOrder}`}
-                    src={embedUrl}
-                    title={currentEpisodeData?.title || resolvedPlaylistVideo?.title || course.title}
-                    className="h-full w-full border-0 flex-1"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; presentation"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    allowFullScreen
-                  />
-                </div>
               ) : (
                 <div className="relative aspect-video w-full flex flex-col items-center justify-center rounded-3xl border border-stone-800 bg-stone-950 p-6 text-center text-stone-400 space-y-3">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 border border-stone-800 text-amber-400">
@@ -1641,7 +1531,9 @@ export default function ClassroomView({
                         <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" title="فيديو سَنَد مباشر" />
                       )}
                       {hasAudio && (
-                        <Headphones className="h-3 w-3 text-emerald-600 shrink-0" title="تتوفر صوتية MP3" />
+                        <span title="تتوفر صوتية MP3">
+                          <Headphones className="h-3 w-3 text-emerald-600 shrink-0" />
+                        </span>
                       )}
                     </button>
                   )
@@ -1656,7 +1548,6 @@ export default function ClassroomView({
                   onClick={() => {
                     const prev = Math.max(0, currentEpisodeIndex - 1)
                     setCurrentEpisodeIndex(prev)
-                    if (playerMode === 'theater') setTimeout(handleOpenTheaterWindow, 200)
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-3 py-1.5 text-stone-700 hover:border-emerald-800 hover:text-emerald-900 disabled:opacity-30 dark:border-stone-700 dark:text-stone-300 cursor-pointer"
                 >
@@ -1674,7 +1565,6 @@ export default function ClassroomView({
                   onClick={() => {
                     const next = Math.min(totalLessonsCount - 1, currentEpisodeIndex + 1)
                     setCurrentEpisodeIndex(next)
-                    if (playerMode === 'theater') setTimeout(handleOpenTheaterWindow, 200)
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-3 py-1.5 text-stone-700 hover:border-emerald-800 hover:text-emerald-900 disabled:opacity-30 dark:border-stone-700 dark:text-stone-300 cursor-pointer"
                 >
@@ -1740,29 +1630,57 @@ export default function ClassroomView({
         {/* لوحة الأدوات والكشكول: كشكول الفوائد + صاحبك في الطلب (تتسع أو تلتصق بجانب المشغل) */}
         <div className={`flex flex-col rounded-3xl border border-stone-200/90 bg-white/95 shadow-sm overflow-hidden h-[680px] dark:border-stone-800 dark:bg-stone-900/95 transition-all duration-300 ${isTheaterExpanded ? 'lg:col-span-12' : 'lg:col-span-4'}`}>
           {/* شريط تبويبات الأدوات */}
-          <div className="flex border-b border-stone-200 bg-stone-50/70 p-1.5 text-xs font-bold dark:border-stone-800 dark:bg-stone-800/60">
+          <div className="grid grid-cols-4 border-b border-stone-200 bg-stone-50/70 p-1 text-[11px] font-bold dark:border-stone-800 dark:bg-stone-800/60 gap-1">
             <button
               onClick={() => setActiveTab('notes')}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl py-2.5 transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1 rounded-xl py-2 transition-all cursor-pointer truncate ${
                 activeTab === 'notes'
                   ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300'
                   : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
               }`}
+              title="كشكول الفوائد"
             >
-              <FileText className="h-4 w-4 text-amber-600" />
-              <span>كشكول الفوائد ({notes.length})</span>
+              <FileText className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <span className="truncate">الفوائد ({notes.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('ai')}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl py-2.5 transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1 rounded-xl py-2 transition-all cursor-pointer truncate ${
                 activeTab === 'ai'
                   ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300'
                   : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
               }`}
+              title="صاحبك في الطلب"
             >
-              <Bot className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-              <span>صاحبك في الطلب</span>
+              <Bot className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400 shrink-0" />
+              <span className="truncate">المساعد</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('spaced')}
+              className={`flex items-center justify-center gap-1 rounded-xl py-2 transition-all cursor-pointer truncate ${
+                activeTab === 'spaced'
+                  ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300'
+                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+              }`}
+              title="تعاهد المحفوظ والمراجعة المتباعدة"
+            >
+              <Clock className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+              <span className="truncate">التعاهد ⏳</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('sources')}
+              className={`flex items-center justify-center gap-1 rounded-xl py-2 transition-all cursor-pointer truncate ${
+                activeTab === 'sources'
+                  ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300'
+                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+              }`}
+              title="التوثيق العلمي وتخريج المصادر"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">المصادر 📜</span>
             </button>
           </div>
 
@@ -1971,6 +1889,19 @@ export default function ClassroomView({
                 </form>
               </div>
             )}
+
+            {/* التبويب 3: تعاهد المحفوظ والمراجعة المتباعدة */}
+            {activeTab === 'spaced' && (
+              <SpacedRepetitionTab
+                course={currentCourse}
+                currentEpisodeIndex={currentEpisodeIndex}
+              />
+            )}
+
+            {/* التبويب 4: التوثيق العلمي وتخريج المصادر المعتمدة */}
+            {activeTab === 'sources' && (
+              <VerifiedSourcesTab course={currentCourse} />
+            )}
           </div>
         </div>
       </div>
@@ -2030,6 +1961,31 @@ export default function ClassroomView({
           author={currentCourse.author}
         />
       )}
+
+      {/* نافذة اختبار التحقق والضبط المنهجي (حد الاجتياز 80%) */}
+      <CourseQuizModal
+        course={currentCourse}
+        studentName="طالب العلم"
+        isOpen={isQuizOpen}
+        onClose={() => setIsQuizOpen(false)}
+        onCertificationIssued={(cert) => {
+          setDirectIjazaCert(cert)
+          try {
+            const localCerts = localStorage.getItem('sanad_my_certificates')
+            const certsList = localCerts ? JSON.parse(localCerts) : []
+            if (!certsList.some((c: { id?: string }) => c?.id === cert.id)) {
+              localStorage.setItem('sanad_my_certificates', JSON.stringify([cert, ...certsList]))
+            }
+          } catch {}
+        }}
+      />
+
+      {/* نافذة المراجعة السريعة وأهم مسائل المتن */}
+      <MatnQuickBriefModal
+        course={currentCourse}
+        isOpen={isQuickBriefOpen}
+        onClose={() => setIsQuickBriefOpen(false)}
+      />
     </div>
   )
 }
