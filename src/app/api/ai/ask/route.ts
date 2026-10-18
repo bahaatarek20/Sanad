@@ -483,14 +483,12 @@ export async function POST(req: Request) {
 
     let liveAiReply: string | null = null
 
-    // 5. محاولة الاتصال بـ Google Gemini API إذا وُجد المفتاح
+    // 5. محاولة الاتصال بـ Google Gemini API بنماذجه الرسمية المعتمدة
     if (apiKey) {
       const modelsToTry = [
-        'gemini-3.8-flash',
-        'gemini-2.5-flash',
-        'gemini-3.8-pro',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
+        'gemini-1.5-pro',
       ]
 
       for (const model of modelsToTry) {
@@ -498,44 +496,6 @@ export async function POST(req: Request) {
         if (liveAiReply) {
           break
         }
-      }
-    }
-
-    // 6. إذا لم يتوفر مفتاح أو فشل Gemini، استخدام محرك الذكاء الاصطناعي الحي الذكي (Live Agent) لمنع أي ردود ثابتة
-    if (!liveAiReply) {
-      try {
-        const historyList = Array.isArray(history)
-          ? history.slice(-8).map((h) => ({
-              role: h.role === 'user' ? 'user' : 'assistant',
-              content: String(h.text || ''),
-            }))
-          : []
-
-        const pollRes = await fetch('https://text.pollinations.ai/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemContext },
-              ...historyList,
-              { role: 'user', content: question },
-            ],
-            model: 'openai',
-            seed: Math.floor(Math.random() * 100000),
-            temperature,
-          }),
-        })
-
-        if (pollRes.ok) {
-          const pollText = await pollRes.text()
-          if (pollText && pollText.trim()) {
-            liveAiReply = pollText.trim()
-          }
-        }
-      } catch (pollErr) {
-        console.warn('[Sanad AI] Pollinations live fallback warning:', pollErr)
       }
     }
 

@@ -509,8 +509,23 @@ function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
 export function recordVisitorHit(options?: { isOwner?: boolean }): number {
   try {
     ensureDataFiles()
-    const content = fs.readFileSync(STATS_FILE, 'utf8')
-    const stats: PlatformStats = JSON.parse(content)
+    let stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: 0,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: new Date().toISOString(),
+    }
+
+    try {
+      const raw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      stats = { ...stats, ...JSON.parse(raw) }
+    } catch {}
 
     // إذا كان الزائر هو صاحب المنصة / المشرف العام، لا يتم احتسابه نهائياً
     if (options?.isOwner) {
@@ -519,7 +534,13 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
 
     stats.totalVisitors = (stats.totalVisitors || 0) + 1
     stats.lastUpdated = new Date().toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
     try {
       fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
     } catch {}
@@ -541,11 +562,40 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
 export function resetVisitorCount(targetCount: number = 0): number {
   try {
     ensureDataFiles()
-    const content = fs.readFileSync(STATS_FILE, 'utf8')
-    const stats: PlatformStats = JSON.parse(content)
+    let stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: 0,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: new Date().toISOString(),
+    }
+
+    try {
+      const raw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      stats = { ...stats, ...JSON.parse(raw) }
+    } catch {}
+
     stats.totalVisitors = Math.max(0, targetCount)
     stats.lastUpdated = new Date().toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
+
     return stats.totalVisitors
   } catch {
     return 0
@@ -706,6 +756,7 @@ export function registerOrUpdateStudent(
   email: string,
   name?: string,
   meta?: {
+    id?: string
     phone?: string
     authProvider?: 'email' | 'google' | 'phone'
     avatarUrl?: string
@@ -727,6 +778,9 @@ export function registerOrUpdateStudent(
   const studentName = name?.trim() || cleanEmail.split('@')[0]
 
   if (existingIdx >= 0) {
+    if (meta?.id && (!students[existingIdx].id || students[existingIdx].id.startsWith('student_'))) {
+      students[existingIdx].id = meta.id
+    }
     if (name && name.trim()) {
       students[existingIdx].name = studentName
     }
@@ -782,7 +836,7 @@ export function registerOrUpdateStudent(
   } else {
     const scholarlyId = generateScholarlyId(students)
     const newStudent: StudentActivityRecord = {
-      id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: meta?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       scholarlyId,
       email: cleanEmail,
       name: studentName,
@@ -825,11 +879,28 @@ export function registerOrUpdateStudent(
       .catch(() => {})
 
     try {
-      const statsRaw = fs.readFileSync(STATS_FILE, 'utf8')
-      const stats: PlatformStats = JSON.parse(statsRaw)
+      const statsRaw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      const stats: PlatformStats = {
+        totalVisitors: 0,
+        totalRegisteredStudents: students.length,
+        totalStudyMinutes: 0,
+        totalNotesCount: 0,
+        totalCompletedCoursesCount: 0,
+        lastUpdated: now,
+        ...JSON.parse(statsRaw),
+      }
       stats.totalRegisteredStudents = students.length
       stats.lastUpdated = now
-      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      try {
+        fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      } catch {}
+      try {
+        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      } catch {}
     } catch {}
 
     logPlatformEvent({
@@ -848,9 +919,8 @@ export function getStudentProfileData(email: string): StudentActivityRecord | nu
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const raw = fs.readFileSync(REGISTRY_FILE, 'utf8')
-    const students: StudentActivityRecord[] = JSON.parse(raw)
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (student) {
       return {
         ...student,
@@ -879,19 +949,13 @@ export function recordStudentListeningHeartbeat(
 ): { totalMinutes: number; todayMinutes: number; streak: number } {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    students = []
-  }
-
-  let student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) {
     student = registerOrUpdateStudent(cleanEmail)
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    student = students.find((s) => s.email === cleanEmail) || student
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
 
   const now = new Date()
@@ -918,15 +982,39 @@ export function recordStudentListeningHeartbeat(
   }
   student.lastStudiedDate = todayStr
 
-  // حفظ السجل
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  // حفظ السجل في كافة المخازن المحلية والسحابية
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   // تحديث إحصائيات المنصة العامة
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now.toISOString(),
+      ...JSON.parse(rawStats),
+    }
     stats.totalStudyMinutes = (stats.totalStudyMinutes || 0) + addedMinutes
     stats.lastUpdated = now.toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
   } catch {}
 
   return {
@@ -945,19 +1033,13 @@ export function recordStudentEpisodeToggle(
 ): number[] {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return []
-  }
-
-  let student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) {
     student = registerOrUpdateStudent(cleanEmail)
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    student = students.find((s) => s.email === cleanEmail) || student
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
 
   student.completedEpisodesMap = student.completedEpisodesMap || {}
@@ -970,12 +1052,8 @@ export function recordStudentEpisodeToggle(
   }
 
   student.lastActive = new Date().toISOString()
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   return student.completedEpisodesMap[courseSlug]
 }
@@ -990,15 +1068,14 @@ export function recordStudentListeningSession(
 ) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  if (!student) {
+    student = registerOrUpdateStudent(cleanEmail)
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
-
-  const student = students.find((s) => s.email === cleanEmail)
   if (!student) return
 
   const now = new Date()
@@ -1053,18 +1130,37 @@ export function recordStudentListeningSession(
     })
   }
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now.toISOString(),
+      ...JSON.parse(rawStats),
+    }
     stats.totalStudyMinutes = (stats.totalStudyMinutes || 0) + durationMinutes
     stats.lastUpdated = now.toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
   } catch {}
 }
 
@@ -1077,15 +1173,9 @@ export function recordStudentCourseCompleted(
 ) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
-  }
-
-  const student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) return
 
   const now = new Date().toISOString()
@@ -1110,20 +1200,34 @@ export function recordStudentCourseCompleted(
     student.completedCourses = student.completedCourses.filter((s) => s !== courseSlug)
   }
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   // تحديث إجمالي المتون المكتملة على المنصة
   try {
     const totalCompleted = students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0)
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalCompletedCoursesCount = totalCompleted
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 }
 
@@ -1131,33 +1235,41 @@ export function recordStudentCourseCompleted(
 export function recordStudentNoteAdded(email: string) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
-  }
-
-  const student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) return
 
   const now = new Date().toISOString()
   student.lastActive = now
   student.notesCount = (student.notesCount || 0) + 1
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalNotesCount = (stats.totalNotesCount || 0) + 1
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 
   logPlatformEvent({
@@ -1175,15 +1287,14 @@ export function saveStudentLocalNote(
 ): LocalStudentNote | null {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return null
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  if (!student) {
+    student = registerOrUpdateStudent(cleanEmail)
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
-
-  const student = students.find((s) => s.email === cleanEmail)
   if (!student) return null
 
   if (!Array.isArray(student.savedNotes)) {
@@ -1213,13 +1324,32 @@ export function saveStudentLocalNote(
   student.notesCount = student.savedNotes.length
   student.lastActive = now
 
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalNotesCount = (stats.totalNotesCount || 0) + 1
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 
   logPlatformEvent({
@@ -1238,8 +1368,8 @@ export function getStudentLocalNotes(email?: string, courseSlug?: string): Local
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const students: StudentActivityRecord[] = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student || !Array.isArray(student.savedNotes)) return []
     if (courseSlug) {
       return student.savedNotes.filter((n) => n.courseSlug === courseSlug)
@@ -1256,15 +1386,16 @@ export function deleteStudentLocalNote(email: string, noteId: string): boolean {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const students: StudentActivityRecord[] = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student || !Array.isArray(student.savedNotes)) return false
 
     const initialLen = student.savedNotes.length
     student.savedNotes = student.savedNotes.filter((n) => n.id !== noteId)
     if (student.savedNotes.length !== initialLen) {
       student.notesCount = student.savedNotes.length
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+      saveAllLocalStudents(students)
+      saveStudentToCloud(student).catch(() => {})
       return true
     }
     return false
@@ -1554,15 +1685,9 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
   ensureDataFiles()
   const cleanCurrentEmail = currentStudentEmail?.toLowerCase().trim() || ''
 
-  let registeredStudents: StudentActivityRecord[] = []
-  try {
-    const raw = fs.readFileSync(REGISTRY_FILE, 'utf8')
-    registeredStudents = JSON.parse(raw)
-  } catch {
-    registeredStudents = []
-  }
+  const registeredStudents = readAllLocalStudents(false)
 
-  // نماذج محفزة ورفقاء مدارسة ملهمون لتكون المنافسة حية ونشطة دائماً
+  // نماذج محفزة ورفقاء مدارسة ملهمون لتكون المنافسة حية وميسرة دائماً
   const inspiringPeers: Array<{
     id: string
     name: string
@@ -1576,64 +1701,37 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
       id: 'peer_1',
       name: 'أحمد بن عبد الرحمن',
       email: 'ahmed.taseel@sanad.edu',
-      totalStudyMinutes: 720,
-      streak: 14,
-      completedCourses: ['bidayat-al-mutafaqqih', '40-hadith-nawawi-1', 'al-ajrumiyyah'],
-      notesCount: 24,
+      totalStudyMinutes: 45,
+      streak: 3,
+      completedCourses: ['bidayat-al-mutafaqqih'],
+      notesCount: 5,
     },
     {
       id: 'peer_2',
       name: 'أبو عبد الله الأندلسي',
       email: 'andalusi@sanad.edu',
-      totalStudyMinutes: 540,
-      streak: 11,
-      completedCourses: ['three-principles', 'al-waraqat'],
-      notesCount: 18,
+      totalStudyMinutes: 30,
+      streak: 2,
+      completedCourses: ['three-principles'],
+      notesCount: 4,
     },
     {
       id: 'peer_3',
       name: 'أم سلمة البغدادية',
       email: 'ummsalamah@sanad.edu',
-      totalStudyMinutes: 420,
-      streak: 9,
-      completedCourses: ['al-ajrumiyyah', '40-hadith-nawawi-1'],
-      notesCount: 22,
+      totalStudyMinutes: 20,
+      streak: 2,
+      completedCourses: ['al-ajrumiyyah'],
+      notesCount: 3,
     },
     {
       id: 'peer_4',
       name: 'أنس بن مالك البصري',
       email: 'anas.basri@sanad.edu',
-      totalStudyMinutes: 320,
-      streak: 7,
-      completedCourses: ['40-hadith-nawawi-1'],
-      notesCount: 12,
-    },
-    {
-      id: 'peer_5',
-      name: 'يحيى بن يحيى الليثي',
-      email: 'yahya.laythi@sanad.edu',
-      totalStudyMinutes: 240,
-      streak: 5,
-      completedCourses: ['bidayat-al-mutafaqqih'],
-      notesCount: 9,
-    },
-    {
-      id: 'peer_6',
-      name: 'معاذ الشامي',
-      email: 'muadh.shami@sanad.edu',
-      totalStudyMinutes: 150,
-      streak: 4,
+      totalStudyMinutes: 15,
+      streak: 1,
       completedCourses: [],
-      notesCount: 6,
-    },
-    {
-      id: 'peer_7',
-      name: 'طالب علم سائر بالهمة',
-      email: 'talib.himmah@sanad.edu',
-      totalStudyMinutes: 85,
-      streak: 3,
-      completedCourses: [],
-      notesCount: 4,
+      notesCount: 2,
     },
   ]
 

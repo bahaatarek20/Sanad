@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { recordVisitorHit, registerOrUpdateStudent } from '@/lib/student-tracking'
+import { recordVisitorHit, registerOrUpdateStudent, ADMIN_EMAILS } from '@/lib/student-tracking'
 import { verifySessionToken } from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 const EXCLUDED_ADMIN_EMAILS = [
-  'bhaaljml480@gmail.com',
-  'bhaaljml48@gmail.com',
-  'bhaaljml66@gmail.com',
-]
+  ...ADMIN_EMAILS,
+  (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim(),
+].filter(Boolean)
 
 export async function POST(request: NextRequest) {
   try {

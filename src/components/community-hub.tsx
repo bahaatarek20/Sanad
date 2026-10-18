@@ -30,6 +30,8 @@ export interface CommunityReply {
   id: string
   post_id: string
   anonymous_alias: string
+  author_role?: 'student' | 'admin'
+  author_scholarly_id?: string
   content: string
   created_at: string
 }
@@ -37,6 +39,8 @@ export interface CommunityReply {
 export interface CommunityPost {
   id: string
   anonymous_alias: string
+  author_role?: 'student' | 'admin'
+  author_scholarly_id?: string
   course_slug?: string | null
   post_type: 'question' | 'summary' | 'benefit'
   content: string
@@ -521,12 +525,25 @@ export default function CommunityHub({
                 <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-900 font-bold text-xs ring-1 ring-amber-300/40 dark:bg-amber-950 dark:text-amber-200">
-                      📖
+                      {post.author_role === 'admin' || post.anonymous_alias?.includes('مشرف عام') ? '🛡️' : '📖'}
                     </div>
                     <div>
-                      <span className="text-xs font-black text-stone-900 dark:text-white block">
-                        {post.anonymous_alias}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-black text-stone-900 dark:text-white block">
+                          {post.anonymous_alias}
+                        </span>
+                        {(post.author_role === 'admin' || post.anonymous_alias?.includes('مشرف عام')) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded-md dark:bg-amber-950 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800">
+                            <ShieldCheck className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                            <span>مشرف المنصة</span>
+                          </span>
+                        )}
+                        {post.author_scholarly_id && (
+                          <span className="text-[10px] font-mono text-stone-400">
+                            [{post.author_scholarly_id}]
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-stone-400">
                         {new Date(post.created_at).toLocaleDateString('ar-EG', {
                           month: 'short',
@@ -596,9 +613,17 @@ export default function CommunityHub({
                             className="rounded-xl border border-stone-200 bg-white p-3 text-xs dark:border-stone-700 dark:bg-stone-800"
                           >
                             <div className="flex items-center justify-between text-[10px] text-stone-400 mb-1">
-                              <span className="font-bold text-emerald-900 dark:text-emerald-400">
-                                {reply.anonymous_alias}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`font-bold ${reply.author_role === 'admin' || reply.anonymous_alias?.includes('مشرف عام') ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-900 dark:text-emerald-400'}`}>
+                                  {reply.anonymous_alias}
+                                </span>
+                                {(reply.author_role === 'admin' || reply.anonymous_alias?.includes('مشرف عام')) && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded dark:bg-amber-950 dark:text-amber-300">
+                                    <ShieldCheck className="h-2.5 w-2.5 text-amber-600" />
+                                    <span>مشرف</span>
+                                  </span>
+                                )}
+                              </div>
                               <span>
                                 {new Date(reply.created_at).toLocaleTimeString('ar-EG', {
                                   hour: '2-digit',

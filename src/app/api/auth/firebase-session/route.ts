@@ -84,12 +84,23 @@ export async function POST(request: NextRequest) {
     const fullName =
       (verifiedGoogleUser.displayName || '').trim() ||
       (phone ? `طالب العلم (${phone})` : email.split('@')[0])
-    const avatarUrl = verifiedGoogleUser.photoUrl
-    const provider = phone && !verifiedGoogleUser.email ? 'phone' : (authProvider === 'phone' ? 'phone' : 'google')
+    const provider: 'google' | 'phone' | 'email' =
+      phone && !verifiedGoogleUser.email
+        ? 'phone'
+        : authProvider === 'phone'
+        ? 'phone'
+        : authProvider === 'email'
+        ? 'email'
+        : verifiedGoogleUser.email?.includes('@gmail.com')
+        ? 'google'
+        : 'email'
+
+    const avatarUrl = verifiedGoogleUser.photoUrl || undefined
     const clientTelemetry = extractClientTelemetry(request.headers)
 
-    // 3. تسجيل أو تحديث سجل الطالب في المنصة وسحابة Firestore مع البيانات الجغرافية
+    // 3. تسجيل أو تحديث سجل الطالب في المنصة وسحابة Firestore مع ربط المعرف الرسمي
     const student = registerOrUpdateStudent(email, fullName, {
+      id: verifiedGoogleUser.localId,
       phone,
       authProvider: provider,
       avatarUrl,
@@ -104,6 +115,8 @@ export async function POST(request: NextRequest) {
         fullName,
         provider === 'phone'
           ? `تم توثيق الدخول بنجاح عبر رسالة SMS على هاتفك [${phone}]`
+          : provider === 'email'
+          ? `تم توثيق الدخول بالبريد الإلكتروني المعتمد بنجاح`
           : `تم توثيق الدخول بحساب Google الرسمي المعتمد بنجاح`
       )
     } catch {}

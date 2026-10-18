@@ -11,12 +11,51 @@ import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getStudentProfileData } from '@/lib/student-tracking'
 import type { CommunityPost } from '@/components/community-hub'
 
-function generateAnonymousAlias(scholarlyId?: string): string {
-  if (scholarlyId && /^\d+$/.test(scholarlyId)) {
-    return `طالب علم #${scholarlyId}`
+function generateAuthorIdentity(profile?: {
+  scholarlyId?: string
+  role?: 'student' | 'admin'
+  name?: string
+  email?: string
+} | null): {
+  alias: string
+  role: 'student' | 'admin'
+  scholarlyId?: string
+} {
+  if (profile) {
+    const adminEmails = [
+      'bhaaljml480@gmail.com',
+      'bhaaljml48@gmail.com',
+      'bhaaljml66@gmail.com',
+      'bhaaljml3@gmail.com',
+      'bhaaljml62@gmail.com',
+    ]
+    const isAdmin =
+      profile.role === 'admin' ||
+      Boolean(profile.email && adminEmails.includes(profile.email.toLowerCase().trim()))
+
+    if (isAdmin) {
+      return {
+        alias: '🛡️ مشرف عام المنصة',
+        role: 'admin',
+        scholarlyId: profile.scholarlyId,
+      }
+    }
+
+    if (profile.scholarlyId) {
+      const displayId = profile.scholarlyId.replace(/^SND-/, '')
+      return {
+        alias: `طالب علم #${displayId}`,
+        role: 'student',
+        scholarlyId: profile.scholarlyId,
+      }
+    }
   }
+
   const randomNumber = Math.floor(100 + Math.random() * 900)
-  return `طالب علم #${randomNumber}`
+  return {
+    alias: `طالب علم #${randomNumber}`,
+    role: 'student',
+  }
 }
 
 export async function GET() {
@@ -86,18 +125,31 @@ export async function POST(request: Request) {
     }
 
     // تحديد الهوية العلمية: إما الحساب الموثق أو معرف رمزي تلقائي
-    let anonymousAlias = guestAlias
+    let authorIdentity = generateAuthorIdentity()
     const studentUser = await getCurrentStudentUser()
     if (studentUser && studentUser.email) {
       const profile = getStudentProfileData(studentUser.email)
-      anonymousAlias = generateAnonymousAlias(profile?.scholarlyId)
-    }
-    if (!anonymousAlias) {
-      anonymousAlias = generateAnonymousAlias()
+      authorIdentity = generateAuthorIdentity(
+        profile
+          ? {
+              scholarlyId: profile.scholarlyId,
+              role: profile.role,
+              name: profile.name,
+              email: profile.email,
+            }
+          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
+      )
+    } else if (guestAlias) {
+      authorIdentity = {
+        alias: guestAlias,
+        role: 'student',
+      }
     }
 
     const newPost = saveLocalCommunityPost({
-      anonymous_alias: anonymousAlias,
+      anonymous_alias: authorIdentity.alias,
+      author_role: authorIdentity.role,
+      author_scholarly_id: authorIdentity.scholarlyId,
       course_slug: courseSlug || null,
       post_type: postType,
       content: content.trim(),

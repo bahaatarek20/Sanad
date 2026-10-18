@@ -16,12 +16,51 @@ import {
 } from '@/lib/cloud-db'
 import type { CommunityPost } from '@/components/community-hub'
 
-function generateAnonymousAlias(scholarlyId?: string): string {
-  if (scholarlyId && /^\d+$/.test(scholarlyId)) {
-    return `طالب علم #${scholarlyId}`
+function generateAuthorIdentity(profile?: {
+  scholarlyId?: string
+  role?: 'student' | 'admin'
+  name?: string
+  email?: string
+} | null): {
+  alias: string
+  role: 'student' | 'admin'
+  scholarlyId?: string
+} {
+  if (profile) {
+    const adminEmails = [
+      'bhaaljml480@gmail.com',
+      'bhaaljml48@gmail.com',
+      'bhaaljml66@gmail.com',
+      'bhaaljml3@gmail.com',
+      'bhaaljml62@gmail.com',
+    ]
+    const isAdmin =
+      profile.role === 'admin' ||
+      Boolean(profile.email && adminEmails.includes(profile.email.toLowerCase().trim()))
+
+    if (isAdmin) {
+      return {
+        alias: '🛡️ مشرف عام المنصة',
+        role: 'admin',
+        scholarlyId: profile.scholarlyId,
+      }
+    }
+
+    if (profile.scholarlyId) {
+      const displayId = profile.scholarlyId.replace(/^SND-/, '')
+      return {
+        alias: `طالب علم #${displayId}`,
+        role: 'student',
+        scholarlyId: profile.scholarlyId,
+      }
+    }
   }
+
   const randomNumber = Math.floor(100 + Math.random() * 900)
-  return `طالب علم #${randomNumber}`
+  return {
+    alias: `طالب علم #${randomNumber}`,
+    role: 'student',
+  }
 }
 
 // إنشاء منشور جديد في مجلس المذاكرة (الرسايل التشاركية)
@@ -36,16 +75,27 @@ export async function createCommunityPost(formData: FormData) {
       return { success: false, error: 'محتوى المسألة أو الفائدة مطلوب' }
     }
 
-    let anonymousAlias = generateAnonymousAlias()
+    let authorIdentity = generateAuthorIdentity()
     if (studentUser && studentUser.email) {
       const { getStudentProfileData } = await import('@/lib/student-tracking')
       const studentProfile = getStudentProfileData(studentUser.email)
-      anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+      authorIdentity = generateAuthorIdentity(
+        studentProfile
+          ? {
+              scholarlyId: studentProfile.scholarlyId,
+              role: studentProfile.role,
+              name: studentProfile.name,
+              email: studentProfile.email,
+            }
+          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
+      )
     }
 
     // 1. الحفظ في السجل المحلي والمشترك
     const localPost = saveLocalCommunityPost({
-      anonymous_alias: anonymousAlias,
+      anonymous_alias: authorIdentity.alias,
+      author_role: authorIdentity.role,
+      author_scholarly_id: authorIdentity.scholarlyId,
       course_slug: courseSlug || null,
       post_type: postType as 'question' | 'summary' | 'benefit',
       content: content.trim(),
@@ -93,23 +143,36 @@ export async function addCommunityReply(postId: string, content: string) {
     const studentUser = await getCurrentStudentUser()
     if (!content.trim()) return { success: false, error: 'محتوى الرد مطلوب' }
 
-    let anonymousAlias = generateAnonymousAlias()
+    let authorIdentity = generateAuthorIdentity()
     if (studentUser && studentUser.email) {
       const { getStudentProfileData } = await import('@/lib/student-tracking')
       const studentProfile = getStudentProfileData(studentUser.email)
-      anonymousAlias = generateAnonymousAlias(studentProfile?.scholarlyId)
+      authorIdentity = generateAuthorIdentity(
+        studentProfile
+          ? {
+              scholarlyId: studentProfile.scholarlyId,
+              role: studentProfile.role,
+              name: studentProfile.name,
+              email: studentProfile.email,
+            }
+          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
+      )
     }
 
     // 1. حفظ الرد محلياً
     const localReply = addLocalCommunityReply(postId, {
-      anonymous_alias: anonymousAlias,
+      anonymous_alias: authorIdentity.alias,
+      author_role: authorIdentity.role,
+      author_scholarly_id: authorIdentity.scholarlyId,
       content: content.trim(),
     })
 
     const replyData = localReply || {
       id: String(Date.now()),
       post_id: postId,
-      anonymous_alias: anonymousAlias,
+      anonymous_alias: authorIdentity.alias,
+      author_role: authorIdentity.role,
+      author_scholarly_id: authorIdentity.scholarlyId,
       content: content.trim(),
       created_at: new Date().toISOString(),
     }

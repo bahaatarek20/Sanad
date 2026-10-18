@@ -164,12 +164,16 @@ export function saveLocalCommunityPost(post: {
   content: string
   post_type: 'question' | 'summary' | 'benefit'
   course_slug?: string | null
+  author_role?: 'student' | 'admin'
+  author_scholarly_id?: string
 }): CommunityPost {
   const posts = [...getLocalCommunityPosts()]
 
   const newPost: CommunityPost = {
     id: post.id || `post_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     anonymous_alias: post.anonymous_alias,
+    author_role: post.author_role,
+    author_scholarly_id: post.author_scholarly_id,
     course_slug: post.course_slug || null,
     post_type: post.post_type,
     content: post.content.trim(),
@@ -192,7 +196,12 @@ export function saveLocalCommunityPost(post: {
 
 export function addLocalCommunityReply(
   postId: string,
-  reply: { anonymous_alias: string; content: string }
+  reply: {
+    anonymous_alias: string
+    content: string
+    author_role?: 'student' | 'admin'
+    author_scholarly_id?: string
+  }
 ): CommunityReply | null {
   const posts = [...getLocalCommunityPosts()]
   const post = posts.find((p) => p.id === postId)
@@ -206,6 +215,8 @@ export function addLocalCommunityReply(
     id: `rep_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     post_id: postId,
     anonymous_alias: reply.anonymous_alias,
+    author_role: reply.author_role,
+    author_scholarly_id: reply.author_scholarly_id,
     content: reply.content.trim(),
     created_at: new Date().toISOString(),
   }

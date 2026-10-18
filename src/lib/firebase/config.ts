@@ -15,12 +15,16 @@ export const firebaseConfig = {
 // تهيئة تطبيق Firebase بشكل آمن يمنع التكرار ويدعم SSR في Next.js
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 
-// خدمة التحقق والمصادقة (Google + Phone Auth)
+// خدمة التحقق والمصادقة (Google + Email + Phone Auth)
 export const auth: Auth = getAuth(app)
-auth.useDeviceLanguage()
+if (typeof window !== 'undefined') {
+  try {
+    auth.useDeviceLanguage()
+  } catch {}
+}
 
-// قاعدة بيانات Cloud Firestore المشتركة (المربوطة بقاعدة default المعتمدة)
-export const db: Firestore = getFirestore(app, 'default')
+// قاعدة بيانات Cloud Firestore الرسمية المعتمدة
+export const db: Firestore = getFirestore(app)
 
 // موفّر تسجيل الدخول المباشر بحساب Google
 export const googleProvider = new GoogleAuthProvider()

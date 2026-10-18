@@ -226,12 +226,12 @@ export default function StudentAnalytics({
   const maxWeeklyHours = Math.max(...weeklyData.map((w) => w.hours), 5)
   const totalWeeklyHours = weeklyData.reduce((acc, w) => acc + w.hours, 0)
 
-  // ج. البيانات الشهرية (شهور السنة الهجرية / الميلادية محسوبة من السجل الفعلي)
+  // ج. البيانات الشهرية (محسوبة بدقة من السجل الفعلي لتطابق شهور السنة)
   const monthlyData = useMemo(() => {
     const monthNames = [
-      'محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر',
-      'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان',
-      'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'
+      'يناير', 'فبراير', 'مارس', 'أبريل',
+      'مايو', 'يونيو', 'يوليو', 'أغسطس',
+      'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
     ]
 
     const now = new Date()
