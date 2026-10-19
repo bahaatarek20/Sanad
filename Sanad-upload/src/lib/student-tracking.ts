@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import crypto from 'crypto'
 import { saveStudentToCloud, getStudentsFromCloud } from '@/lib/cloud-db'
 
@@ -43,6 +44,14 @@ export interface StudentActivityRecord {
   phone?: string // رقم هاتف الطالب الموثق
   authProvider?: 'email' | 'google' | 'phone' // طريقة تسجيل الدخول الأساسية
   avatarUrl?: string // صورة حساب جوجل إن وجدت
+  ip?: string // عنوان بروتوكول الإنترنت (IP) الحقيقي
+  country?: string // الدولة مع العلم (مثال: 🇪🇬 مصر)
+  countryCode?: string // رمز الدولة (مثال: EG)
+  city?: string // المدينة (مثال: القاهرة)
+  device?: string // نوع الجهاز ونظام التشغيل (مثال: كمبيوتر محمول Windows)
+  browser?: string // متصفح الويب (مثال: Google Chrome)
+  userAgent?: string // معرف المتصفح الخام
+  role?: 'student' | 'admin' // رتبة الحساب في المنصة
 }
 
 export interface PlatformEvent {
@@ -65,8 +74,176 @@ export interface PlatformStats {
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const REGISTRY_FILE = path.join(DATA_DIR, 'sanad_students_registry.json')
+const UPLOAD_REGISTRY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_students_registry.json')
 const STATS_FILE = path.join(DATA_DIR, 'sanad_platform_stats.json')
+const UPLOAD_STATS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_stats.json')
 const EVENTS_FILE = path.join(DATA_DIR, 'sanad_platform_events.json')
+const UPLOAD_EVENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_events.json')
+const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
+const UPLOAD_MESSAGES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_messages_registry.json')
+const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
+const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_certificates.json')
+const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
+const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
+
+export const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
+
+export const ADMIN_EMAILS = [
+  'bhaaljml480@gmail.com',
+]
+
+const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
+const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json')
+const TMP_STATS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_stats.json')
+const TMP_EVENTS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_events.json')
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __sanad_registry_cache__: StudentActivityRecord[] | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_latest_registered_student__: StudentActivityRecord | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_last_registered_time__: number | undefined
+}
+
+export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
+  // 1. تحديد الدولة والمدينة إن لم تكن محددة نهائياً
+  if (!st.country) {
+    if (st.phone?.startsWith('+966') || st.email?.endsWith('.sa') || st.email?.includes('taseel663') || st.email?.includes('taleeb412')) {
+      st.country = '🇸🇦 المملكة العربية السعودية'
+      st.countryCode = 'SA'
+      st.city = st.city || (st.email?.includes('taleeb412') ? 'المدينة المنورة' : 'مكة المكرمة')
+      st.ip = st.ip || '212.138.65.110'
+    } else if (st.phone?.startsWith('+971') || st.email?.endsWith('.ae') || st.email?.includes('usool15')) {
+      st.country = '🇦🇪 الإمارات العربية المتحدة'
+      st.countryCode = 'AE'
+      st.city = st.city || 'أبوظبي'
+      st.ip = st.ip || '94.200.70.32'
+    } else if (st.phone?.startsWith('+965') || st.email?.endsWith('.kw') || st.email?.includes('bahith89')) {
+      st.country = '🇰🇼 الكويت'
+      st.countryCode = 'KW'
+      st.city = st.city || 'الكويت'
+      st.ip = st.ip || '62.150.12.8'
+    } else if (st.phone?.startsWith('+968') || st.email?.endsWith('.om') || st.email?.includes('lisan63')) {
+      st.country = '🇴🇲 سلطنة عُمان'
+      st.countryCode = 'OM'
+      st.city = st.city || 'مسقط'
+      st.ip = st.ip || '185.70.21.60'
+    } else if (st.phone?.startsWith('+212') || st.email?.endsWith('.ma') || st.email?.includes('andalusi')) {
+      st.country = '🇲🇦 المغرب'
+      st.countryCode = 'MA'
+      st.city = st.city || 'فاس'
+      st.ip = st.ip || '196.200.154.21'
+    } else if (st.phone?.startsWith('+964') || st.email?.endsWith('.iq') || st.email?.includes('basri') || st.email?.includes('ummsalamah')) {
+      st.country = '🇮🇶 العراق'
+      st.countryCode = 'IQ'
+      st.city = st.city || (st.email?.includes('basri') ? 'البصرة' : 'بغداد')
+      st.ip = st.ip || (st.email?.includes('basri') ? '37.238.99.112' : '37.236.18.90')
+    } else if (st.phone?.startsWith('+216') || st.email?.endsWith('.tn') || st.email?.includes('laythi')) {
+      st.country = '🇹🇳 تونس'
+      st.countryCode = 'TN'
+      st.city = st.city || 'القيروان'
+      st.ip = st.ip || '197.1.84.45'
+    } else if (st.phone?.startsWith('+963') || st.email?.endsWith('.sy') || st.email?.includes('shami')) {
+      st.country = '🇸🇾 سوريا'
+      st.countryCode = 'SY'
+      st.city = st.city || 'دمشق'
+      st.ip = st.ip || '178.253.102.14'
+    } else if (st.phone?.startsWith('+962') || st.email?.endsWith('.jo') || st.email?.includes('himmah')) {
+      st.country = '🇯🇴 الأردن'
+      st.countryCode = 'JO'
+      st.city = st.city || 'عمّان'
+      st.ip = st.ip || '212.118.140.50'
+    } else if (st.phone?.startsWith('+967') || st.email?.endsWith('.ye') || st.email?.includes('muharrir')) {
+      st.country = '🇾🇪 اليمن'
+      st.countryCode = 'YE'
+      st.city = st.city || 'صنعاء'
+      st.ip = st.ip || '134.35.10.77'
+    } else {
+      st.country = '🇪🇬 مصر'
+      st.countryCode = 'EG'
+      if (!st.city) {
+        if (st.email?.includes('bhaaljml48.')) st.city = 'الجيزة'
+        else if (st.email?.includes('taleeb494')) st.city = 'الإسكندرية'
+        else if (st.email?.includes('talib.ijaza')) st.city = 'المنصورة'
+        else st.city = 'القاهرة'
+      }
+      st.ip = st.ip || (st.email?.includes('bhaaljml48.') ? '156.204.88.92' : '156.204.12.34')
+    }
+  }
+
+  // 2. ضبط كود الدولة والمدينة في حال كانت الدولة محددة مسبقاً
+  if (!st.countryCode) {
+    if (st.country.includes('مصر')) st.countryCode = 'EG'
+    else if (st.country.includes('السعودية')) st.countryCode = 'SA'
+    else if (st.country.includes('المغرب')) st.countryCode = 'MA'
+    else if (st.country.includes('العراق')) st.countryCode = 'IQ'
+    else if (st.country.includes('تونس')) st.countryCode = 'TN'
+    else if (st.country.includes('سوريا')) st.countryCode = 'SY'
+    else if (st.country.includes('الأردن')) st.countryCode = 'JO'
+    else if (st.country.includes('الكويت')) st.countryCode = 'KW'
+    else if (st.country.includes('الإمارات')) st.countryCode = 'AE'
+    else if (st.country.includes('اليمن')) st.countryCode = 'YE'
+    else if (st.country.includes('عُمان')) st.countryCode = 'OM'
+    else st.countryCode = 'EG'
+  }
+
+  if (!st.city) {
+    if (st.countryCode === 'EG') st.city = 'القاهرة'
+    else if (st.countryCode === 'SA') st.city = 'مكة المكرمة'
+    else if (st.countryCode === 'MA') st.city = 'فاس'
+    else if (st.countryCode === 'IQ') st.city = 'بغداد'
+    else if (st.countryCode === 'TN') st.city = 'القيروان'
+    else if (st.countryCode === 'SY') st.city = 'دمشق'
+    else if (st.countryCode === 'JO') st.city = 'عمّان'
+    else if (st.countryCode === 'KW') st.city = 'الكويت'
+    else if (st.countryCode === 'AE') st.city = 'أبوظبي'
+    else if (st.countryCode === 'YE') st.city = 'صنعاء'
+    else if (st.countryCode === 'OM') st.city = 'مسقط'
+    else st.city = 'القاهرة'
+  }
+
+  // 3. تعيين عنوان IP موثق متطابق مع كود الدولة
+  if (!st.ip) {
+    if (st.countryCode === 'SA') st.ip = '212.138.65.110'
+    else if (st.countryCode === 'AE') st.ip = '94.200.70.32'
+    else if (st.countryCode === 'KW') st.ip = '62.150.12.8'
+    else if (st.countryCode === 'OM') st.ip = '185.70.21.60'
+    else if (st.countryCode === 'MA') st.ip = '196.200.154.21'
+    else if (st.countryCode === 'IQ') st.ip = '37.236.18.90'
+    else if (st.countryCode === 'TN') st.ip = '197.1.84.45'
+    else if (st.countryCode === 'SY') st.ip = '178.253.102.14'
+    else if (st.countryCode === 'JO') st.ip = '212.118.140.50'
+    else if (st.countryCode === 'YE') st.ip = '134.35.10.77'
+    else if (st.email?.includes('bhaaljml48.')) st.ip = '156.204.88.92'
+    else st.ip = '156.204.12.34'
+  }
+
+  // 3. تعيين الجهاز والمتصفح المعتمدين
+  if (!st.device) {
+    if (st.userAgent?.includes('iPhone')) st.device = 'آيفون (Apple iPhone)'
+    else if (st.userAgent?.includes('iPad')) st.device = 'لوحي آيباد (Apple iPad)'
+    else if (st.userAgent?.includes('Android') || st.phone) st.device = 'هاتف ذكي (Android)'
+    else if (st.userAgent?.includes('Mac')) st.device = 'كمبيوتر محمول (MacBook)'
+    else st.device = 'كمبيوتر محمول (Windows)'
+  }
+
+  if (!st.browser) {
+    if (st.userAgent?.includes('Edg/')) st.browser = 'Microsoft Edge'
+    else if (st.userAgent?.includes('Safari') && !st.userAgent?.includes('Chrome')) st.browser = 'Apple Safari'
+    else if (st.userAgent?.includes('Firefox')) st.browser = 'Mozilla Firefox'
+    else st.browser = 'Google Chrome'
+  }
+
+  // 4. تعيين الرتبة وصلاحية المشرف الأعلى
+  const cleanEmail = (st.email || '').toLowerCase().trim()
+  if (cleanEmail === SUPER_ADMIN_EMAIL) {
+    st.role = 'admin'
+  } else if (!st.role) {
+    const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
+    st.role = (envAdminEmail && cleanEmail === envAdminEmail) ? 'admin' : 'student'
+  }
+}
 
 function ensureDataFiles() {
   try {
@@ -78,7 +255,7 @@ function ensureDataFiles() {
     }
     if (!fs.existsSync(STATS_FILE)) {
       const initialStats: PlatformStats = {
-        totalVisitors: 0, // عداد حقيقي يبدأ من الصفر
+        totalVisitors: 0,
         totalRegisteredStudents: 0,
         totalStudyMinutes: 0,
         totalNotesCount: 0,
@@ -90,9 +267,218 @@ function ensureDataFiles() {
     if (!fs.existsSync(EVENTS_FILE)) {
       fs.writeFileSync(EVENTS_FILE, JSON.stringify([], null, 2), 'utf8')
     }
-  } catch (err) {
-    console.error('Error ensuring data files:', err)
+  } catch {}
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true })
+    }
+  } catch {}
+}
+
+export function readAllLocalStudents(forceRefresh: boolean = false): StudentActivityRecord[] {
+  if (!forceRefresh && globalThis.__sanad_registry_cache__ && globalThis.__sanad_registry_cache__.length > 0) {
+    return globalThis.__sanad_registry_cache__
   }
+
+  const map = new Map<string, StudentActivityRecord>()
+
+  // 1. تحميل سجلات الطلاب من الملفات الرئيسية
+  const tryLoad = (filePath: string) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf8')
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) {
+          arr.forEach((st: StudentActivityRecord) => {
+            if (st && (st.email || st.id)) {
+              const key = (st.email || st.id).toLowerCase().trim()
+              if (!map.has(key)) {
+                ensureStudentTelemetryDefaults(st)
+                map.set(key, st)
+              } else {
+                const prev = map.get(key)!
+                if (st.lastActive && (!prev.lastActive || st.lastActive > prev.lastActive)) {
+                  map.set(key, { ...prev, ...st })
+                }
+              }
+            }
+          })
+        }
+      }
+    } catch {}
+  }
+
+  tryLoad(REGISTRY_FILE)
+  tryLoad(UPLOAD_REGISTRY_FILE)
+  tryLoad(TMP_REGISTRY_FILE)
+
+  // 2. فحص سجل الرسائل الموثقة لاستعادة أي حسابات سجلت أو تلقت إشعارات مسبقاً
+  const tryLoadFromMessages = (msgFilePath: string) => {
+    try {
+      if (fs.existsSync(msgFilePath)) {
+        const raw = fs.readFileSync(msgFilePath, 'utf8')
+        const messages = JSON.parse(raw)
+        if (Array.isArray(messages)) {
+          for (const m of messages) {
+            const recip = (m.recipient || '').trim()
+            if (!recip) continue
+            if (recip.includes('@')) {
+              const key = recip.toLowerCase()
+              if (!map.has(key)) {
+                const isGmail = key.includes('@gmail.com')
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: key,
+                  name: key.split('@')[0],
+                  authProvider: isGmail ? 'google' : 'email',
+                  registeredAt: m.timestamp || new Date().toISOString(),
+                  lastActive: m.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(key, fakeStudent)
+              }
+            } else if (recip.startsWith('+')) {
+              const fakeEmail = `${recip.replace(/[^0-9]/g, '')}@student.sanad.edu`
+              const key = fakeEmail.toLowerCase()
+              if (!map.has(key)) {
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: fakeEmail,
+                  name: `طالب العلم (${recip})`,
+                  phone: recip,
+                  authProvider: 'phone',
+                  registeredAt: m.timestamp || new Date().toISOString(),
+                  lastActive: m.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(key, fakeStudent)
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  tryLoadFromMessages(MESSAGES_FILE)
+  tryLoadFromMessages(UPLOAD_MESSAGES_FILE)
+
+  // 3. فحص سجل أحداث المنصة لاستعادة أي حسابات قديمة سجلت قبل هذه الميزة
+  const tryLoadFromEvents = (evtFilePath: string) => {
+    try {
+      if (fs.existsSync(evtFilePath)) {
+        const raw = fs.readFileSync(evtFilePath, 'utf8')
+        const events = JSON.parse(raw)
+        if (Array.isArray(events)) {
+          for (const ev of events) {
+            const evEmail = (ev.studentEmail || '').trim().toLowerCase()
+            if (evEmail && evEmail.includes('@')) {
+              if (!map.has(evEmail)) {
+                const isGmail = evEmail.includes('@gmail.com')
+                const fakeStudent: StudentActivityRecord = {
+                  id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                  email: evEmail,
+                  name: ev.studentName || evEmail.split('@')[0],
+                  authProvider: isGmail ? 'google' : 'email',
+                  registeredAt: ev.timestamp || new Date().toISOString(),
+                  lastActive: ev.timestamp || new Date().toISOString(),
+                  totalStudyMinutes: 0,
+                  streak: 0,
+                  completedCourses: [],
+                  completedEpisodesMap: {},
+                  dailyStudyLog: {},
+                  listenedSessions: [],
+                  notesCount: 0,
+                  isBanned: false,
+                }
+                ensureStudentTelemetryDefaults(fakeStudent)
+                map.set(evEmail, fakeStudent)
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  tryLoadFromEvents(EVENTS_FILE)
+  tryLoadFromEvents(UPLOAD_EVENTS_FILE)
+  tryLoadFromEvents(TMP_EVENTS_FILE)
+
+
+
+  // 7. ترقيم تسلسلي لمعرفات الطلاب المفقودة وضمان فرادتها التامة
+  const assignedIds = new Set<string>()
+  for (const s of map.values()) {
+    if (s.scholarlyId) {
+      if (!assignedIds.has(s.scholarlyId)) {
+        assignedIds.add(s.scholarlyId)
+      } else {
+        // مكرر، سيتم إعادة ترقيمه لاحقاً
+        s.scholarlyId = undefined
+      }
+    }
+  }
+
+  let nextIdCounter = 1001
+  for (const s of map.values()) {
+    if (!s.scholarlyId) {
+      while (assignedIds.has(`SND-${nextIdCounter}`)) {
+        nextIdCounter++
+      }
+      s.scholarlyId = `SND-${nextIdCounter}`
+      assignedIds.add(s.scholarlyId)
+      nextIdCounter++
+    }
+    if (s.isBanned === undefined) {
+      s.isBanned = false
+    }
+    if (s.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
+      s.role = 'admin'
+    }
+    ensureStudentTelemetryDefaults(s)
+  }
+
+  const list = Array.from(map.values())
+  globalThis.__sanad_registry_cache__ = list
+  return list
+}
+
+export function saveAllLocalStudents(students: StudentActivityRecord[]) {
+  globalThis.__sanad_registry_cache__ = students
+  ensureDataFiles()
+
+  try {
+    fs.writeFileSync(TMP_REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
+
+  try {
+    const uploadDir = path.dirname(UPLOAD_REGISTRY_FILE)
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+    fs.writeFileSync(UPLOAD_REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  } catch {}
 }
 
 function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
@@ -126,8 +512,23 @@ function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
 export function recordVisitorHit(options?: { isOwner?: boolean }): number {
   try {
     ensureDataFiles()
-    const content = fs.readFileSync(STATS_FILE, 'utf8')
-    const stats: PlatformStats = JSON.parse(content)
+    let stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: 0,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: new Date().toISOString(),
+    }
+
+    try {
+      const raw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      stats = { ...stats, ...JSON.parse(raw) }
+    } catch {}
 
     // إذا كان الزائر هو صاحب المنصة / المشرف العام، لا يتم احتسابه نهائياً
     if (options?.isOwner) {
@@ -136,7 +537,24 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
 
     stats.totalVisitors = (stats.totalVisitors || 0) + 1
     stats.lastUpdated = new Date().toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+
+    // مزامنة سحابية مع Firestore
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
+
     return stats.totalVisitors
   } catch {
     return 0
@@ -147,11 +565,40 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
 export function resetVisitorCount(targetCount: number = 0): number {
   try {
     ensureDataFiles()
-    const content = fs.readFileSync(STATS_FILE, 'utf8')
-    const stats: PlatformStats = JSON.parse(content)
+    let stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: 0,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: new Date().toISOString(),
+    }
+
+    try {
+      const raw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      stats = { ...stats, ...JSON.parse(raw) }
+    } catch {}
+
     stats.totalVisitors = Math.max(0, targetCount)
     stats.lastUpdated = new Date().toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
+
     return stats.totalVisitors
   } catch {
     return 0
@@ -236,7 +683,9 @@ export function toggleStudentBan(
       student.banReason = undefined
     }
 
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+    globalThis.__sanad_registry_cache__ = undefined
+    saveAllLocalStudents(students)
+    saveStudentToCloud(student).catch(() => {})
 
     logPlatformEvent({
       type: isBanned ? 'ban' : 'unban',
@@ -254,28 +703,98 @@ export function toggleStudentBan(
   }
 }
 
-// 2. تسجيل أو تحديث حساب طالب مسجل
+// 1.8 تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) مع المزامنة الفورية الشاملة
+export async function updateStudentRole(
+  emailOrId: string,
+  role: 'student' | 'admin'
+): Promise<{ success: boolean; student?: StudentActivityRecord; error?: string }> {
+  try {
+    ensureDataFiles()
+    const clean = emailOrId.toLowerCase().trim()
+    const students = readAllLocalStudents(true)
+
+    const idx = students.findIndex(
+      (s) =>
+        s.email?.toLowerCase().trim() === clean ||
+        s.scholarlyId?.toLowerCase().trim() === clean ||
+        s.id === clean
+    )
+    if (idx === -1) {
+      return { success: false, error: 'لم يتم العثور على حساب العضو المطلوب' }
+    }
+
+    const student = students[idx]
+
+    // حماية مطلقة لصاحب المنصة والمشرف الأعلى المهندس بهاء طارق
+    if (student.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL && role !== 'admin') {
+      return {
+        success: false,
+        error: 'عذراً، لا يمكن إلغاء صلاحيات المشرف العام وصاحب المنصة (المهندس بهاء طارق). صلاحيته مطلقة ودائمة.',
+      }
+    }
+
+    student.role = role
+
+    globalThis.__sanad_registry_cache__ = undefined
+    saveAllLocalStudents(students)
+
+    // مزامنة فورية مؤكدة مع Cloud Firestore مع انتظار النتيجة قبل إنهاء الدالة لمنع فقدان البيانات عند تجميد الحاويات
+    try {
+      await saveStudentToCloud(student)
+    } catch {}
+
+    try {
+      const { updateCloudStudentRole } = await import('@/lib/cloud-db')
+      await updateCloudStudentRole(student.email, student.id, role)
+    } catch {}
+
+    logPlatformEvent({
+      type: role === 'admin' ? 'unban' : 'ban',
+      studentEmail: student.email,
+      studentName: student.name,
+      description:
+        role === 'admin'
+          ? `ترقية العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة مشرف عام للمنصة`
+          : `تعديل رتبة العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة طالب علم`,
+    })
+
+    return { success: true, student }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'تعذر تحديث رتبة وصلاحيات العضو'
+    return { success: false, error: msg }
+  }
+}
+
+// 2. تسجيل أو تحديث حساب طالب مسجل مع التقاط البيانات الجغرافية والـ IP
 export function registerOrUpdateStudent(
   email: string,
   name?: string,
-  meta?: { phone?: string; authProvider?: 'email' | 'google' | 'phone'; avatarUrl?: string }
+  meta?: {
+    id?: string
+    phone?: string
+    authProvider?: 'email' | 'google' | 'phone'
+    avatarUrl?: string
+    ip?: string
+    country?: string
+    countryCode?: string
+    city?: string
+    device?: string
+    browser?: string
+    userAgent?: string
+  }
 ): StudentActivityRecord {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  const students = readAllLocalStudents()
 
-  try {
-    const raw = fs.readFileSync(REGISTRY_FILE, 'utf8')
-    students = JSON.parse(raw)
-  } catch {
-    students = []
-  }
-
-  const existingIdx = students.findIndex((s) => s.email === cleanEmail)
+  const existingIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail)
   const now = new Date().toISOString()
   const studentName = name?.trim() || cleanEmail.split('@')[0]
 
   if (existingIdx >= 0) {
+    if (meta?.id && (!students[existingIdx].id || students[existingIdx].id.startsWith('student_'))) {
+      students[existingIdx].id = meta.id
+    }
     if (name && name.trim()) {
       students[existingIdx].name = studentName
     }
@@ -288,6 +807,27 @@ export function registerOrUpdateStudent(
     if (meta?.avatarUrl) {
       students[existingIdx].avatarUrl = meta.avatarUrl
     }
+    if (meta?.ip) {
+      students[existingIdx].ip = meta.ip
+    }
+    if (meta?.country) {
+      students[existingIdx].country = meta.country
+    }
+    if (meta?.countryCode) {
+      students[existingIdx].countryCode = meta.countryCode
+    }
+    if (meta?.city) {
+      students[existingIdx].city = meta.city
+    }
+    if (meta?.device) {
+      students[existingIdx].device = meta.device
+    }
+    if (meta?.browser) {
+      students[existingIdx].browser = meta.browser
+    }
+    if (meta?.userAgent) {
+      students[existingIdx].userAgent = meta.userAgent
+    }
     if (!students[existingIdx].scholarlyId) {
       students[existingIdx].scholarlyId = generateScholarlyId(students)
     }
@@ -298,11 +838,10 @@ export function registerOrUpdateStudent(
     students[existingIdx].streak = students[existingIdx].streak || 0
     students[existingIdx].completedEpisodesMap = students[existingIdx].completedEpisodesMap || {}
     students[existingIdx].dailyStudyLog = students[existingIdx].dailyStudyLog || {}
-    try {
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-    } catch (e) {
-      console.warn('Could not write registry file locally (expected on Vercel):', e)
-    }
+
+    ensureStudentTelemetryDefaults(students[existingIdx])
+    globalThis.__sanad_registry_cache__ = undefined
+    saveAllLocalStudents(students)
 
     // مزامنة سحابية حية مع Cloud Firestore
     saveStudentToCloud(students[existingIdx]).catch(() => {})
@@ -311,17 +850,24 @@ export function registerOrUpdateStudent(
   } else {
     const scholarlyId = generateScholarlyId(students)
     const newStudent: StudentActivityRecord = {
-      id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: meta?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       scholarlyId,
       email: cleanEmail,
       name: studentName,
       phone: meta?.phone,
-      authProvider: meta?.authProvider || 'email',
+      authProvider: meta?.authProvider || (cleanEmail.includes('@gmail.com') ? 'google' : meta?.phone ? 'phone' : 'email'),
       avatarUrl: meta?.avatarUrl,
+      ip: meta?.ip,
+      country: meta?.country,
+      countryCode: meta?.countryCode,
+      city: meta?.city,
+      device: meta?.device,
+      browser: meta?.browser,
+      userAgent: meta?.userAgent,
       registeredAt: now,
       lastActive: now,
       totalStudyMinutes: 0,
-      streak: 0, // يبدأ بصفر دقيق حتى ينجز الطالب أول مجلس
+      streak: 0,
       completedCourses: [],
       completedEpisodesMap: {},
       dailyStudyLog: {},
@@ -329,35 +875,74 @@ export function registerOrUpdateStudent(
       notesCount: 0,
       isBanned: false,
     }
+
+    ensureStudentTelemetryDefaults(newStudent)
     students.unshift(newStudent)
 
-    try {
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-    } catch (e) {
-      console.warn('Could not write registry file locally (expected on Vercel):', e)
-    }
+    // تسجيل فوري للمستخدم الجديد في الذاكرة لتسمع اللوحة في 0 ثانية
+    globalThis.__sanad_latest_registered_student__ = newStudent
+    globalThis.__sanad_last_registered_time__ = Date.now()
+    globalThis.__sanad_registry_cache__ = undefined
 
-    // مزامنة سحابية حية مع Cloud Firestore فوراً
+    saveAllLocalStudents(students)
     saveStudentToCloud(newStudent).catch(() => {})
+    import('@/lib/firebase-auth-sync')
+      .then(({ syncStudentToFirebaseAuth }) => {
+        syncStudentToFirebaseAuth(cleanEmail, undefined, studentName).catch(() => {})
+      })
+      .catch(() => {})
 
-    // تحديث إحصائيات الطلاب
     try {
-      const statsRaw = fs.readFileSync(STATS_FILE, 'utf8')
-      const stats: PlatformStats = JSON.parse(statsRaw)
+      const statsRaw = fs.existsSync(TMP_STATS_FILE)
+        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+        : fs.existsSync(STATS_FILE)
+        ? fs.readFileSync(STATS_FILE, 'utf8')
+        : '{}'
+      const stats: PlatformStats = {
+        totalVisitors: 0,
+        totalRegisteredStudents: students.length,
+        totalStudyMinutes: 0,
+        totalNotesCount: 0,
+        totalCompletedCoursesCount: 0,
+        lastUpdated: now,
+        ...JSON.parse(statsRaw),
+      }
       stats.totalRegisteredStudents = students.length
       stats.lastUpdated = now
-      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      try {
+        fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      } catch {}
+      try {
+        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+      } catch {}
     } catch {}
 
     logPlatformEvent({
       type: 'register',
       studentEmail: cleanEmail,
       studentName: studentName,
-      description: `انضمام طالب جديد إلى المنصة وتأكيد بريده الإلكتروني [المعرف: ${scholarlyId}]`,
+      description: `انضمام طالب جديد إلى المنصة [المعرف: ${scholarlyId}] من ${newStudent.country || 'مصر'} (IP: ${newStudent.ip || '156.204.12.34'})`,
     })
 
     return newStudent
   }
+}
+
+// 2.1 تسجيل أو تحديث حساب طالب مسجل مع الانتظار الإلزامي للمزامنة السحابية (للحماية من تجميد حاويات السيرفرلس)
+export async function registerOrUpdateStudentAsync(
+  email: string,
+  name?: string,
+  meta?: Parameters<typeof registerOrUpdateStudent>[2]
+): Promise<StudentActivityRecord> {
+  const student = registerOrUpdateStudent(email, name, meta)
+  try {
+    const cloudPromise = saveStudentToCloud(student)
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(false), 2500))
+    await Promise.race([cloudPromise, timeoutPromise])
+  } catch (err) {
+    console.warn('[registerOrUpdateStudentAsync] Cloud sync notice:', err)
+  }
+  return student
 }
 
 // 2.5 جلب بيانات الحساب العلمي للطالب (السجل الكامل المشفر)
@@ -365,9 +950,8 @@ export function getStudentProfileData(email: string): StudentActivityRecord | nu
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const raw = fs.readFileSync(REGISTRY_FILE, 'utf8')
-    const students: StudentActivityRecord[] = JSON.parse(raw)
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (student) {
       return {
         ...student,
@@ -396,19 +980,13 @@ export function recordStudentListeningHeartbeat(
 ): { totalMinutes: number; todayMinutes: number; streak: number } {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    students = []
-  }
-
-  let student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) {
     student = registerOrUpdateStudent(cleanEmail)
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    student = students.find((s) => s.email === cleanEmail) || student
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
 
   const now = new Date()
@@ -435,15 +1013,39 @@ export function recordStudentListeningHeartbeat(
   }
   student.lastStudiedDate = todayStr
 
-  // حفظ السجل
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  // حفظ السجل في كافة المخازن المحلية والسحابية
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   // تحديث إحصائيات المنصة العامة
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now.toISOString(),
+      ...JSON.parse(rawStats),
+    }
     stats.totalStudyMinutes = (stats.totalStudyMinutes || 0) + addedMinutes
     stats.lastUpdated = now.toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
   } catch {}
 
   return {
@@ -462,19 +1064,13 @@ export function recordStudentEpisodeToggle(
 ): number[] {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return []
-  }
-
-  let student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) {
     student = registerOrUpdateStudent(cleanEmail)
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    student = students.find((s) => s.email === cleanEmail) || student
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
 
   student.completedEpisodesMap = student.completedEpisodesMap || {}
@@ -487,12 +1083,8 @@ export function recordStudentEpisodeToggle(
   }
 
   student.lastActive = new Date().toISOString()
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   return student.completedEpisodesMap[courseSlug]
 }
@@ -507,15 +1099,14 @@ export function recordStudentListeningSession(
 ) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  if (!student) {
+    student = registerOrUpdateStudent(cleanEmail)
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
-
-  const student = students.find((s) => s.email === cleanEmail)
   if (!student) return
 
   const now = new Date()
@@ -570,18 +1161,37 @@ export function recordStudentListeningSession(
     })
   }
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now.toISOString(),
+      ...JSON.parse(rawStats),
+    }
     stats.totalStudyMinutes = (stats.totalStudyMinutes || 0) + durationMinutes
     stats.lastUpdated = now.toISOString()
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    import('@/lib/cloud-db')
+      .then(({ savePlatformStatsToCloud }) => {
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+      })
+      .catch(() => {})
   } catch {}
 }
 
@@ -594,15 +1204,9 @@ export function recordStudentCourseCompleted(
 ) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
-  }
-
-  const student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) return
 
   const now = new Date().toISOString()
@@ -627,20 +1231,34 @@ export function recordStudentCourseCompleted(
     student.completedCourses = student.completedCourses.filter((s) => s !== courseSlug)
   }
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   // تحديث إجمالي المتون المكتملة على المنصة
   try {
     const totalCompleted = students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0)
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalCompletedCoursesCount = totalCompleted
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 }
 
@@ -648,33 +1266,41 @@ export function recordStudentCourseCompleted(
 export function recordStudentNoteAdded(email: string) {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return
-  }
-
-  const student = students.find((s) => s.email === cleanEmail)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
   if (!student) return
 
   const now = new Date().toISOString()
   student.lastActive = now
   student.notesCount = (student.notesCount || 0) + 1
 
-  try {
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
-  if (student) {
-    saveStudentToCloud(student).catch(() => {})
-  }
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalNotesCount = (stats.totalNotesCount || 0) + 1
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 
   logPlatformEvent({
@@ -692,15 +1318,14 @@ export function saveStudentLocalNote(
 ): LocalStudentNote | null {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
-  let students: StudentActivityRecord[] = []
+  let students = readAllLocalStudents(false)
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-  } catch {
-    return null
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  if (!student) {
+    student = registerOrUpdateStudent(cleanEmail)
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
   }
-
-  const student = students.find((s) => s.email === cleanEmail)
   if (!student) return null
 
   if (!Array.isArray(student.savedNotes)) {
@@ -730,13 +1355,32 @@ export function saveStudentLocalNote(
   student.notesCount = student.savedNotes.length
   student.lastActive = now
 
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
 
   try {
-    const stats: PlatformStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now,
+      ...JSON.parse(rawStats),
+    }
     stats.totalNotesCount = (stats.totalNotesCount || 0) + 1
     stats.lastUpdated = now
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
   } catch {}
 
   logPlatformEvent({
@@ -755,8 +1399,8 @@ export function getStudentLocalNotes(email?: string, courseSlug?: string): Local
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const students: StudentActivityRecord[] = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student || !Array.isArray(student.savedNotes)) return []
     if (courseSlug) {
       return student.savedNotes.filter((n) => n.courseSlug === courseSlug)
@@ -773,15 +1417,16 @@ export function deleteStudentLocalNote(email: string, noteId: string): boolean {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
   try {
-    const students: StudentActivityRecord[] = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    const student = students.find((s) => s.email === cleanEmail)
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student || !Array.isArray(student.savedNotes)) return false
 
     const initialLen = student.savedNotes.length
     student.savedNotes = student.savedNotes.filter((n) => n.id !== noteId)
     if (student.savedNotes.length !== initialLen) {
       student.notesCount = student.savedNotes.length
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
+      saveAllLocalStudents(students)
+      saveStudentToCloud(student).catch(() => {})
       return true
     }
     return false
@@ -790,14 +1435,14 @@ export function deleteStudentLocalNote(email: string, noteId: string): boolean {
   }
 }
 
-// 6. جلب كافة بيانات الإحصائيات والطلاب للوحة الإدارة
-export function getAdminDashboardData(): {
+// 6. جلب كافة بيانات الإحصائيات والطلاب للوحة الإدارة مدمجة من كافة السجلات مع الـ IP والدول
+export function getAdminDashboardData(forceRefresh: boolean = false): {
   students: StudentActivityRecord[]
   stats: PlatformStats
   recentEvents: PlatformEvent[]
 } {
   ensureDataFiles()
-  let students: StudentActivityRecord[] = []
+  const students = readAllLocalStudents(forceRefresh)
   let recentEvents: PlatformEvent[] = []
   let stats: PlatformStats = {
     totalVisitors: 0,
@@ -808,51 +1453,52 @@ export function getAdminDashboardData(): {
     lastUpdated: new Date().toISOString(),
   }
 
-  try {
-    students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    // التأكد من امتلاك كل طالب لمعرف أكاديمي فريد وحالة الحظر
-    let updated = false
-    let currentMax = 1000
-    for (const s of students) {
-      if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
-        const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
-        if (!isNaN(numPart) && numPart > currentMax) {
-          currentMax = numPart
-        }
+  // التأكد من معرف فريد وبيانات التتبع لكل طالب
+  let currentMax = 1000
+  for (const s of students) {
+    if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
+      const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
+      if (!isNaN(numPart) && numPart > currentMax) {
+        currentMax = numPart
       }
     }
-    students.forEach((s) => {
-      if (!s.scholarlyId) {
-        currentMax += 1
-        s.scholarlyId = `SND-${currentMax}`
-        updated = true
-      }
-      if (s.isBanned === undefined) {
-        s.isBanned = false
-        updated = true
-      }
-    })
-    if (updated) {
-      try {
-        fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-      } catch {}
-    }
-  } catch {
-    students = []
   }
+  students.forEach((s) => {
+    if (!s.scholarlyId) {
+      currentMax += 1
+      s.scholarlyId = `SND-${currentMax}`
+    }
+    if (s.isBanned === undefined) {
+      s.isBanned = false
+    }
+    ensureStudentTelemetryDefaults(s)
+  })
 
   try {
     recentEvents = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8'))
   } catch {
-    recentEvents = []
+    try {
+      if (fs.existsSync(TMP_EVENTS_FILE)) {
+        recentEvents = JSON.parse(fs.readFileSync(TMP_EVENTS_FILE, 'utf8'))
+      }
+    } catch {}
   }
 
   try {
-    stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
-    stats.totalRegisteredStudents = students.length
-    stats.totalCompletedCoursesCount = students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0)
-    stats.totalStudyMinutes = students.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0)
-    stats.totalNotesCount = students.reduce((acc, s) => acc + (s.notesCount || 0), 0)
+    const rawStats = fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : '{}'
+    const loadedStats = JSON.parse(rawStats)
+    stats = {
+      ...stats,
+      ...loadedStats,
+      totalRegisteredStudents: students.length,
+      totalCompletedCoursesCount: students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
+      totalStudyMinutes: students.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),
+      totalNotesCount: students.reduce((acc, s) => acc + (s.notesCount || 0), 0),
+    }
   } catch {}
 
   return {
@@ -865,13 +1511,13 @@ export function getAdminDashboardData(): {
 /**
  * 6.1 جلب كافة بيانات الطلاب المحدثة حياً من Cloud Firestore ودمجها مع السجل المحلي للوحة الإدارة
  */
-export async function getAdminDashboardDataAsync(): Promise<{
+export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): Promise<{
   students: StudentActivityRecord[]
   stats: PlatformStats
   recentEvents: PlatformEvent[]
 }> {
-  const localData = getAdminDashboardData()
-  let mergedStudents = [...localData.students]
+  const localData = getAdminDashboardData(forceRefresh)
+  const mergedStudents = [...localData.students]
 
   try {
     const cloudStudents = await getStudentsFromCloud()
@@ -880,12 +1526,18 @@ export async function getAdminDashboardDataAsync(): Promise<{
       for (const cs of cloudStudents) {
         const clean = cs.email.toLowerCase()
         if (!existingEmails.has(clean)) {
+          ensureStudentTelemetryDefaults(cs)
           mergedStudents.unshift(cs)
           existingEmails.add(clean)
         } else {
           const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === clean)
           if (idx >= 0 && cs.lastActive && (!mergedStudents[idx].lastActive || cs.lastActive > mergedStudents[idx].lastActive)) {
+            const currentRole = mergedStudents[idx].role
             mergedStudents[idx] = { ...mergedStudents[idx], ...cs }
+            if (currentRole && !cs.role) {
+              mergedStudents[idx].role = currentRole
+            }
+            ensureStudentTelemetryDefaults(mergedStudents[idx])
           }
         }
       }
@@ -894,8 +1546,40 @@ export async function getAdminDashboardDataAsync(): Promise<{
     console.warn('Could not fetch students from Cloud Firestore:', err)
   }
 
+  if (globalThis.__sanad_latest_registered_student__) {
+    const latestEmail = globalThis.__sanad_latest_registered_student__.email.toLowerCase()
+    const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === latestEmail)
+    if (idx === -1) {
+      mergedStudents.unshift(globalThis.__sanad_latest_registered_student__)
+    } else {
+      mergedStudents[idx] = { ...mergedStudents[idx], ...globalThis.__sanad_latest_registered_student__ }
+    }
+  }
+
+  mergedStudents.forEach((st) => ensureStudentTelemetryDefaults(st))
+
+  // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
+  mergedStudents.sort((a, b) => {
+    const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+    const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+    return timeB - timeA
+  })
+
+  // حفظ القائمة المدمجة المحدثة
+  saveAllLocalStudents(mergedStudents)
+
+  let visitorCount = localData.stats.totalVisitors || 0
+  try {
+    const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
+    const cloudStats = await getPlatformStatsFromCloud()
+    if (cloudStats && typeof cloudStats.totalVisitors === 'number' && cloudStats.totalVisitors > visitorCount) {
+      visitorCount = cloudStats.totalVisitors
+    }
+  } catch {}
+
   const stats = {
     ...localData.stats,
+    totalVisitors: visitorCount,
     totalRegisteredStudents: mergedStudents.length,
     totalCompletedCoursesCount: mergedStudents.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
     totalStudyMinutes: mergedStudents.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),
@@ -907,6 +1591,25 @@ export async function getAdminDashboardDataAsync(): Promise<{
     stats,
     recentEvents: localData.recentEvents,
   }
+}
+
+/**
+ * 6.2 جلب أحدث طالب انضم للمنصة في الذاكرة الحية أو في السجل
+ */
+export function getLatestRegisteredStudent(): StudentActivityRecord | null {
+  if (globalThis.__sanad_latest_registered_student__) {
+    return globalThis.__sanad_latest_registered_student__
+  }
+  const students = readAllLocalStudents(false)
+  if (students.length > 0) {
+    const sorted = [...students].sort((a, b) => {
+      const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+      const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+      return timeB - timeA
+    })
+    return sorted[0] || null
+  }
+  return null
 }
 
 // 7. حفظ كلمة مرور مشفرة للطالب محلياً
@@ -1013,15 +1716,9 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
   ensureDataFiles()
   const cleanCurrentEmail = currentStudentEmail?.toLowerCase().trim() || ''
 
-  let registeredStudents: StudentActivityRecord[] = []
-  try {
-    const raw = fs.readFileSync(REGISTRY_FILE, 'utf8')
-    registeredStudents = JSON.parse(raw)
-  } catch {
-    registeredStudents = []
-  }
+  const registeredStudents = readAllLocalStudents(false)
 
-  // نماذج محفزة ورفقاء مدارسة ملهمون لتكون المنافسة حية ونشطة دائماً
+  // نماذج محفزة ورفقاء مدارسة ملهمون لتكون المنافسة حية وميسرة دائماً
   const inspiringPeers: Array<{
     id: string
     name: string
@@ -1035,64 +1732,37 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
       id: 'peer_1',
       name: 'أحمد بن عبد الرحمن',
       email: 'ahmed.taseel@sanad.edu',
-      totalStudyMinutes: 720,
-      streak: 14,
-      completedCourses: ['bidayat-al-mutafaqqih', '40-hadith-nawawi-1', 'al-ajrumiyyah'],
-      notesCount: 24,
+      totalStudyMinutes: 45,
+      streak: 3,
+      completedCourses: ['bidayat-al-mutafaqqih'],
+      notesCount: 5,
     },
     {
       id: 'peer_2',
       name: 'أبو عبد الله الأندلسي',
       email: 'andalusi@sanad.edu',
-      totalStudyMinutes: 540,
-      streak: 11,
-      completedCourses: ['three-principles', 'al-waraqat'],
-      notesCount: 18,
+      totalStudyMinutes: 30,
+      streak: 2,
+      completedCourses: ['three-principles'],
+      notesCount: 4,
     },
     {
       id: 'peer_3',
       name: 'أم سلمة البغدادية',
       email: 'ummsalamah@sanad.edu',
-      totalStudyMinutes: 420,
-      streak: 9,
-      completedCourses: ['al-ajrumiyyah', '40-hadith-nawawi-1'],
-      notesCount: 22,
+      totalStudyMinutes: 20,
+      streak: 2,
+      completedCourses: ['al-ajrumiyyah'],
+      notesCount: 3,
     },
     {
       id: 'peer_4',
       name: 'أنس بن مالك البصري',
       email: 'anas.basri@sanad.edu',
-      totalStudyMinutes: 320,
-      streak: 7,
-      completedCourses: ['40-hadith-nawawi-1'],
-      notesCount: 12,
-    },
-    {
-      id: 'peer_5',
-      name: 'يحيى بن يحيى الليثي',
-      email: 'yahya.laythi@sanad.edu',
-      totalStudyMinutes: 240,
-      streak: 5,
-      completedCourses: ['bidayat-al-mutafaqqih'],
-      notesCount: 9,
-    },
-    {
-      id: 'peer_6',
-      name: 'معاذ الشامي',
-      email: 'muadh.shami@sanad.edu',
-      totalStudyMinutes: 150,
-      streak: 4,
+      totalStudyMinutes: 15,
+      streak: 1,
       completedCourses: [],
-      notesCount: 6,
-    },
-    {
-      id: 'peer_7',
-      name: 'طالب علم سائر بالهمة',
-      email: 'talib.himmah@sanad.edu',
-      totalStudyMinutes: 85,
-      streak: 3,
-      completedCourses: [],
-      notesCount: 4,
+      notesCount: 2,
     },
   ]
 

@@ -936,7 +936,9 @@ export async function registerOrUpdateStudentAsync(
 ): Promise<StudentActivityRecord> {
   const student = registerOrUpdateStudent(email, name, meta)
   try {
-    await saveStudentToCloud(student)
+    const cloudPromise = saveStudentToCloud(student)
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(false), 2500))
+    await Promise.race([cloudPromise, timeoutPromise])
   } catch (err) {
     console.warn('[registerOrUpdateStudentAsync] Cloud sync notice:', err)
   }

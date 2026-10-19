@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  LogIn,
+  UserPlus,
 } from 'lucide-react'
 import { auth, googleProvider } from '@/lib/firebase/config'
 import {
@@ -49,16 +51,17 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
   const isVerifyEmailOtp = params.mode === 'verify-otp'
   const isResetStep2 = params.mode === 'reset-step2'
-  const isExplicitLogin = params.mode === 'login'
+  const isExplicitSignup = params.mode === 'signup'
+  const isExplicitLogin = params.mode === 'login' || params.mode === 'password'
   const isLoggedOut = params.loggedOut === 'true'
   const targetRedirect =
     params.redirect && params.redirect.startsWith('/') && !params.redirect.startsWith('//')
       ? params.redirect
       : '/courses'
 
-  // التبويبات والخيارات
+  // التبويبات والخيارات — الوضع الافتراضي دائماً تسجيل الدخول إلا إذا طُلب حساب جديد صراحة
   const [authTab, setAuthTab] = useState<'password' | 'otp'>('password')
-  const [isSignup, setIsSignup] = useState<boolean>(!isExplicitLogin && params.mode !== 'forgot' && !isResetStep2)
+  const [isSignup, setIsSignup] = useState<boolean>(isExplicitSignup)
   const [isForgot, setIsForgot] = useState<boolean>(params.mode === 'forgot')
 
   // حالات إظهار/إخفاء كلمة المرور للتحقق البصري
@@ -66,8 +69,12 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
-  // حالات Firebase Auth
-  const [firebaseLoading, setFirebaseLoading] = useState(false)
+  // حالات التحميل المنفصلة لتجنب تكرار مؤشر التحميل في أكثر من زر معاً
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const isAnyLoading = googleLoading || emailLoading || resetLoading
+
   const [firebaseError, setFirebaseError] = useState<string | null>(null)
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null)
 
@@ -86,9 +93,34 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     } catch {}
   }, [isLoggedOut])
 
+  // دالة توجيه مؤكدة بعد تسجيل الدخول (تضمن وصول الكوكيز فوراً للسيرفر)
+  const completeLoginAndRedirect = (destination: string) => {
+    window.location.href = destination
+  }
+
+  // مزامنة جلسة الكوكي في الخادم مع مؤقت لمنع التعليق
+  const syncFirebaseSession = async (idToken: string, provider: 'google' | 'email') => {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 6000)
+      await fetch('/api/auth/firebase-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          authProvider: provider,
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+    } catch (e) {
+      console.warn('Session endpoint notice:', e)
+    }
+  }
+
   // تسجيل الدخول الموثق بحساب Google عبر Firebase و Cloud Firestore
   const handleGoogleSignIn = async () => {
-    setFirebaseLoading(true)
+    setGoogleLoading(true)
     setFirebaseError(null)
     setResetSuccessMsg(null)
     try {
@@ -97,7 +129,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       const cleanEmail = (fbUser.email || '').toLowerCase().trim()
       let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
 
-      // 1. مزامنة فورية في Firestore (users/{uid}) وزيادة عداد الإحصائيات (مرنة غير حاجبة)
+      // 1. مزامنة فورية في Firestore (users/{uid}) مرنة غير حاجبة
       try {
         const synced = await syncUserToFirestore(fbUser.uid, {
           fullName: fbUser.displayName || fbUser.email?.split('@')[0] || 'طالب العلم',
@@ -110,7 +142,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           userRole = synced.role
         }
       } catch (syncErr) {
-        console.warn('syncUserToFirestore google warning:', syncErr)
+        console.warn('syncUserToFirestore google notice:', syncErr)
       }
 
       // 2. التحقق من حالة الحساب (حظر أو صلاحية الإدارة)
@@ -125,30 +157,32 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           userRole = check.role
         }
       } catch (checkErr) {
-        console.warn('verifyUserAccount google warning:', checkErr)
+        console.warn('verifyUserAccount google notice:', checkErr)
       }
 
       // 3. توثيق جلسة الكوكي المشفرة عبر السيرفر
       try {
         const idToken = await fbUser.getIdToken()
-        await fetch('/api/auth/firebase-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idToken,
-            authProvider: 'google',
-          }),
-        })
-      } catch (sessErr) {
-        console.warn('Session endpoint warning:', sessErr)
-      }
+        await syncFirebaseSession(idToken, 'google')
+      } catch {}
 
-      // 4. التوجيه بناءً على الصلاحيات
-      if (userRole === 'admin') {
-        router.push('/admin')
-      } else {
-        router.push(targetRedirect)
-      }
+      // 4. حفظ النسخة في التخزين المحلي لضمان استجابة الواجهة فوراً
+      try {
+        localStorage.setItem(
+          'sanad_student_user',
+          JSON.stringify({
+            id: fbUser.uid,
+            email: cleanEmail,
+            name: fbUser.displayName || cleanEmail.split('@')[0],
+            role: userRole,
+          })
+        )
+        localStorage.setItem('sanad_student_registered', 'true')
+      } catch {}
+
+      // 5. التوجيه المباشر
+      const dest = userRole === 'admin' ? '/admin' : targetRedirect
+      completeLoginAndRedirect(dest)
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
       const msg = fbErr.message || ''
@@ -175,14 +209,14 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       }
       setFirebaseError(fbErr.message || 'تعذر استكمال تسجيل الدخول عبر Google حالياً. يرجى المحاولة لاحقاً أو استخدام البريد.')
     } finally {
-      setFirebaseLoading(false)
+      setGoogleLoading(false)
     }
   }
 
   // تسجيل حساب جديد أو دخول بالبريد وكلمة المرور عبر Firebase Auth & Firestore
   const handleEmailPasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setFirebaseLoading(true)
+    setEmailLoading(true)
     setFirebaseError(null)
     setResetSuccessMsg(null)
 
@@ -191,7 +225,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
     if (!cleanEmail || !password) {
       setFirebaseError('يرجى ملء جميع الحقول المطلوبة بدقة.')
-      setFirebaseLoading(false)
+      setEmailLoading(false)
       return
     }
 
@@ -200,18 +234,32 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         const cleanName = fullNameInput.trim() || cleanEmail.split('@')[0]
         if (password.length < 6) {
           setFirebaseError('يجب ألا تقل كلمة المرور عن 6 أحرف أو أرقام.')
-          setFirebaseLoading(false)
+          setEmailLoading(false)
           return
         }
 
-        // 1. إنشاء الحساب في Firebase Auth
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password)
+        // 1. إنشاء الحساب في Firebase Auth مع فحص الحساب المسجل مسبقاً
+        let cred
+        try {
+          cred = await createUserWithEmailAndPassword(auth, cleanEmail, password)
+        } catch (createErr: unknown) {
+          const fbErr = createErr as { code?: string; message?: string }
+          if (fbErr.code === 'auth/email-already-in-use') {
+            // التحويل الذكي التلقائي لتسجيل الدخول إذا كان الحساب مسجلاً مسبقاً
+            setIsSignup(false)
+            setFirebaseError('هذا البريد مسجل مسبقاً في سَنَد. تم تحويلك لتسجيل الدخول، يرجى كتابة كلمة المرور للمتابعة.')
+            setEmailLoading(false)
+            return
+          }
+          throw createErr
+        }
+
         const fbUser = cred.user
 
         // 2. تحديث الاسم في ملف Auth
         await updateProfile(fbUser, { displayName: cleanName }).catch(() => {})
 
-        // 3. إنشاء مستند Firestore في users/{uid} وزيادة إجمالي الطلاب في site_stats/overview (مرن غير حاجب)
+        // 3. إنشاء مستند Firestore في users/{uid} (مرن غير حاجب)
         let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
         try {
           const synced = await syncUserToFirestore(fbUser.uid, {
@@ -223,30 +271,32 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
             userRole = synced.role
           }
         } catch (syncErr) {
-          console.warn('syncUserToFirestore signup warning:', syncErr)
+          console.warn('syncUserToFirestore signup notice:', syncErr)
         }
 
-        // 4. مزامنة جلسة الكوكي في الخادم (ضمان حفظ السجل ومزامنة Firestore الخادمية)
+        // 4. مزامنة جلسة الكوكي في الخادم
         try {
           const idToken = await fbUser.getIdToken()
-          await fetch('/api/auth/firebase-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              idToken,
-              authProvider: 'email',
-            }),
-          })
-        } catch (sessErr) {
-          console.warn('Session endpoint warning:', sessErr)
-        }
+          await syncFirebaseSession(idToken, 'email')
+        } catch {}
 
-        // 5. التوجيه الفوري بدون أي تعليق
-        if (userRole === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push(targetRedirect)
-        }
+        // 5. حفظ الجلسة محلياً
+        try {
+          localStorage.setItem(
+            'sanad_student_user',
+            JSON.stringify({
+              id: fbUser.uid,
+              email: cleanEmail,
+              name: cleanName,
+              role: userRole,
+            })
+          )
+          localStorage.setItem('sanad_student_registered', 'true')
+        } catch {}
+
+        // 6. التوجيه الفوري
+        const dest = userRole === 'admin' ? '/admin' : targetRedirect
+        completeLoginAndRedirect(dest)
       } else {
         // تسجيل الدخول بالبريد وكلمة المرور
         const cred = await signInWithEmailAndPassword(auth, cleanEmail, password)
@@ -259,49 +309,52 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           if (!check.allowed) {
             await signOut(auth).catch(() => {})
             setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-            setFirebaseLoading(false)
+            setEmailLoading(false)
             return
           }
           if (check.role) {
             userRole = check.role
           }
         } catch (checkErr) {
-          console.warn('verifyUserAccount warning:', checkErr)
+          console.warn('verifyUserAccount notice:', checkErr)
         }
 
         // 2. مزامنة الكوكي عبر السيرفر
         try {
           const idToken = await fbUser.getIdToken()
-          await fetch('/api/auth/firebase-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              idToken,
-              authProvider: 'email',
-            }),
-          })
-        } catch (sessErr) {
-          console.warn('Session endpoint warning:', sessErr)
-        }
+          await syncFirebaseSession(idToken, 'email')
+        } catch {}
 
-        // 3. التوجيه بناءً على الصلاحيات
-        if (userRole === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push(targetRedirect)
-        }
+        // 3. حفظ الجلسة محلياً
+        try {
+          localStorage.setItem(
+            'sanad_student_user',
+            JSON.stringify({
+              id: fbUser.uid,
+              email: cleanEmail,
+              name: fbUser.displayName || cleanEmail.split('@')[0],
+              role: userRole,
+            })
+          )
+          localStorage.setItem('sanad_student_registered', 'true')
+        } catch {}
+
+        // 4. التوجيه بناءً على الصلاحيات
+        const dest = userRole === 'admin' ? '/admin' : targetRedirect
+        completeLoginAndRedirect(dest)
       }
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
       const msg = fbErr.message || ''
       if (fbErr.code === 'auth/email-already-in-use') {
-        setFirebaseError('هذا البريد مسجل مسبقاً، يمكنك تسجيل الدخول مباشرة بكلمة المرور.')
+        setIsSignup(false)
+        setFirebaseError('هذا البريد مسجل مسبقاً في سَنَد. تم تحويلك لتسجيل الدخول، يرجى كتابة كلمة المرور للمتابعة.')
       } else if (
         fbErr.code === 'auth/invalid-credential' ||
         fbErr.code === 'auth/wrong-password' ||
         fbErr.code === 'auth/user-not-found'
       ) {
-        setFirebaseError('بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.')
+        setFirebaseError('بيانات الدخول غير صحيحة، أو الحساب غير مسجل بعد. تأكد من البريد وكلمة المرور أو أنشئ حساباً جديداً.')
       } else if (fbErr.code === 'auth/invalid-email') {
         setFirebaseError('عنوان البريد الإلكتروني غير صحيح.')
       } else if (fbErr.code === 'auth/weak-password') {
@@ -320,21 +373,21 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         setFirebaseError(fbErr.message || 'حدث خطأ أثناء الاتصال بخادم المصادقة.')
       }
     } finally {
-      setFirebaseLoading(false)
+      setEmailLoading(false)
     }
   }
 
   // استعادة كلمة المرور عبر رابط Firebase Auth الرسمي
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setFirebaseLoading(true)
+    setResetLoading(true)
     setFirebaseError(null)
     setResetSuccessMsg(null)
 
     const cleanEmail = emailInput.trim().toLowerCase()
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setFirebaseError('يرجى كتابة عنوان بريد إلكتروني صحيح.')
-      setFirebaseLoading(false)
+      setResetLoading(false)
       return
     }
 
@@ -356,7 +409,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         setFirebaseError(fbErr.message || 'تعذر إرسال رابط استعادة كلمة المرور حالياً.')
       }
     } finally {
-      setFirebaseLoading(false)
+      setResetLoading(false)
     }
   }
 
@@ -380,11 +433,9 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               ? 'تعيين كلمة المرور الجديدة'
               : isForgot
               ? 'استعادة وتعديل كلمة المرور'
-              : authTab === 'otp'
-              ? 'الدخول الموثق عبر البريد الإلكتروني'
               : isSignup
               ? 'إنشاء حساب جديد لطالب العلم'
-              : 'حيّاك الله في منصة سَنَد'}
+              : 'تسجيل الدخول إلى منصة سَنَد'}
           </h1>
           <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
             {isVerifyEmailOtp
@@ -393,13 +444,47 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               ? 'أدخل رمز التحقق المرسل لبريدك مع كلمة المرور الجديدة لتحديث حسابك'
               : isForgot
               ? 'أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة تعيين كلمة المرور بأمان'
-              : authTab === 'otp'
-              ? 'اكتب بريدك وسنرسل رمز تحقق سرياً يصلك فوراً في بريدك الإلكتروني'
               : isSignup
-              ? 'أنشئ حسابك لمزامنة كشكول الفوائد وقيود المتون والتقارير العلمية'
+              ? 'أنشئ حسابك لمزامنة كشكول الفوائد وقيود العلم والتأصيل العلمي'
               : 'سجل دخولك ببريدك وكلمة المرور لمتابعة مجالسك التأصيلية'}
           </p>
         </div>
+
+        {/* مبدل رئيسي واضح وبارز بين تسجيل الدخول وإنشاء حساب جديد */}
+        {!isVerifyEmailOtp && !isResetStep2 && !isForgot && (
+          <div className="mt-5 grid grid-cols-2 rounded-2xl border border-stone-200 bg-stone-100/70 p-1 text-xs font-bold dark:border-stone-800 dark:bg-stone-800/80">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignup(false)
+                setFirebaseError(null)
+              }}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 transition-all cursor-pointer ${
+                !isSignup
+                  ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300 font-black'
+                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+              }`}
+            >
+              <LogIn className="h-4 w-4" />
+              <span>تسجيل الدخول</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignup(true)
+                setFirebaseError(null)
+              }}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 transition-all cursor-pointer ${
+                isSignup
+                  ? 'bg-white text-emerald-950 shadow-xs dark:bg-stone-700 dark:text-emerald-300 font-black'
+                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>حساب جديد</span>
+            </button>
+          </div>
+        )}
 
         {/* إشعار تأكيد تسجيل الخروج بنجاح */}
         {isLoggedOut && !params.error && !params.message && (
@@ -409,7 +494,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           </div>
         )}
 
-        {/* رسائل التنبيه والنجاح */}
+        {/* رسائل التنبيه والخطأ */}
         {params.error && !firebaseError && (
           <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/60 dark:text-rose-200 space-y-2">
             <div className="flex items-center gap-2">
@@ -610,14 +695,14 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
              ======================================================== */
           <>
             {/* زر تسجيل الدخول الموثق عبر Google (Firebase Auth) */}
-            <div className="mt-6">
+            <div className="mt-4">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                disabled={firebaseLoading}
+                disabled={isAnyLoading}
                 className="w-full rounded-2xl bg-white border border-stone-200 py-3 px-4 text-xs sm:text-sm font-bold text-stone-800 shadow-xs hover:bg-stone-50 hover:border-stone-300 hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-3 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 dark:hover:bg-stone-750 disabled:opacity-50"
               >
-                {firebaseLoading ? (
+                {googleLoading ? (
                   <RefreshCw className="h-5 w-5 animate-spin text-emerald-800 dark:text-emerald-400" />
                 ) : (
                   <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
@@ -655,7 +740,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               </div>
             </div>
 
-            {/* أزرار التبديل الثنائية النظيفة */}
+            {/* أزرار التبديل الفرعية (كلمة المرور / رمز البريد) */}
             <div className="flex rounded-2xl border border-stone-200 bg-stone-100/70 p-1 text-[11px] sm:text-xs font-bold dark:border-stone-700 dark:bg-stone-800">
               <button
                 type="button"
@@ -669,8 +754,8 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                     : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
                 }`}
               >
-                <User className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-                <span>{isSignup ? 'حساب جديد' : 'كلمة المرور'}</span>
+                <KeyRound className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+                <span>كلمة المرور</span>
               </button>
 
               <button
@@ -752,10 +837,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
                   <button
                     type="submit"
-                    disabled={firebaseLoading}
+                    disabled={isAnyLoading}
                     className="w-full rounded-2xl bg-linear-to-r from-emerald-800 to-emerald-950 py-3.5 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-950/20 hover:from-emerald-700 hover:to-emerald-900 transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-600/30 disabled:opacity-50"
                   >
-                    {firebaseLoading ? (
+                    {resetLoading ? (
                       <RefreshCw className="h-4 w-4 animate-spin text-amber-300" />
                     ) : (
                       <Send className="h-4 w-4 text-amber-300" />
@@ -865,10 +950,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
                   <button
                     type="submit"
-                    disabled={firebaseLoading}
+                    disabled={isAnyLoading}
                     className="w-full rounded-2xl bg-emerald-900 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-950/20 hover:bg-emerald-950 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {firebaseLoading ? (
+                    {emailLoading ? (
                       <RefreshCw className="h-4 w-4 animate-spin text-amber-300" />
                     ) : isSignup ? (
                       <>
@@ -893,8 +978,8 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                       className="text-xs font-bold text-stone-500 hover:text-emerald-800 transition dark:text-stone-400 dark:hover:text-emerald-400 cursor-pointer"
                     >
                       {isSignup
-                        ? 'لديك حساب بالفعل؟ تسجيل الدخول'
-                        : 'طالب جديد في المنصة؟ أنشئ حسابك من هنا'}
+                        ? 'لديك حساب بالفعل؟ اضغط هنا لتسجيل الدخول'
+                        : 'طالب جديد في المنصة؟ اضغط هنا لإنشاء حساب جديد'}
                     </button>
                   </div>
                 </form>

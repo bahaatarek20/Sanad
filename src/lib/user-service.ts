@@ -131,7 +131,9 @@ export async function syncUserToFirestore(
   // الحالة الثانية: مستخدم مسجل مسبقاً، محاولة القراءة بأمان تام ضد انقطاع الشبكة
   let existingSnap = null
   try {
-    existingSnap = await getDoc(userRef)
+    const getDocPromise = getDoc(userRef)
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
+    existingSnap = await Promise.race([getDocPromise, timeoutPromise])
   } catch (err) {
     console.warn('syncUserToFirestore: getDoc failed (offline or network error):', err)
   }
@@ -210,9 +212,11 @@ export async function verifyUserAccount(uid: string): Promise<{
 }> {
   try {
     const userRef = doc(db, 'users', uid)
-    const snap = await getDoc(userRef)
+    const getDocPromise = getDoc(userRef)
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
+    const snap = await Promise.race([getDocPromise, timeoutPromise])
 
-    if (!snap.exists()) {
+    if (!snap || !snap.exists()) {
       return { allowed: true, role: 'student', status: 'active', user: null }
     }
 
