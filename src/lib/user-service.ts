@@ -50,10 +50,10 @@ export async function syncUserToFirestore(
   const cleanEmail = (data.email || '').toLowerCase().trim()
   const isDefaultAdmin = cleanEmail === SUPER_ADMIN_EMAIL
   const userRef = doc(db, 'users', uid)
-  const existingSnap = await getDoc(userRef)
 
-  if (!existingSnap.exists()) {
-    // مستخدم جديد ينشأ لأول مرة
+  // الحالة الأولى: مستخدم جديد ينشأ لأول مرة
+  // لا نحتاج إطلاقاً إلى استعلام getDoc لأن الحساب جديد، وبذلك نتفادى خطأ "client is offline"
+  if (data.isNewUser) {
     const newUser: Record<string, unknown> = {
       uid,
       fullName: data.fullName || cleanEmail.split('@')[0],
@@ -68,7 +68,11 @@ export async function syncUserToFirestore(
       completedCourses: [],
     }
 
-    await setDoc(userRef, newUser)
+    try {
+      await setDoc(userRef, newUser, { merge: true })
+    } catch (e) {
+      console.warn('syncUserToFirestore (new user setDoc):', e)
+    }
 
     // زيادة عداد إجمالي المستخدمين في site_stats/overview
     try {
@@ -122,6 +126,44 @@ export async function syncUserToFirestore(
       status: 'active',
       avatarUrl: data.avatarUrl || null,
     }
+  }
+
+  // الحالة الثانية: مستخدم مسجل مسبقاً، محاولة القراءة بأمان تام ضد انقطاع الشبكة
+  let existingSnap = null
+  try {
+    existingSnap = await getDoc(userRef)
+  } catch (err) {
+    console.warn('syncUserToFirestore: getDoc failed (offline or network error):', err)
+  }
+
+  if (!existingSnap || !existingSnap.exists()) {
+    // في حال عدم وجود المستند أو تعذر جلبه بسبب offline: ننشئه/ندمجه بأمان
+    const fallbackUser: Record<string, unknown> = {
+      uid,
+      fullName: data.fullName || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      phoneNumber: data.phoneNumber || null,
+      role: isDefaultAdmin ? 'admin' : 'student',
+      status: 'active',
+      avatarUrl: data.avatarUrl || null,
+      lastLoginAt: serverTimestamp(),
+    }
+
+    try {
+      await setDoc(userRef, fallbackUser, { merge: true })
+    } catch (e) {
+      console.warn('syncUserToFirestore fallback setDoc failed:', e)
+    }
+
+    return {
+      uid,
+      fullName: data.fullName,
+      email: cleanEmail,
+      phoneNumber: data.phoneNumber || null,
+      role: isDefaultAdmin ? 'admin' : 'student',
+      status: 'active',
+      avatarUrl: data.avatarUrl || null,
+    }
   } else {
     // مستخدم موجود بالفعل: تحديث وقت آخر ظهور ومعلومات الاتصال
     const existingData = existingSnap.data() as SanadUser
@@ -142,7 +184,11 @@ export async function syncUserToFirestore(
       updates.role = 'admin'
     }
 
-    await updateDoc(userRef, updates)
+    try {
+      await updateDoc(userRef, updates)
+    } catch (e) {
+      console.warn('syncUserToFirestore updateDoc failed:', e)
+    }
 
     return {
       ...existingData,

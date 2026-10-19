@@ -226,8 +226,8 @@
     "authProvider": "email",
     "phone": "+201012728516",
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-18T12:46:45.042Z",
-    "totalStudyMinutes": 869,
+    "lastActive": "2026-10-18T12:59:23.420Z",
+    "totalStudyMinutes": 875,
     "streak": 1,
     "completedCourses": [],
     "completedEpisodesMap": {
@@ -245,7 +245,7 @@
       "2026-10-06": 3,
       "2026-10-12": 2,
       "2026-10-13": 108,
-      "2026-10-18": 2
+      "2026-10-18": 8
     },
     "listenedSessions": [
       {

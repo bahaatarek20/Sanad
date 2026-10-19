@@ -25,7 +25,7 @@ import {
   sendPasswordResetEmail,
   signOut,
 } from 'firebase/auth'
-import { syncUserToFirestore, verifyUserAccount } from '@/lib/user-service'
+import { syncUserToFirestore, verifyUserAccount, SUPER_ADMIN_EMAIL } from '@/lib/user-service'
 import {
   requestOtpAction,
   verifyOtpAction,
@@ -89,43 +89,64 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     try {
       const res = await signInWithPopup(auth, googleProvider)
       const fbUser = res.user
+      const cleanEmail = (fbUser.email || '').toLowerCase().trim()
+      let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
 
-      // 1. مزامنة فورية في Firestore (users/{uid}) وزيادة عداد الإحصائيات
-      const synced = await syncUserToFirestore(fbUser.uid, {
-        fullName: fbUser.displayName || fbUser.email?.split('@')[0] || 'طالب العلم',
-        email: fbUser.email || '',
-        phoneNumber: fbUser.phoneNumber,
-        avatarUrl: fbUser.photoURL,
-        isNewUser: false,
-      })
+      // 1. مزامنة فورية في Firestore (users/{uid}) وزيادة عداد الإحصائيات (مرنة غير حاجبة)
+      try {
+        const synced = await syncUserToFirestore(fbUser.uid, {
+          fullName: fbUser.displayName || fbUser.email?.split('@')[0] || 'طالب العلم',
+          email: fbUser.email || '',
+          phoneNumber: fbUser.phoneNumber,
+          avatarUrl: fbUser.photoURL,
+          isNewUser: false,
+        })
+        if (synced?.role) {
+          userRole = synced.role
+        }
+      } catch (syncErr) {
+        console.warn('syncUserToFirestore google warning:', syncErr)
+      }
 
       // 2. التحقق من حالة الحساب (حظر أو صلاحية الإدارة)
-      const check = await verifyUserAccount(fbUser.uid)
-      if (!check.allowed) {
-        await signOut(auth).catch(() => {})
-        setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-        return
+      try {
+        const check = await verifyUserAccount(fbUser.uid)
+        if (!check.allowed) {
+          await signOut(auth).catch(() => {})
+          setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+          return
+        }
+        if (check.role) {
+          userRole = check.role
+        }
+      } catch (checkErr) {
+        console.warn('verifyUserAccount google warning:', checkErr)
       }
 
       // 3. توثيق جلسة الكوكي المشفرة عبر السيرفر
-      const idToken = await fbUser.getIdToken()
-      await fetch('/api/auth/firebase-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idToken,
-          authProvider: 'google',
-        }),
-      })
+      try {
+        const idToken = await fbUser.getIdToken()
+        await fetch('/api/auth/firebase-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idToken,
+            authProvider: 'google',
+          }),
+        })
+      } catch (sessErr) {
+        console.warn('Session endpoint warning:', sessErr)
+      }
 
       // 4. التوجيه بناءً على الصلاحيات
-      if (check.role === 'admin' || synced.role === 'admin') {
+      if (userRole === 'admin') {
         router.push('/admin')
       } else {
         router.push('/courses')
       }
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
+      const msg = fbErr.message || ''
       if (fbErr.code === 'auth/popup-closed-by-user') {
         return
       }
@@ -135,6 +156,16 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       }
       if (fbErr.code === 'auth/unauthorized-domain') {
         setFirebaseError('نطاق المنصة الحالي غير مدرج في النطاقات المعتمدة لـ Google Firebase. يرجى إضافة النطاق في إعدادات Firebase Console.')
+        return
+      }
+      if (
+        fbErr.code === 'auth/network-request-failed' ||
+        msg.includes('offline') ||
+        msg.includes('client is offline') ||
+        msg.includes('network') ||
+        msg.includes('Failed to get document')
+      ) {
+        setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
         return
       }
       setFirebaseError(fbErr.message || 'تعذر استكمال تسجيل الدخول عبر Google حالياً. يرجى المحاولة لاحقاً أو استخدام البريد.')
@@ -175,26 +206,38 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         // 2. تحديث الاسم في ملف Auth
         await updateProfile(fbUser, { displayName: cleanName }).catch(() => {})
 
-        // 3. إنشاء مستند Firestore في users/{uid} وزيادة إجمالي الطلاب في site_stats/overview
-        const synced = await syncUserToFirestore(fbUser.uid, {
-          fullName: cleanName,
-          email: cleanEmail,
-          isNewUser: true,
-        })
+        // 3. إنشاء مستند Firestore في users/{uid} وزيادة إجمالي الطلاب في site_stats/overview (مرن غير حاجب)
+        let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+        try {
+          const synced = await syncUserToFirestore(fbUser.uid, {
+            fullName: cleanName,
+            email: cleanEmail,
+            isNewUser: true,
+          })
+          if (synced?.role) {
+            userRole = synced.role
+          }
+        } catch (syncErr) {
+          console.warn('syncUserToFirestore signup warning:', syncErr)
+        }
 
-        // 4. مزامنة جلسة الكوكي في الخادم
-        const idToken = await fbUser.getIdToken()
-        await fetch('/api/auth/firebase-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idToken,
-            authProvider: 'email',
-          }),
-        })
+        // 4. مزامنة جلسة الكوكي في الخادم (ضمان حفظ السجل ومزامنة Firestore الخادمية)
+        try {
+          const idToken = await fbUser.getIdToken()
+          await fetch('/api/auth/firebase-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              idToken,
+              authProvider: 'email',
+            }),
+          })
+        } catch (sessErr) {
+          console.warn('Session endpoint warning:', sessErr)
+        }
 
-        // 5. التوجيه الفوري
-        if (synced.role === 'admin') {
+        // 5. التوجيه الفوري بدون أي تعليق
+        if (userRole === 'admin') {
           router.push('/admin')
         } else {
           router.push('/courses')
@@ -205,27 +248,39 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         const fbUser = cred.user
 
         // 1. فحص حالة الحساب (حظر أو نشط)
-        const check = await verifyUserAccount(fbUser.uid)
-        if (!check.allowed) {
-          await signOut(auth).catch(() => {})
-          setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-          setFirebaseLoading(false)
-          return
+        let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+        try {
+          const check = await verifyUserAccount(fbUser.uid)
+          if (!check.allowed) {
+            await signOut(auth).catch(() => {})
+            setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+            setFirebaseLoading(false)
+            return
+          }
+          if (check.role) {
+            userRole = check.role
+          }
+        } catch (checkErr) {
+          console.warn('verifyUserAccount warning:', checkErr)
         }
 
         // 2. مزامنة الكوكي عبر السيرفر
-        const idToken = await fbUser.getIdToken()
-        await fetch('/api/auth/firebase-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idToken,
-            authProvider: 'email',
-          }),
-        })
+        try {
+          const idToken = await fbUser.getIdToken()
+          await fetch('/api/auth/firebase-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              idToken,
+              authProvider: 'email',
+            }),
+          })
+        } catch (sessErr) {
+          console.warn('Session endpoint warning:', sessErr)
+        }
 
         // 3. التوجيه بناءً على الصلاحيات
-        if (check.role === 'admin') {
+        if (userRole === 'admin') {
           router.push('/admin')
         } else {
           router.push('/courses')
@@ -233,6 +288,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       }
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
+      const msg = fbErr.message || ''
       if (fbErr.code === 'auth/email-already-in-use') {
         setFirebaseError('هذا البريد مسجل مسبقاً، يمكنك تسجيل الدخول مباشرة بكلمة المرور.')
       } else if (
@@ -247,6 +303,14 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         setFirebaseError('كلمة المرور ضعيفة، يجب أن تحتوي على 6 أحرف أو أرقام على الأقل.')
       } else if (fbErr.code === 'auth/too-many-requests') {
         setFirebaseError('تم إجراء محاولات متكررة، يرجى الانتظار قليلاً أو استعادة كلمة المرور.')
+      } else if (
+        fbErr.code === 'auth/network-request-failed' ||
+        msg.includes('offline') ||
+        msg.includes('client is offline') ||
+        msg.includes('network') ||
+        msg.includes('Failed to get document')
+      ) {
+        setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
       } else {
         setFirebaseError(fbErr.message || 'حدث خطأ أثناء الاتصال بخادم المصادقة.')
       }
@@ -274,8 +338,15 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       setResetSuccessMsg('تم إرسال رابط استعادة وتعديل كلمة المرور إلى بريدك الإلكتروني بنجاح. راجع صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).')
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
+      const msg = fbErr.message || ''
       if (fbErr.code === 'auth/user-not-found') {
         setFirebaseError('هذا البريد الإلكتروني غير مسجل في المنصة.')
+      } else if (
+        fbErr.code === 'auth/network-request-failed' ||
+        msg.includes('offline') ||
+        msg.includes('network')
+      ) {
+        setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
       } else {
         setFirebaseError(fbErr.message || 'تعذر إرسال رابط استعادة كلمة المرور حالياً.')
       }
