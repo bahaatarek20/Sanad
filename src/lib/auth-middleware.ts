@@ -23,17 +23,9 @@ export async function updateSession(request: NextRequest) {
   // 1. استثناء مسارات الدخول والصفحات العامة وملفات النظام
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isApi = pathname.startsWith('/api')
-  const isPublicPage =
-    pathname === '/' ||
-    pathname.startsWith('/courses') ||
-    pathname.startsWith('/roadmap') ||
-    pathname.startsWith('/community') ||
+  // الصفحات العامة المستثناة حصراً (التحقق الخارجي من رمز QR للإجازات الموثقة والسياسات القانونية)
+  const isPublicExempt =
     pathname.startsWith('/verify-ijaza') ||
-    pathname.startsWith('/download') ||
-    pathname.startsWith('/app') ||
-    pathname === '/offline' ||
-    pathname === '/about' ||
-    pathname === '/contact' ||
     pathname === '/privacy' ||
     pathname === '/terms'
   const isStaticFile =
@@ -41,7 +33,11 @@ export async function updateSession(request: NextRequest) {
     pathname === '/manifest.json' ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/favicon.ico' ||
+    pathname === '/icon.png' ||
+    pathname === '/apple-icon.png' ||
     pathname === '/icon.svg' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
     pathname.includes('.')
 
   // 2. فحص كوكي الطالب المعتمد
@@ -91,23 +87,27 @@ export async function updateSession(request: NextRequest) {
       } catch {}
     }
 
-    // إذا لم يكن المشرف المعتمد، يُحظر الوصول تماماً ويُحوّل للرئيسية دون كشف البوابة
+    // إذا لم يكن المشرف المعتمد، يُحظر الوصول تماماً ويُحوّل للدخول دون كشف البوابة
     if (!isOwnerVerified) {
-      const homeUrl = new URL('/', request.url)
-      return attachSecurityHeaders(NextResponse.redirect(homeUrl))
+      const loginUrl = new URL('/login', request.url)
+      return attachSecurityHeaders(NextResponse.redirect(loginUrl))
     }
   }
 
-  // إذا لم يكن مسجلاً وحاول فتح مسار مقيد، يتم إلزامه بصفحة الدخول والتسجيل
-  if (!hasUser && !isAuthRoute && !isApi && !isPublicPage && !isStaticFile) {
+  // 3. قفل المنصة العام: إلزام كل زائر بتسجيل الدخول وإنشاء حساب للوصول إلى المنصة
+  if (!hasUser && !isAuthRoute && !isApi && !isPublicExempt && !isStaticFile) {
     const loginUrl = new URL('/login', request.url)
+    if (pathname !== '/' && pathname !== '/courses') {
+      loginUrl.searchParams.set('redirect', pathname)
+    }
     return attachSecurityHeaders(NextResponse.redirect(loginUrl))
   }
 
-  // إذا كان مسجلاً بالفعل وفتح صفحة الدخول، يوجه فوراً للمنصة
+  // 4. إذا كان الطالب مسجلاً بالفعل وفتح صفحة الدخول، يوجه فوراً للمتون أو المسار المطلوب
   if (hasUser && pathname === '/login') {
-    const homeUrl = new URL('/', request.url)
-    return attachSecurityHeaders(NextResponse.redirect(homeUrl))
+    const targetUrl = request.nextUrl.searchParams.get('redirect') || '/courses'
+    const redirectUrl = new URL(targetUrl.startsWith('/') ? targetUrl : '/courses', request.url)
+    return attachSecurityHeaders(NextResponse.redirect(redirectUrl))
   }
 
   return attachSecurityHeaders(NextResponse.next({ request }))

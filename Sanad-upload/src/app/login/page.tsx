@@ -39,6 +39,7 @@ interface LoginPageProps {
     mode?: string
     email?: string
     loggedOut?: string
+    redirect?: string
   }>
 }
 
@@ -50,6 +51,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const isResetStep2 = params.mode === 'reset-step2'
   const isExplicitLogin = params.mode === 'login'
   const isLoggedOut = params.loggedOut === 'true'
+  const targetRedirect =
+    params.redirect && params.redirect.startsWith('/') && !params.redirect.startsWith('//')
+      ? params.redirect
+      : '/courses'
 
   // التبويبات والخيارات
   const [authTab, setAuthTab] = useState<'password' | 'otp'>('password')
@@ -142,7 +147,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       if (userRole === 'admin') {
         router.push('/admin')
       } else {
-        router.push('/courses')
+        router.push(targetRedirect)
       }
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
@@ -240,7 +245,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         if (userRole === 'admin') {
           router.push('/admin')
         } else {
-          router.push('/courses')
+          router.push(targetRedirect)
         }
       } else {
         // تسجيل الدخول بالبريد وكلمة المرور
@@ -283,7 +288,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         if (userRole === 'admin') {
           router.push('/admin')
         } else {
-          router.push('/courses')
+          router.push(targetRedirect)
         }
       }
     } catch (err: unknown) {

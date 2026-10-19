@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getActiveCourseBySlug, getActiveCourses } from '@/lib/courses-store'
 import { getStudentProfileData, getStudentLocalNotes } from '@/lib/student-tracking'
@@ -89,6 +89,10 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
     user = await getCurrentStudentUser()
   } catch (err) {
     console.warn('Failed to fetch student user in course SSR:', err)
+  }
+
+  if (!user) {
+    redirect(`/login?redirect=/courses/${slug}`)
   }
 
   let initialNotes: NoteItem[] = []

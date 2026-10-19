@@ -11,8 +11,8 @@ interface BottomNavProps {
 export default function BottomNav({ isLoggedIn }: BottomNavProps) {
   const pathname = usePathname()
 
-  // إخفاء الشريط في صفحات العرض الكامل للفيديو المباشر أو البوابات الإدارية المعزولة إذا لزم الأمر
-  const isHidden = pathname?.startsWith('/sanad-control-gate')
+  // إخفاء الشريط في صفحات العرض الكامل للفيديو المباشر وصفحة الدخول أو البوابات الإدارية المعزولة
+  const isHidden = pathname?.startsWith('/sanad-control-gate') || pathname?.startsWith('/login')
 
   if (isHidden) return null
 

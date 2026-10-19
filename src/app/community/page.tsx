@@ -3,6 +3,7 @@ import { getScholarlyLeaderboardData } from '@/lib/student-tracking'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import CommunityHub, { CommunityPost } from '@/components/community-hub'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
+import { redirect } from 'next/navigation'
 
 import { getLocalCommunityPosts } from '@/lib/community-store'
 import { getCommunityPostsFromCloud } from '@/lib/cloud-db'
@@ -93,7 +94,10 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
 
 export default async function CommunityPage() {
   const currentUser = await getCurrentStudentUser()
-  const isLoggedIn = Boolean(currentUser)
+  if (!currentUser) {
+    redirect('/login?redirect=/community')
+  }
+  const isLoggedIn = true
 
   // 1. نبدأ بالسجل المحلي كقاعدة مبدئية
   const localPosts = getLocalCommunityPosts()

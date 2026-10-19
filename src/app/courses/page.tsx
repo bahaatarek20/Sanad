@@ -2,6 +2,7 @@ import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import { Compass, BookOpen } from 'lucide-react'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import { getStudentProfileData } from '@/lib/student-tracking'
 
@@ -46,6 +47,9 @@ export default async function CoursesCatalogPage() {
 
   // جلب بيانات الطالب للتعرف على المتون المنجزة
   const user = await getCurrentStudentUser()
+  if (!user) {
+    redirect('/login?redirect=/courses')
+  }
 
   let completedCourseSlugs: string[] = []
 

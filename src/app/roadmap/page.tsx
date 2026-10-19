@@ -1,4 +1,5 @@
 import { getCurrentStudentUser } from '@/lib/auth-helper'
+import { redirect } from 'next/navigation'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import { getStudentProfileData } from '@/lib/student-tracking'
 import CurriculumRoadmap from '@/components/curriculum-roadmap'
@@ -41,6 +42,9 @@ export default async function RoadmapPage() {
   const courses = getActiveCourses()
   const categories = getActiveCategories()
   const user = await getCurrentStudentUser()
+  if (!user) {
+    redirect('/login?redirect=/roadmap')
+  }
 
   let completedCourseSlugs: string[] = []
 

@@ -82,6 +82,9 @@ export default async function HomePage() {
 
   // جلب بيانات الطالب للتعرف على المتون المنجزة إن كان مسجلاً
   const user = await getCurrentStudentUser()
+  if (!user) {
+    redirect('/login')
+  }
 
   let completedCourseSlugs: string[] = []
 

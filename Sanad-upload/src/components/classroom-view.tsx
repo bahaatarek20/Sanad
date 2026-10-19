@@ -132,7 +132,7 @@ export default function ClassroomView({
     : []
   const hasUncompletedPrereqs = uncompletedPrerequisites.length > 0
   const allPrereqsDone = hasPrerequisites && uncompletedPrerequisites.length === 0
-  const [isProgressionOpen, setIsProgressionOpen] = useState(true)
+  const [isProgressionOpen, setIsProgressionOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
 
   // فتح وإصدار الإجازة الموثقة مباشرة أو فحص استحقاقها عبر اختبار الضبط (80%)
@@ -753,9 +753,9 @@ export default function ClassroomView({
       )}
 
       {/* 1. الترويسة وأزرار التنقل والإنجاز وأدوات القاعة التعليمية */}
-      <div className="flex flex-col gap-4 border-b border-stone-200/80 pb-5 sm:flex-row sm:items-center sm:justify-between dark:border-stone-800">
-        <div className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-stone-500 dark:text-stone-400">
+      <div className="flex flex-col gap-3 sm:gap-4 border-b border-stone-200/80 pb-4 sm:pb-5 sm:flex-row sm:items-center sm:justify-between dark:border-stone-800">
+        <div className="space-y-1.5 sm:space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs font-bold text-stone-500 dark:text-stone-400">
             <Link
               href="/courses"
               className="hover:text-emerald-900 flex items-center gap-1 transition dark:hover:text-emerald-400"
@@ -769,56 +769,56 @@ export default function ClassroomView({
             </span>
           </div>
 
-          <h1 className="flex flex-wrap items-baseline gap-2.5 text-2xl font-black text-stone-900 sm:text-3xl dark:text-white leading-snug">
+          <h1 className="flex flex-wrap items-baseline gap-2 text-xl sm:text-2xl lg:text-3xl font-black text-stone-900 dark:text-white leading-snug">
             <span>«{currentCourse.title}»</span>
             {currentCourse.instructor && (
-              <span className="rounded-xl bg-emerald-50 px-3 py-1 text-sm sm:text-base font-extrabold text-emerald-900 border border-emerald-200/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800">
+              <span className="rounded-lg sm:rounded-xl bg-emerald-50 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm font-extrabold text-emerald-900 border border-emerald-200/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800">
                 الشارح: {currentCourse.instructor}
               </span>
             )}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-medium text-stone-500 dark:text-stone-400">
-            <span className="flex items-center gap-1.5 font-bold">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs font-medium text-stone-500 dark:text-stone-400">
+            <span className="flex items-center gap-1 font-bold">
               {isPlaylist ? (
                 <>
                   <ListVideo className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>سلسلة علمية متكاملة ({totalLessonsCount} مجلساً)</span>
+                  <span>سلسلة علمية ({totalLessonsCount} مجلساً)</span>
                 </>
               ) : (
                 <>
                   <Video className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>مجلس علمي كامل</span>
+                  <span>مجلس كامل</span>
                 </>
               )}
             </span>
             <span>•</span>
             <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
               <CheckCircle className="h-3.5 w-3.5" />
-              <span>{completedEpisodes.size} مجالس منجزة من {totalLessonsCount}</span>
+              <span>{completedEpisodes.size} من {totalLessonsCount} منجزة</span>
             </span>
           </div>
         </div>
 
         {/* زر الإجازة والشهادة الموثقة + زر المراجعة السريعة والخلاصة */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setIsQuickBriefOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-amber-50/80 px-3.5 py-2 text-xs font-black text-amber-950 hover:bg-amber-100 hover:border-amber-400 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+            className="inline-flex items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-2xl border border-amber-300/80 bg-amber-50/80 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black text-amber-950 hover:bg-amber-100 hover:border-amber-400 transition cursor-pointer dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
             title="عرض أهم مسائل ومقاصد المتن وطريقة ضبطه الموصى بها"
           >
-            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <span>خلاصة ومراجعة سريعة ⚡</span>
+            <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <span>خلاصة سريعة ⚡</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsQuizOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-300/80 bg-emerald-50/80 px-3.5 py-2 text-xs font-black text-emerald-950 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+            className="inline-flex items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-2xl border border-emerald-300/80 bg-emerald-50/80 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black text-emerald-950 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
             title="اختبار ضبط مسائل المتن واستحقاق الإجازة الموثقة (نسبة الاجتياز 80%)"
           >
-            <HelpCircle className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+            <HelpCircle className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
             <span>اختبار الضبط 📝</span>
           </button>
 
@@ -826,28 +826,28 @@ export default function ClassroomView({
             type="button"
             onClick={handleOpenDirectIjaza}
             disabled={isIssuingDirectIjaza}
-            className="inline-flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-3.5 py-2 text-xs font-black text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black text-white shadow-xs transition cursor-pointer disabled:opacity-50"
             title="طلب إجازة قراءة وضبط موثقة برمز QR وكود تجزئة مشفر باسم المنصة"
           >
-            <Award className="h-4 w-4" />
-            <span>{isIssuingDirectIjaza ? 'جارٍ إصدار الإجازة...' : (isCompleted ? 'إجازة المتن الموثقة 📜' : 'طلب إجازة المتن 📜')}</span>
+            <Award className="h-3.5 w-3.5" />
+            <span>{isIssuingDirectIjaza ? 'جارٍ الإجازة...' : (isCompleted ? 'الإجازة 📜' : 'طلب إجازة 📜')}</span>
           </button>
         </div>
       </div>
 
       {/* تنبيه استئناف موضع المشاهدة */}
       {showResumePrompt && savedPosition && (
-        <div className="flex items-center justify-between rounded-2xl border border-amber-300/80 bg-amber-50/90 p-4 text-xs font-bold text-amber-950 shadow-2xs dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+        <div className="flex items-center justify-between rounded-2xl border border-amber-300/80 bg-amber-50/90 p-3 sm:p-4 text-xs font-bold text-amber-950 shadow-2xs dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <span>
-              أهلاً بعودتك يا بطل! توقفت سابقاً عند الدقيقة {Math.floor(savedPosition / 60)}:{String(savedPosition % 60).padStart(2, '0')}. هل تحب المتابعة؟
+            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-[11px] sm:text-xs leading-relaxed">
+              أهلاً بعودتك! توقفت سابقاً عند الدقيقة {Math.floor(savedPosition / 60)}:{String(savedPosition % 60).padStart(2, '0')}. هل تحب المتابعة؟
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setShowResumePrompt(false)}
-              className="rounded-xl bg-amber-900 px-3 py-1 text-white hover:bg-amber-950 transition cursor-pointer"
+              className="rounded-xl bg-amber-900 px-2.5 py-1 text-xs text-white hover:bg-amber-950 transition cursor-pointer"
             >
               استئناف
             </button>
@@ -856,7 +856,7 @@ export default function ClassroomView({
                 setShowResumePrompt(false)
                 localStorage.removeItem(`sanad_pos_${course.slug}`)
               }}
-              className="rounded-xl border border-amber-300 bg-white px-2.5 py-1 text-amber-900 hover:bg-amber-50 transition cursor-pointer dark:bg-stone-800 dark:border-stone-700 dark:text-stone-300"
+              className="rounded-xl border border-amber-300 bg-white px-2 py-1 text-xs text-amber-900 hover:bg-amber-50 transition cursor-pointer dark:bg-stone-800 dark:border-stone-700 dark:text-stone-300"
             >
               من الأول
             </button>
@@ -865,27 +865,32 @@ export default function ClassroomView({
       )}
 
       {/* 2. مسار التدرج المنهجي والمتطلبات السابقة للمتن (Methodological Progression & Prerequisites) */}
-      <div className={`overflow-hidden rounded-3xl border transition-all duration-300 ${
+      <div className={`overflow-hidden rounded-2xl sm:rounded-3xl border transition-all duration-300 ${
         hasUncompletedPrereqs
           ? 'border-amber-300/90 bg-linear-to-b from-amber-50/70 via-white to-amber-50/40 dark:border-amber-900/80 dark:from-amber-950/40 dark:via-stone-900 dark:to-stone-900 shadow-sm'
           : 'border-stone-200/90 bg-linear-to-b from-[#fbf9f4] via-white to-stone-50/40 dark:border-stone-800 dark:from-stone-900/90 dark:via-stone-900 dark:to-stone-900 shadow-xs'
       }`}>
-        {/* الترويسة القابلة للطي والتوسيع */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 border-b border-stone-200/60 dark:border-stone-800/80">
-          <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+        {/* الترويسة الرشيقة المدمجة القابلة للنقر والطي والتوسيع */}
+        <div
+          onClick={() => setIsProgressionOpen(!isProgressionOpen)}
+          className={`cursor-pointer flex items-center justify-between gap-2.5 p-3 sm:p-4.5 transition select-none hover:bg-stone-50/60 dark:hover:bg-stone-800/40 ${
+            isProgressionOpen ? 'border-b border-stone-200/60 dark:border-stone-800/80' : ''
+          }`}
+        >
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl ${
               hasUncompletedPrereqs
                 ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
                 : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
             }`}>
-              <Compass className="h-5 w-5" />
+              <Compass className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black text-stone-900 dark:text-white">
-                  مسار التدرج المنهجي والمتطلبات السابقة
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h3 className="text-xs sm:text-base font-black text-stone-900 dark:text-white truncate">
+                  مسار التدرج المنهجي
                 </h3>
-                <span className={`rounded-xl px-2.5 py-0.5 text-[11px] font-bold border ${
+                <span className={`rounded-lg sm:rounded-xl px-2 py-0.5 text-[10px] sm:text-[11px] font-bold border shrink-0 ${
                   progression.stage === 1
                     ? 'bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800'
                     : progression.stage === 2
@@ -895,30 +900,31 @@ export default function ClassroomView({
                   {progression.stageName}
                 </span>
                 {hasUncompletedPrereqs && (
-                  <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-950 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 animate-pulse">
-                    <AlertCircle className="h-3 w-3 text-amber-600" />
-                    <span>يُنصح بضبط المتطلب السابق أولاً</span>
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-950 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 shrink-0 animate-pulse">
+                    <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
+                    <span>متطلب سابق</span>
                   </span>
                 )}
               </div>
-              <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium">
+              <p className="hidden sm:block text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium truncate">
                 توجيه منهجي لترتيب الأولويات وضبط التسلسل العلمي دون تشتت في فن {currentCourse.category}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
             <Link
               href={`/roadmap?category=${currentCourse.categorySlug || 'hadith'}`}
-              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-stone-700 hover:border-emerald-700 hover:text-emerald-900 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-emerald-400"
+              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white/90 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold text-stone-700 hover:border-emerald-700 hover:text-emerald-900 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-emerald-400"
             >
-              <span>خارطة الفن الكاملة</span>
+              <span className="hidden sm:inline">خارطة الفن الكاملة</span>
+              <span className="sm:hidden">الخارطة</span>
               <ArrowLeft className="h-3 w-3" />
             </Link>
             <button
               type="button"
               onClick={() => setIsProgressionOpen(!isProgressionOpen)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+              className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
               title={isProgressionOpen ? 'طي مسار التدرج' : 'إظهار مسار التدرج'}
             >
               {isProgressionOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

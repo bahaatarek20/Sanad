@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import CurriculumBoard from '@/components/curriculum-board'
 import { Compass, BookOpen } from 'lucide-react'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import { getStudentProfileData } from '@/lib/student-tracking'
 
@@ -14,12 +14,12 @@ export const metadata: Metadata = {
   title: 'خرائط العلوم والمتون التأصيلية',
   description: 'فهرس شامل للمتون الشرعية التأصيلية في 9 فنون مباركة بالتوازي وبلا قيود مع المشايخ المتقنين.',
   alternates: {
-    canonical: 'https://sanad.vercel.app/courses',
+    canonical: 'https://sanad-edu1.vercel.app/courses',
   },
   openGraph: {
     title: 'خرائط العلوم والمتون التأصيلية || منصة سَنَد',
     description: 'فهرس شامل للمتون الشرعية التأصيلية في 9 فنون مباركة بالتوازي وبلا قيود.',
-    url: 'https://sanad.vercel.app/courses',
+    url: 'https://sanad-edu1.vercel.app/courses',
     siteName: 'منصة سَنَد',
     locale: 'ar_SA',
     type: 'website',
@@ -42,43 +42,21 @@ export const metadata: Metadata = {
 
 
 export default async function CoursesCatalogPage() {
-  const supabase = await createClient()
-
   // جلب كافة المتون المعتمدة والنشطة من الخادم (بما فيها التعديلات والإضافات الإدارية)
   const courses = getActiveCourses()
 
   // جلب بيانات الطالب للتعرف على المتون المنجزة
   const user = await getCurrentStudentUser()
+  if (!user) {
+    redirect('/login?redirect=/courses')
+  }
 
   let completedCourseSlugs: string[] = []
 
-  if (user) {
-    // 1. مزامنة المتون المكتملة المحفوظة في سجل الطالب الدائم على السيرفر
-    if (user.email) {
-      const studentProfile = getStudentProfileData(user.email)
-      if (studentProfile?.completedCourses) {
-        completedCourseSlugs = [...studentProfile.completedCourses]
-      }
-    }
-
-    // 2. مزامنة مع Supabase فقط إذا كان الحساب سحابياً
-    if (!user.id.startsWith('student-')) {
-      try {
-        const { data: progress } = await supabase
-          .from('student_progress')
-          .select('course_slug')
-          .eq('user_id', user.id)
-          .eq('is_completed', true)
-
-        if (progress) {
-          const fromDb = progress
-            .map((p) => p.course_slug)
-            .filter((slug): slug is string => Boolean(slug))
-          completedCourseSlugs = Array.from(new Set([...completedCourseSlugs, ...fromDb]))
-        }
-      } catch {
-        // Fallback to server registry
-      }
+  if (user && user.email) {
+    const studentProfile = getStudentProfileData(user.email)
+    if (studentProfile?.completedCourses) {
+      completedCourseSlugs = [...studentProfile.completedCourses]
     }
   }
 
@@ -153,8 +131,8 @@ export default async function CoursesCatalogPage() {
               {
                 '@type': 'BreadcrumbList',
                 itemListElement: [
-                  { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad.vercel.app' },
-                  { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad.vercel.app/courses' },
+                  { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: 'https://sanad-edu1.vercel.app' },
+                  { '@type': 'ListItem', position: 2, name: 'فهرس المتون', item: 'https://sanad-edu1.vercel.app/courses' },
                 ],
               },
               {
@@ -163,7 +141,7 @@ export default async function CoursesCatalogPage() {
                 itemListElement: courses.slice(0, 30).map((c, idx) => ({
                   '@type': 'ListItem',
                   position: idx + 1,
-                  url: `https://sanad.vercel.app/courses/${c.slug}`,
+                  url: `https://sanad-edu1.vercel.app/courses/${c.slug}`,
                   name: c.title,
                 })),
               },
