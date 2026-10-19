@@ -15,7 +15,7 @@ import {
   MessageSquare,
   Copy,
 } from 'lucide-react'
-import { ALL_COURSES } from '@/lib/curriculum-data'
+import type { MatnCourse } from '@/lib/curriculum-data'
 
 interface Message {
   role: 'user' | 'ai'
@@ -133,18 +133,76 @@ function TypingIndicator() {
   )
 }
 
+function getDynamicSuggestedQuestions(courseTitle: string): string[] {
+  const t = courseTitle.toLowerCase()
+  if (t.includes('آجرومية') || t.includes('نحو') || t.includes('إعراب') || t.includes('قطر الندى') || t.includes('ألفية')) {
+    return [
+      'ما هي علامات الإعراب الأصلية والفرعية؟',
+      'كيف أميز بين الجملة الاسمية والجملة الفعلية؟',
+      'اشرح لي إعراب الفاعل ونائب الفاعل باختصار',
+      'ما الفرق بين المعرب والمبني من الأسماء والأفعال؟',
+    ]
+  }
+  if (t.includes('فقه') || t.includes('متفقه') || t.includes('طهارة') || t.includes('زاد المستقنع') || t.includes('أخصر')) {
+    return [
+      'ما هي أركان الوضوء وشروطه وسننه؟',
+      'ما الفرق بين الركن والواجب والشرط في الفقه؟',
+      'ما هي نواقض الوضوء ومبطلات الصلاة؟',
+      'كيف أضبط أبواب المعاملات وفقه البيوع؟',
+    ]
+  }
+  if (t.includes('حديث') || t.includes('نووية') || t.includes('أربعين') || t.includes('بيقونية') || t.includes('نخبة')) {
+    return [
+      'ما هو الضابط الفقهي لحديث «إنما الأعمال بالنيات»؟',
+      'ما الفرق بين الحديث الصحيح والحسن والضعيف؟',
+      'اشرح لي مراتب الدين الثلاث في حديث جبريل',
+      'ما هو ضابط العمل بالحديث في فضائل الأعمال؟',
+    ]
+  }
+  if (t.includes('عقيدة') || t.includes('توحيد') || t.includes('واسطية') || t.includes('طحاوية') || t.includes('أصول ثلاثة')) {
+    return [
+      'ما الفرق بين توحيد الربوبية وتوحيد الألوهية؟',
+      'ما هي أركان الإيمان الستة وما ضابط الإيمان بالقدر؟',
+      'ما هي الأصول الثلاثة التي يجب على العبد معرفتها؟',
+      'ما هو المنهج المعتمد في إثبات أسماء الله وصفاته؟',
+    ]
+  }
+  if (t.includes('أصول') || t.includes('ورقات') || t.includes('قواعد')) {
+    return [
+      'ما الفرق بين الحكم التكليفي والحكم الوضعي؟',
+      'ما هي الأدلة المتفق عليها بين الأئمة؟',
+      'ما الفرق بين العام والخاص والمطلق والمقيد؟',
+      'اشرح لي قاعدة «الأمور بمقاصدها» وتطبيقاتها',
+    ]
+  }
+  if (t.includes('حلية') || t.includes('آداب')) {
+    return [
+      'ما هي أهم ركائز حفظ هيبة العلم وأدب الطلب؟',
+      'كيف يتدرج طالب العلم بين المتون والمطولات؟',
+      'ما هو أدب الطالب مع شيخه وأقرانه في الحلقات؟',
+      'كيف يصون طالب العلم وقته ونباهته من الشواغل؟',
+    ]
+  }
+  return [
+    'هل انت ذكي وفاهم كلامي ومستوعب أسئلتي؟',
+    'ما هي منهجية حفظ وضبط المتون خطوة بخطوة؟',
+    'ما الفرق بين الفرض والواجب عند أهل العلم؟',
+    'كيف أبدأ التأصيل المنهجي من البداية بدون تشتت؟',
+  ]
+}
+
 export default function GlobalAiTutor() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
-      text: 'يا أهلاً بيك يا بطل! أنا «صاحبك في الطلب» رفيقك ومعينك في منصة سَنَد.. اسألني عن أي لفظ في المتون مش واضح، أو مسألة فقهية أو عقدية كلكعت معاك، أو قولي محتار تبدأ منين وهنرتبها سوا!',
+      text: 'أهلاً بك في منصة سَنَد. أنا «رفيق المدارسة»، جاهز لمعاونتك في تفكيك ألفاظ المتون، وضبط المسائل الفقهية والعقدية والنحوية، وترتيب خطتك الدراسية. تفضل بطرح سؤالك أو استشكالك.',
     },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState('عام في العلوم الشرعية')
-  const [coursesList, setCoursesList] = useState<MatnCourse[]>(ALL_COURSES)
+  const [coursesList, setCoursesList] = useState<MatnCourse[]>([])
   const [userApiKey, setUserApiKey] = useState('')
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [keyInput, setKeyInput] = useState('')
@@ -154,28 +212,31 @@ export default function GlobalAiTutor() {
 
   // تحميل المفتاح والمحادثة المحفوظة إن وُجدت
   useEffect(() => {
-    try {
-      const storedKey = localStorage.getItem('sanad_gemini_key')
-      if (storedKey) {
-        setUserApiKey(storedKey)
-        setKeyInput(storedKey)
-      }
-      const storedChat = localStorage.getItem('sanad_ai_chat_history')
-      if (storedChat) {
-        const parsed = JSON.parse(storedChat)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed)
+    const t = setTimeout(() => {
+      try {
+        const storedKey = localStorage.getItem('sanad_gemini_key')
+        if (storedKey) {
+          setUserApiKey(storedKey)
+          setKeyInput(storedKey)
         }
-      }
-      fetch('/api/courses')
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.success && Array.isArray(data.courses) && data.courses.length > 0) {
-            setCoursesList(data.courses)
+        const storedChat = localStorage.getItem('sanad_ai_chat_history')
+        if (storedChat) {
+          const parsed = JSON.parse(storedChat)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed)
           }
-        })
-        .catch(() => {})
-    } catch {}
+        }
+        fetch('/api/courses')
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.success && Array.isArray(data.courses) && data.courses.length > 0) {
+              setCoursesList(data.courses)
+            }
+          })
+          .catch(() => {})
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // حفظ المحادثة تلقائياً
@@ -235,12 +296,12 @@ export default function GlobalAiTutor() {
       })
 
       const data = await res.json()
-      const aiReply = data?.reply || 'يا بطل حصل عطل سريع في الاتصال، جرب تسألني تاني كده!'
+      const aiReply = data?.reply || 'حدث انقطاع مؤقت في الاتصال، يرجى إعادة إرسال السؤال وسأجيبك فوراً.'
       setMessages((prev) => [...prev, { role: 'ai', text: aiReply }])
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: 'معلش يا صديقي، النت علّق لحظة معايا، اسألني تاني كده وركز معايا!' },
+        { role: 'ai', text: 'تعذر الاتصال بالخادم مؤقتاً، يرجى المحاولة مجدداً وسأكون معك مباشرة.' },
       ])
     } finally {
       setIsLoading(false)
@@ -437,14 +498,9 @@ export default function GlobalAiTutor() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* اقتراحات الأسئلة السريعة */}
+            {/* اقتراحات الأسئلة السريعة الديناميكية حسب المقرر المختار */}
             <div className="px-3 py-2 border-t border-stone-200/60 bg-[#f7f5ed] flex flex-wrap gap-1.5 dark:border-stone-800 dark:bg-[#181614]">
-              {[
-                'ما الفرق بين الفرض والواجب عند الحنفية؟',
-                'اشرح لي منهج حفظ المتون خطوة بخطوة',
-                'ما حكم الصلاة على الجنازة وأركانها؟',
-                'كيف أفهم الآجرومية وأبدأ دراسة النحو؟',
-              ].map((chip) => (
+              {getDynamicSuggestedQuestions(selectedCourse).map((chip) => (
                 <button
                   key={chip}
                   type="button"

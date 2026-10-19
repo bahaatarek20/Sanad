@@ -20,6 +20,29 @@ const COURSES_FILE = path.join(DATA_DIR, 'sanad_custom_courses.json')
 const CATEGORIES_FILE = path.join(DATA_DIR, 'sanad_custom_categories.json')
 const BROADCAST_FILE = path.join(DATA_DIR, 'sanad_broadcast.json')
 
+// ذاكرة كاش داخلية فائقة السرعة تمنع القراءة المتكررة من القرص في كل طلب
+let cachedCourses: MatnCourse[] | null = null
+let cachedCourseMap: Map<string, MatnCourse> | null = null
+let lastCoursesCacheTime = 0
+
+let cachedCategories: CategoryItem[] | null = null
+let lastCategoriesCacheTime = 0
+
+let cachedBroadcast: BroadcastNotice | null = null
+let lastBroadcastCacheTime = 0
+
+const CACHE_TTL_MS = 60 * 1000 // 60 ثانية
+
+export function invalidateCoursesCache() {
+  cachedCourses = null
+  cachedCourseMap = null
+  lastCoursesCacheTime = 0
+  cachedCategories = null
+  lastCategoriesCacheTime = 0
+  cachedBroadcast = null
+  lastBroadcastCacheTime = 0
+}
+
 function ensureStoreFiles() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -76,6 +99,10 @@ export function normalizeArabicSpaces(str: string): string {
  * جلب كافة المتون المعتمدة والنشطة على مستوى المنصة (Server Source of Truth)
  */
 export function getActiveCourses(): MatnCourse[] {
+  if (cachedCourses && Date.now() - lastCoursesCacheTime < CACHE_TTL_MS) {
+    return cachedCourses
+  }
+
   try {
     ensureStoreFiles()
     if (fs.existsSync(COURSES_FILE)) {
@@ -178,19 +205,32 @@ export function getActiveCourses(): MatnCourse[] {
         // دمج أي متون تأصيلية كبرى لم تكن موجودة في ملف التخصيص
         const customSlugs = new Set(parsed.map((c) => c.slug))
         const missingCanonicalCourses = ALL_COURSES.filter((c) => !customSlugs.has(c.slug))
-        return [...courses, ...missingCanonicalCourses]
+        const finalCourses = [...courses, ...missingCanonicalCourses]
+
+        cachedCourses = finalCourses
+        cachedCourseMap = new Map(finalCourses.map((c) => [c.slug, c]))
+        lastCoursesCacheTime = Date.now()
+        return finalCourses
       }
     }
   } catch (err) {
     console.error('Error reading courses from store:', err)
   }
+
+  cachedCourses = ALL_COURSES
+  cachedCourseMap = new Map(ALL_COURSES.map((c) => [c.slug, c]))
+  lastCoursesCacheTime = Date.now()
   return ALL_COURSES
 }
 
 /**
- * جلب متن معين بالمعرف (Slug) مع تأمين البحث المزدوج
+ * جلب متن معين بالمعرف (Slug) مع تأمين البحث المزدوج والكاش السريع
  */
 export function getActiveCourseBySlug(slug: string): MatnCourse | undefined {
+  if (cachedCourseMap && Date.now() - lastCoursesCacheTime < CACHE_TTL_MS) {
+    const found = cachedCourseMap.get(slug)
+    if (found) return found
+  }
   const courses = getActiveCourses()
   const found = courses.find((c) => c.slug === slug)
   if (found) return found
@@ -246,6 +286,7 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error writing courses to file:', err)
   }
@@ -262,6 +303,7 @@ export function deleteCourseFromServer(slug: string): MatnCourse[] {
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error deleting course from file:', err)
   }
@@ -288,6 +330,7 @@ export function moveCourseInServer(slug: string, direction: 'up' | 'down'): Matn
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error moving course in server:', err)
   }
@@ -318,6 +361,7 @@ export function updateCourseCategoryInServer(slug: string, newCategorySlug: stri
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error updating course category in server:', err)
   }
@@ -332,6 +376,7 @@ export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse
   ensureStoreFiles()
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(orderedCourses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error reordering courses in server:', err)
   }
@@ -339,13 +384,20 @@ export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse
 }
 
 /**
- * جلب الإعلان الإداري النشط المعروض لجميع الطلاب
+ * جلب الإعلان الإداري النشط المعروض لجميع الطلاب مع كاش سريع
  */
 export function getBroadcastNotice(): BroadcastNotice {
+  if (cachedBroadcast && Date.now() - lastBroadcastCacheTime < CACHE_TTL_MS) {
+    return cachedBroadcast
+  }
+
   try {
     ensureStoreFiles()
     const content = fs.readFileSync(BROADCAST_FILE, 'utf8')
-    return JSON.parse(content)
+    const parsed = JSON.parse(content)
+    cachedBroadcast = parsed
+    lastBroadcastCacheTime = Date.now()
+    return parsed
   } catch {
     return {
       active: false,
@@ -369,6 +421,7 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
 
   try {
     fs.writeFileSync(BROADCAST_FILE, JSON.stringify(updated, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error saving broadcast to file:', err)
   }
@@ -377,9 +430,13 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
 }
 
 /**
- * جلب كافة الفنون والتصنيفات الشرعية النشطة على مستوى المنصة
+ * جلب كافة الفنون والتصنيفات الشرعية النشطة على مستوى المنصة مع كاش سريع
  */
 export function getActiveCategories(): CategoryItem[] {
+  if (cachedCategories && Date.now() - lastCategoriesCacheTime < CACHE_TTL_MS) {
+    return cachedCategories
+  }
+
   try {
     ensureStoreFiles()
     let categories: CategoryItem[] = []
@@ -404,7 +461,10 @@ export function getActiveCategories(): CategoryItem[] {
       }
     })
 
-    return Array.from(map.entries()).map(([slug, title]) => ({ slug, title }))
+    const finalCategories = Array.from(map.entries()).map(([slug, title]) => ({ slug, title }))
+    cachedCategories = finalCategories
+    lastCategoriesCacheTime = Date.now()
+    return finalCategories
   } catch {
     return [...CATEGORIES_LIST]
   }
@@ -475,6 +535,7 @@ export function saveCategoryToServer({
     }
   }
 
+  invalidateCoursesCache()
   return { categories, courses }
 }
 
@@ -487,6 +548,7 @@ export function deleteCategoryFromServer(slug: string): CategoryItem[] {
 
   try {
     fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(categories, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error deleting category from file:', err)
   }

@@ -15,7 +15,7 @@ import {
   MessageSquare,
   Copy,
 } from 'lucide-react'
-import { ALL_COURSES, MatnCourse } from '@/lib/curriculum-data'
+import type { MatnCourse } from '@/lib/curriculum-data'
 
 interface Message {
   role: 'user' | 'ai'
@@ -202,7 +202,7 @@ export default function GlobalAiTutor() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState('عام في العلوم الشرعية')
-  const [coursesList, setCoursesList] = useState<MatnCourse[]>(ALL_COURSES)
+  const [coursesList, setCoursesList] = useState<MatnCourse[]>([])
   const [userApiKey, setUserApiKey] = useState('')
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [keyInput, setKeyInput] = useState('')

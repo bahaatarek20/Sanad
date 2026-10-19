@@ -103,8 +103,8 @@ export async function updateSession(request: NextRequest) {
     return attachSecurityHeaders(NextResponse.redirect(loginUrl))
   }
 
-  // 4. إذا كان الطالب مسجلاً بالفعل وفتح صفحة الدخول، يوجه فوراً للمتون أو المسار المطلوب
-  if (hasUser && pathname === '/login') {
+  // 4. إذا كان الطالب مسجلاً بالفعل وفتح صفحة الدخول، يوجه فوراً للمتون أو المسار المطلوب (ما لم يكن يسجل خروجه)
+  if (hasUser && pathname === '/login' && !request.nextUrl.searchParams.has('loggedOut')) {
     const targetUrl = request.nextUrl.searchParams.get('redirect') || '/courses'
     const redirectUrl = new URL(targetUrl.startsWith('/') ? targetUrl : '/courses', request.url)
     return attachSecurityHeaders(NextResponse.redirect(redirectUrl))

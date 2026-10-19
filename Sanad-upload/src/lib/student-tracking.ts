@@ -462,6 +462,7 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
 
 export function saveAllLocalStudents(students: StudentActivityRecord[]) {
   globalThis.__sanad_registry_cache__ = students
+  invalidateStudentProfileCache()
   ensureDataFiles()
 
   try {
@@ -945,15 +946,31 @@ export async function registerOrUpdateStudentAsync(
   return student
 }
 
-// 2.5 جلب بيانات الحساب العلمي للطالب (السجل الكامل المشفر)
+const profileCacheMap = new Map<string, { data: StudentActivityRecord | null; time: number }>()
+const PROFILE_CACHE_TTL = 30 * 1000 // 30 ثانية
+
+export function invalidateStudentProfileCache(email?: string) {
+  if (email) {
+    profileCacheMap.delete(email.toLowerCase().trim())
+  } else {
+    profileCacheMap.clear()
+  }
+}
+
+// 2.5 جلب بيانات الحساب العلمي للطالب (السجل الكامل المشفر مع كاش سريع في الذاكرة)
 export function getStudentProfileData(email: string): StudentActivityRecord | null {
-  ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
+  const cached = profileCacheMap.get(cleanEmail)
+  if (cached && Date.now() - cached.time < PROFILE_CACHE_TTL) {
+    return cached.data
+  }
+
+  ensureDataFiles()
   try {
     const students = readAllLocalStudents(false)
     const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (student) {
-      return {
+      const result: StudentActivityRecord = {
         ...student,
         totalStudyMinutes: student.totalStudyMinutes || 0,
         streak: student.streak || 0,
@@ -963,7 +980,10 @@ export function getStudentProfileData(email: string): StudentActivityRecord | nu
         listenedSessions: Array.isArray(student.listenedSessions) ? student.listenedSessions : [],
         notesCount: student.notesCount || 0,
       }
+      profileCacheMap.set(cleanEmail, { data: result, time: Date.now() })
+      return result
     }
+    profileCacheMap.set(cleanEmail, { data: null, time: Date.now() })
   } catch (err) {
     console.error('Error getting student profile data:', err)
   }

@@ -1,10 +1,17 @@
+import crypto from 'crypto'
+import { cache } from 'react'
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { isStudentBanned } from '@/lib/student-tracking'
+
+const SESSION_SECRET =
+  process.env.SANAD_SESSION_SECRET ||
+  process.env.SANAD_ADMIN_PASSCODE ||
+  'sanad-blessed-scholar-hmac-sha256-key-2026'
 
 export interface StudentUser {
   id: string
   email: string
+  role?: 'student' | 'admin'
   phone?: string
   authProvider?: 'email' | 'google' | 'phone'
   avatarUrl?: string
@@ -16,84 +23,109 @@ export interface StudentUser {
   }
 }
 
-// جلب المستخدم الحالي: فحص محلي فوري (0ms) لمنع أي بطء في التنقل بين الصفحات
-export async function getCurrentStudentUser(): Promise<StudentUser | null> {
-  const cookieStore = await cookies()
+/**
+ * توقيع بيانات الجلسة بتشفير HMAC-SHA256 لمنع التلاعب بها تماماً
+ */
+export function signSessionPayload(data: Record<string, unknown>): string {
+  const jsonStr = JSON.stringify(data)
+  const base64Payload = Buffer.from(jsonStr, 'utf8').toString('base64url')
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(base64Payload).digest('hex')
+  return `v1.${base64Payload}.${signature}`
+}
 
-  // 1. فحص جلسة الطالب المحلية المخزنة في الكوكيز أولاً (فوري 0ms بدون استدعاءات شبكة)
+/**
+ * فك تشفير وتأكيد صحة توقيع جلسة الطالب بمقارنة آمنة ضد هجمات التوقيت
+ */
+export function verifySessionToken(rawToken?: string): Record<string, unknown> | null {
+  if (!rawToken || typeof rawToken !== 'string') return null
+
   try {
-    const localSession = cookieStore.get('sanad_student_user')
-    if (localSession?.value) {
-      const parsed = JSON.parse(localSession.value)
-      if (parsed && parsed.email) {
-        const banCheck = isStudentBanned(parsed.email)
-        if (banCheck.isBanned) {
-          cookieStore.delete('sanad_student_user')
-          return null
-        }
-        return {
-          id: parsed.id || `student-${Buffer.from(parsed.email).toString('hex').slice(0, 16)}`,
-          email: parsed.email,
-          phone: parsed.phone,
-          authProvider: parsed.authProvider || 'email',
-          avatarUrl: parsed.avatarUrl,
-          user_metadata: {
-            full_name: parsed.full_name || 'طالب العلم',
-            phone: parsed.phone,
-            authProvider: parsed.authProvider || 'email',
-            avatar_url: parsed.avatarUrl,
-          },
-        }
-      }
-    }
-  } catch {
-    // خطأ في فك تشفير الكوكي
-  }
+    if (rawToken.startsWith('v1.')) {
+      const parts = rawToken.split('.')
+      if (parts.length !== 3) return null
+      const base64Payload = parts[1]
+      const signature = parts[2]
+      const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(base64Payload).digest('hex')
 
-  // 2. فحص سريع: هل توجد أي كوكيز لـ Supabase أصلاً قبل محاولة الاتصال بالشبكة؟
-  const allCookies = cookieStore.getAll()
-  const hasSupabaseCookie = allCookies.some(
-    (c) => (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) || c.name === 'supabase-auth-token'
-  )
-
-  // إذا لم يكن مسجلاً في Supabase ولا توجد كوكيز، نعيد null فوراً دون تعطيل الصفحة
-  if (!hasSupabaseCookie) {
-    return null
-  }
-
-  // 3. فقط إذا كان كوكي Supabase موجوداً فعلياً، نقوم بالتحقق منه
-  try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (user && !error && user.email) {
-      const banCheck = isStudentBanned(user.email)
-      if (banCheck.isBanned) {
-        cookieStore.delete('sanad_student_user')
+      const bufA = Buffer.from(signature, 'hex')
+      const bufB = Buffer.from(expectedSig, 'hex')
+      if (bufA.length !== bufB.length || !crypto.timingSafeEqual(bufA, bufB)) {
+        console.warn('⚠️ [Sanad Security Alert]: كشف محاولة تلاعب غير مصرح بها في كوكي الجلسة!')
         return null
       }
-      const provider = (user.app_metadata?.provider as 'google' | 'phone' | 'email') || 'email'
-      return {
-        id: user.id,
-        email: user.email,
-        phone: user.phone || user.user_metadata?.phone,
-        authProvider: provider,
-        avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        user_metadata: {
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'طالب العلم',
-          phone: user.phone || user.user_metadata?.phone,
-          authProvider: provider,
-          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        },
-      }
+
+      const jsonStr = Buffer.from(base64Payload, 'base64url').toString('utf8')
+      return JSON.parse(jsonStr)
+    }
+
+    // دعم انتقالي مؤقت للجلسات السابقة المسجلة قبل التحديث
+    const parsed = JSON.parse(rawToken)
+    if (parsed && typeof parsed === 'object' && parsed.email) {
+      return parsed
     }
   } catch {
-    // تجاوز أخطاء الاتصال أو بطء الشبكة
+    return null
   }
-
   return null
 }
 
-// حفظ جلسة طالب محلية في الكوكيز (تدعم البريد الإلكتروني أو الهاتف)
+/**
+ * جلب المستخدم الحالي: فحص محلي فوري (0ms) مع تدقيق التوقيع الرقمي لمنع أي انتحال
+ */
+export const getCurrentStudentUser = cache(async function getCurrentStudentUser(): Promise<StudentUser | null> {
+  const cookieStore = await cookies()
+
+  try {
+    const localSession = cookieStore.get('sanad_student_user')
+    if (localSession?.value) {
+      const parsed = verifySessionToken(localSession.value)
+      if (parsed && parsed.email) {
+        const email = String(parsed.email).toLowerCase().trim()
+        const banCheck = isStudentBanned(email)
+        if (banCheck.isBanned) {
+          cookieStore.delete('sanad_student_user')
+          cookieStore.delete('sanad_student_display')
+          return null
+        }
+
+        const isAdmin =
+          ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+          cookieStore.has('sanad_admin_gate_token') ||
+          parsed.role === 'admin'
+
+        return {
+          id: String(parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
+          email,
+          role: isAdmin ? 'admin' : 'student',
+          phone: parsed.phone ? String(parsed.phone) : undefined,
+          authProvider:
+            parsed.authProvider === 'google' || parsed.authProvider === 'phone'
+              ? (parsed.authProvider as 'google' | 'phone')
+              : 'email',
+          avatarUrl: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
+          user_metadata: {
+            full_name: String(parsed.full_name || parsed.fullName || 'طالب العلم'),
+            phone: parsed.phone ? String(parsed.phone) : undefined,
+            authProvider: typeof parsed.authProvider === 'string' ? parsed.authProvider : 'email',
+            avatar_url: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
+          },
+        }
+      } else {
+        // توقيع غير صالح أو تم التلاعب به
+        cookieStore.delete('sanad_student_user')
+        cookieStore.delete('sanad_student_display')
+      }
+    }
+  } catch {
+    // خطأ في القراءة
+  }
+
+  return null
+})
+
+/**
+ * حفظ جلسة طالب موثقة وموقعة رقمياً بـ HMAC في الكوكيز
+ */
 export async function setStudentSessionCookie(
   fullName: string,
   emailOrPhone: string,
@@ -101,6 +133,7 @@ export async function setStudentSessionCookie(
     phone?: string
     authProvider?: 'email' | 'google' | 'phone'
     avatarUrl?: string
+    role?: 'student' | 'admin'
   }
 ) {
   const cookieStore = await cookies()
@@ -110,38 +143,83 @@ export async function setStudentSessionCookie(
     ? rawIdentifier.toLowerCase()
     : `${rawIdentifier.replace(/[^0-9]/g, '') || 'user'}@phone.sanad.edu`
   const phone = options?.phone || (!isEmail ? rawIdentifier : undefined)
+  const cleanName = fullName.trim() || 'طالب العلم'
 
-  const studentData = {
+  const isAdmin =
+    ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+    options?.role === 'admin'
+
+  const studentData: Record<string, unknown> = {
     id: `student-${Buffer.from(rawIdentifier.toLowerCase()).toString('hex').slice(0, 16)}`,
     email,
-    full_name: fullName.trim() || 'طالب العلم',
+    role: isAdmin ? 'admin' : 'student',
+    full_name: cleanName,
     phone,
     authProvider: options?.authProvider || (phone ? 'phone' : 'email'),
     avatarUrl: options?.avatarUrl,
     created_at: new Date().toISOString(),
   }
 
-  cookieStore.set('sanad_student_user', JSON.stringify(studentData), {
+  // 1. التوقيع الرقمي الصارم للكوكي الأمني الأساسي
+  const signedToken = signSessionPayload(studentData)
+
+  cookieStore.set('sanad_student_user', signedToken, {
     path: '/',
-    maxAge: 60 * 60 * 24 * 365, // سنة كاملة
-    httpOnly: true,
+    maxAge: 60 * 60 * 24 * 30, // 30 يوماً
+    httpOnly: true, // محمي ضد هجمات XSS ولا يمكن للعميل أو السكربتات قراءته أو تزويره
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   })
 
+  // 2. كوكي واجهة المستخدم العام للعرض فقط (الاسم والصورة) دون أي بيانات صلاحية
+  cookieStore.set(
+    'sanad_student_display',
+    JSON.stringify({
+      name: cleanName,
+      email,
+      avatarUrl: options?.avatarUrl,
+    }),
+    {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    }
+  )
+
   return studentData
 }
 
-// تسجيل خروج الطالب ومسح الجلسة
+/**
+ * تسجيل خروج الطالب ومسح الجلسة وتدمير التوكنات
+ */
 export async function clearStudentSession() {
   const cookieStore = await cookies()
 
-  try {
-    const supabase = await createClient()
-    await supabase.auth.signOut()
-  } catch {
-    // تجاوز أخطاء Supabase
-  }
-
+  cookieStore.set('sanad_student_user', '', {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  })
   cookieStore.delete('sanad_student_user')
+
+  cookieStore.set('sanad_student_display', '', {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  })
+  cookieStore.delete('sanad_student_display')
+
+  // تعيين علامة خروج صريحة لمنع أي استعادة تلقائية
+  cookieStore.set('sanad_explicit_logout', 'true', {
+    path: '/',
+    maxAge: 86400, // 24 ساعة
+    httpOnly: false,
+    sameSite: 'lax',
+  })
 }

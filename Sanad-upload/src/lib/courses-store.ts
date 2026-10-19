@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
 import { ALL_COURSES, MatnCourse, CATEGORIES_LIST } from '@/lib/curriculum-data'
-import { cleanVideoTitle, cleanEpisodeDescription } from '@/lib/title-cleaner'
 
 export interface BroadcastNotice {
   active: boolean
@@ -20,6 +19,29 @@ const DATA_DIR = path.join(process.cwd(), 'data')
 const COURSES_FILE = path.join(DATA_DIR, 'sanad_custom_courses.json')
 const CATEGORIES_FILE = path.join(DATA_DIR, 'sanad_custom_categories.json')
 const BROADCAST_FILE = path.join(DATA_DIR, 'sanad_broadcast.json')
+
+// ذاكرة كاش داخلية فائقة السرعة تمنع القراءة المتكررة من القرص في كل طلب
+let cachedCourses: MatnCourse[] | null = null
+let cachedCourseMap: Map<string, MatnCourse> | null = null
+let lastCoursesCacheTime = 0
+
+let cachedCategories: CategoryItem[] | null = null
+let lastCategoriesCacheTime = 0
+
+let cachedBroadcast: BroadcastNotice | null = null
+let lastBroadcastCacheTime = 0
+
+const CACHE_TTL_MS = 60 * 1000 // 60 ثانية
+
+export function invalidateCoursesCache() {
+  cachedCourses = null
+  cachedCourseMap = null
+  lastCoursesCacheTime = 0
+  cachedCategories = null
+  lastCategoriesCacheTime = 0
+  cachedBroadcast = null
+  lastBroadcastCacheTime = 0
+}
 
 function ensureStoreFiles() {
   try {
@@ -50,9 +72,37 @@ function ensureStoreFiles() {
 }
 
 /**
+ * دالة ذكية لفصل الحروف والكلمات الملتصقة واستعادة المسافات الطبيعية في اللغة العربية
+ */
+export function normalizeArabicSpaces(str: string): string {
+  if (!str || typeof str !== 'string') return ''
+  return str
+    .replace(/([^\s(])\(/g, '$1 (')
+    .replace(/\)([^\s)])/g, ') $1')
+    .replace(/(:|،)(?=[^\s])/g, '$1 ')
+    .replace(/كتابالبداية/g, 'كتاب البداية')
+    .replace(/فيعلمالعقيدة/g, 'في علم العقيدة')
+    .replace(/الشيخوحيدبالي/g, 'الشيخ وحيد بالي')
+    .replace(/الشيخصالحالعصيميمجلسان/g, 'الشيخ صالح العصيمي - مجلسان')
+    .replace(/الأربعينالنووية/g, 'الأربعين النووية')
+    .replace(/التأهيلالفقهيأصولالفقه/g, 'التأهيل الفقهي: أصول الفقه')
+    .replace(/الكفايةفيشرحالبدايةأصولالفقه/g, 'الكفاية في شرح البداية: أصول الفقه')
+    .replace(/الدروسالتأصيليةشرحمتنالآجرومية/g, 'الدروس التأصيلية: شرح متن الآجرومية')
+    .replace(/شرحكتاببدايةالمتفقه\((\d+)\)للشيخنورشعلان/g, 'شرح كتاب بداية المتفقه ($1) - للشيخ نور شعلان')
+    .replace(/برنامجغريبالحديثدمحمدحمدالعتيبي/g, ' - برنامج غريب الحديث - د. محمد حمد العتيبي')
+    .replace(/شرحالبيقونيةللشيخعبدالكريمالخضيربرنامجاجتماعالنقط/g, 'شرح المنظومة البيقونية - الشيخ عبد الكريم الخضير - ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
  * جلب كافة المتون المعتمدة والنشطة على مستوى المنصة (Server Source of Truth)
  */
 export function getActiveCourses(): MatnCourse[] {
+  if (cachedCourses && Date.now() - lastCoursesCacheTime < CACHE_TTL_MS) {
+    return cachedCourses
+  }
+
   try {
     ensureStoreFiles()
     if (fs.existsSync(COURSES_FILE)) {
@@ -62,56 +112,82 @@ export function getActiveCourses(): MatnCourse[] {
         const fallbackMap = new Map<string, MatnCourse>()
         ALL_COURSES.forEach((c) => fallbackMap.set(c.slug, c))
 
-        let hadQualityOrPrefixChanges = false
+        let hadRepairs = false
 
-        const cleanedCourses = parsed.map((customCourse) => {
+        const courses = parsed.map((customCourse) => {
           const fallback = fallbackMap.get(customCourse.slug)
           const baseCourse = fallback ? { ...fallback, ...customCourse } : customCourse
+
+          // استعادة العنوان الأصلي السليم من قاعدة المتون المعتمدة إذا كانت المسافات قد حُذفت سابقاً
+          let resolvedTitle = normalizeArabicSpaces(customCourse.title || fallback?.title || '')
+          if (fallback && resolvedTitle.replace(/\s+/g, '') === fallback.title.replace(/\s+/g, '')) {
+            if (resolvedTitle !== fallback.title) {
+              resolvedTitle = fallback.title
+              hadRepairs = true
+            }
+          }
 
           const rawEpisodes = (customCourse.episodes && customCourse.episodes.length > 0)
             ? customCourse.episodes
             : (fallback?.episodes || [])
 
-          const cleanedEpisodes = rawEpisodes.map((ep) => {
-            const cleanT = cleanVideoTitle(ep.title || '')
-            const cleanD = cleanEpisodeDescription(ep.description)
-            if (cleanT !== (ep.title || '') || cleanD !== (ep.description || '')) {
-              hadQualityOrPrefixChanges = true
+          const episodes = rawEpisodes.map((ep) => {
+            let epTitle = normalizeArabicSpaces(ep.title ? ep.title.trim() : '')
+            // استعادة المسافات للألقاب مثل "المجلس1"
+            const majlisMatch = epTitle.match(/^(المجلس|الدرس)(\d+)$/)
+            if (majlisMatch) {
+              epTitle = `${majlisMatch[1]} ${majlisMatch[2]}`
+              hadRepairs = true
+            }
+            // استعادة الاسم الأصلي من وصف المجلد إن وُجد
+            if (ep.description && ep.description.startsWith('فيديو مرفوع من المجلد:')) {
+              const fromDesc = ep.description.replace(/^فيديو مرفوع من المجلد:\s*/, '').trim()
+              if (fromDesc && epTitle.replace(/\s+/g, '') === fromDesc.replace(/\s+/g, '')) {
+                if (epTitle !== fromDesc) {
+                  epTitle = fromDesc
+                  hadRepairs = true
+                }
+              }
             }
             return {
               ...ep,
-              title: cleanT,
-              description: cleanD,
+              title: epTitle,
+              description: ep.description ? ep.description.trim() : '',
             }
           })
 
-          const cleanTitle = cleanVideoTitle(customCourse.title || fallback?.title || '')
-          const cleanDesc = cleanEpisodeDescription(customCourse.description || fallback?.description || '')
-
-          if (cleanTitle !== customCourse.title || cleanDesc !== (customCourse.description || '')) {
-            hadQualityOrPrefixChanges = true
-          }
-
-          const resolvedTotalLessons = cleanedEpisodes.length > 0
-            ? cleanedEpisodes.length
+          const resolvedTotalLessons = episodes.length > 0
+            ? episodes.length
             : (customCourse.totalLessons !== undefined && customCourse.totalLessons > 0)
             ? customCourse.totalLessons
             : (fallback?.totalLessons || 1)
 
+          const resolvedYoutubeId =
+            customCourse.youtubeId && !customCourse.youtubeId.startsWith('/api/video/')
+              ? customCourse.youtubeId
+              : fallback?.youtubeId || customCourse.youtubeId || ''
+
+          const resolvedIsPlaylist =
+            customCourse.isPlaylist !== undefined
+              ? customCourse.isPlaylist
+              : (fallback?.isPlaylist ?? Boolean(resolvedYoutubeId && (resolvedYoutubeId.startsWith('PL') || resolvedYoutubeId.includes('list='))))
+
           return {
             ...baseCourse,
-            title: cleanTitle,
+            title: resolvedTitle,
             category: customCourse.category || fallback?.category || 'عام',
             categorySlug: customCourse.categorySlug || fallback?.categorySlug || 'hadith',
             stage: (customCourse.stage as 1 | 2 | 3) || (fallback?.stage as 1 | 2 | 3) || 1,
             author: customCourse.author || fallback?.author,
             instructor: customCourse.instructor || fallback?.instructor,
             videoUrl: customCourse.videoUrl || fallback?.videoUrl,
-            youtubeId: customCourse.youtubeId || fallback?.youtubeId,
+            youtubeId: resolvedYoutubeId,
+            isPlaylist: resolvedIsPlaylist,
+            videoList: customCourse.videoList && customCourse.videoList.length > 0 ? customCourse.videoList : fallback?.videoList,
             pdfUrl: customCourse.pdfUrl || fallback?.pdfUrl,
             audioUrl: customCourse.audioUrl || fallback?.audioUrl,
-            description: cleanDesc,
-            episodes: cleanedEpisodes,
+            description: customCourse.description || fallback?.description || '',
+            episodes: episodes,
             totalLessons: resolvedTotalLessons,
             prerequisites: customCourse.prerequisites || fallback?.prerequisites || undefined,
             nextCourses: customCourse.nextCourses || fallback?.nextCourses || undefined,
@@ -119,30 +195,46 @@ export function getActiveCourses(): MatnCourse[] {
           }
         })
 
-        // إذا وُجدت أي عناوين تحتوي على دلالات جودة أو سوابق مكررة، حفظ النسخة المنظفة في الملف تلقائياً
-        if (hadQualityOrPrefixChanges) {
+        // إذا تم إصلاح أي عناوين استُرجعت مسافاتها، حفظ التحديث في الملف فوراً
+        if (hadRepairs) {
           try {
-            fs.writeFileSync(COURSES_FILE, JSON.stringify(cleanedCourses, null, 2), 'utf8')
-          } catch (writeErr) {
-            console.error('Error auto-cleaning courses file:', writeErr)
-          }
+            fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+          } catch {}
         }
 
-        return cleanedCourses
+        // دمج أي متون تأصيلية كبرى لم تكن موجودة في ملف التخصيص
+        const customSlugs = new Set(parsed.map((c) => c.slug))
+        const missingCanonicalCourses = ALL_COURSES.filter((c) => !customSlugs.has(c.slug))
+        const finalCourses = [...courses, ...missingCanonicalCourses]
+
+        cachedCourses = finalCourses
+        cachedCourseMap = new Map(finalCourses.map((c) => [c.slug, c]))
+        lastCoursesCacheTime = Date.now()
+        return finalCourses
       }
     }
   } catch (err) {
     console.error('Error reading courses from store:', err)
   }
+
+  cachedCourses = ALL_COURSES
+  cachedCourseMap = new Map(ALL_COURSES.map((c) => [c.slug, c]))
+  lastCoursesCacheTime = Date.now()
   return ALL_COURSES
 }
 
 /**
- * جلب متن معين بالمعرف (Slug)
+ * جلب متن معين بالمعرف (Slug) مع تأمين البحث المزدوج والكاش السريع
  */
 export function getActiveCourseBySlug(slug: string): MatnCourse | undefined {
+  if (cachedCourseMap && Date.now() - lastCoursesCacheTime < CACHE_TTL_MS) {
+    const found = cachedCourseMap.get(slug)
+    if (found) return found
+  }
   const courses = getActiveCourses()
-  return courses.find((c) => c.slug === slug)
+  const found = courses.find((c) => c.slug === slug)
+  if (found) return found
+  return ALL_COURSES.find((c) => c.slug === slug)
 }
 
 /**
@@ -155,11 +247,11 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
   const targetSlug = oldSlug || course.slug
   const existingIdx = courses.findIndex((c) => c.slug === targetSlug || c.slug === course.slug)
 
-  // تنظيف مجالس المتن وعنوانه من أي جودة أو سوابق مكررة
+  // حفظ مجالس المتن وعنوانه تماماً كما كتبها المستخدم دون أي تعديل على النص العربي
   const cleanedEpisodes = (course.episodes || []).map((ep) => ({
     ...ep,
-    title: cleanVideoTitle(ep.title || ''),
-    description: cleanEpisodeDescription(ep.description),
+    title: ep.title ? ep.title.trim() : '',
+    description: ep.description ? ep.description.trim() : '',
   }))
 
   const resolvedTotalLessons = cleanedEpisodes.length > 0
@@ -168,8 +260,8 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
 
   const updatedCourseItem: MatnCourse = {
     ...course,
-    title: cleanVideoTitle(course.title),
-    description: cleanEpisodeDescription(course.description),
+    title: course.title ? course.title.trim() : '',
+    description: course.description ? course.description.trim() : '',
     episodes: cleanedEpisodes,
     totalLessons: resolvedTotalLessons,
     stage: (course.stage as 1 | 2 | 3) || 1,
@@ -194,6 +286,7 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error writing courses to file:', err)
   }
@@ -210,6 +303,7 @@ export function deleteCourseFromServer(slug: string): MatnCourse[] {
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error deleting course from file:', err)
   }
@@ -236,6 +330,7 @@ export function moveCourseInServer(slug: string, direction: 'up' | 'down'): Matn
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error moving course in server:', err)
   }
@@ -266,6 +361,7 @@ export function updateCourseCategoryInServer(slug: string, newCategorySlug: stri
 
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error updating course category in server:', err)
   }
@@ -280,6 +376,7 @@ export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse
   ensureStoreFiles()
   try {
     fs.writeFileSync(COURSES_FILE, JSON.stringify(orderedCourses, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error reordering courses in server:', err)
   }
@@ -287,13 +384,20 @@ export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse
 }
 
 /**
- * جلب الإعلان الإداري النشط المعروض لجميع الطلاب
+ * جلب الإعلان الإداري النشط المعروض لجميع الطلاب مع كاش سريع
  */
 export function getBroadcastNotice(): BroadcastNotice {
+  if (cachedBroadcast && Date.now() - lastBroadcastCacheTime < CACHE_TTL_MS) {
+    return cachedBroadcast
+  }
+
   try {
     ensureStoreFiles()
     const content = fs.readFileSync(BROADCAST_FILE, 'utf8')
-    return JSON.parse(content)
+    const parsed = JSON.parse(content)
+    cachedBroadcast = parsed
+    lastBroadcastCacheTime = Date.now()
+    return parsed
   } catch {
     return {
       active: false,
@@ -317,6 +421,7 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
 
   try {
     fs.writeFileSync(BROADCAST_FILE, JSON.stringify(updated, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error saving broadcast to file:', err)
   }
@@ -325,9 +430,13 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
 }
 
 /**
- * جلب كافة الفنون والتصنيفات الشرعية النشطة على مستوى المنصة
+ * جلب كافة الفنون والتصنيفات الشرعية النشطة على مستوى المنصة مع كاش سريع
  */
 export function getActiveCategories(): CategoryItem[] {
+  if (cachedCategories && Date.now() - lastCategoriesCacheTime < CACHE_TTL_MS) {
+    return cachedCategories
+  }
+
   try {
     ensureStoreFiles()
     let categories: CategoryItem[] = []
@@ -352,7 +461,10 @@ export function getActiveCategories(): CategoryItem[] {
       }
     })
 
-    return Array.from(map.entries()).map(([slug, title]) => ({ slug, title }))
+    const finalCategories = Array.from(map.entries()).map(([slug, title]) => ({ slug, title }))
+    cachedCategories = finalCategories
+    lastCategoriesCacheTime = Date.now()
+    return finalCategories
   } catch {
     return [...CATEGORIES_LIST]
   }
@@ -373,7 +485,7 @@ export function saveCategoryToServer({
   oldTitle?: string
 }): { categories: CategoryItem[]; courses: MatnCourse[] } {
   ensureStoreFiles()
-  let categories = getActiveCategories()
+  const categories = getActiveCategories()
   const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-')
   const cleanTitle = title.trim()
   const targetOldSlug = (oldSlug || cleanSlug).trim().toLowerCase()
@@ -423,6 +535,7 @@ export function saveCategoryToServer({
     }
   }
 
+  invalidateCoursesCache()
   return { categories, courses }
 }
 
@@ -435,6 +548,7 @@ export function deleteCategoryFromServer(slug: string): CategoryItem[] {
 
   try {
     fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(categories, null, 2), 'utf8')
+    invalidateCoursesCache()
   } catch (err) {
     console.error('Error deleting category from file:', err)
   }

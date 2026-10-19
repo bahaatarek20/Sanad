@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { isStudentBanned } from '@/lib/student-tracking'
 
@@ -71,7 +72,7 @@ export function verifySessionToken(rawToken?: string): Record<string, unknown> |
 /**
  * جلب المستخدم الحالي: فحص محلي فوري (0ms) مع تدقيق التوقيع الرقمي لمنع أي انتحال
  */
-export async function getCurrentStudentUser(): Promise<StudentUser | null> {
+export const getCurrentStudentUser = cache(async function getCurrentStudentUser(): Promise<StudentUser | null> {
   const cookieStore = await cookies()
 
   try {
@@ -120,7 +121,7 @@ export async function getCurrentStudentUser(): Promise<StudentUser | null> {
   }
 
   return null
-}
+})
 
 /**
  * حفظ جلسة طالب موثقة وموقعة رقمياً بـ HMAC في الكوكيز
