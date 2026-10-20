@@ -1,5 +1,13 @@
 [
   {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "استمع إلى المجلس (2) من متن «حلية طالب العلم»",
+    "id": "ev_1792524815890_iizn",
+    "timestamp": "2026-10-20T19:33:35.890Z"
+  },
+  {
     "type": "unban",
     "studentEmail": "bhaaljml3@gmail.com",
     "studentName": "test 1",

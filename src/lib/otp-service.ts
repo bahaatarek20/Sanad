@@ -26,7 +26,10 @@ if (!globalForOtp.otpStore) {
 }
 
 // 1. توليد وإرسال رمز التحقق للبريد الإلكتروني
-export async function sendOtpToEmail(email: string): Promise<{ success: boolean; message: string; method?: string }> {
+export async function sendOtpToEmail(
+  email: string,
+  purpose: 'login' | 'reset-password' = 'login'
+): Promise<{ success: boolean; message: string; method?: string }> {
   const cleanEmail = email.toLowerCase().trim()
 
   if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
@@ -56,9 +59,11 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
     attempts: 0,
   })
 
+  const isReset = purpose === 'reset-password'
+
   // طباعة الكود في سجل طرفية الخادم للمطور فقط
   console.log('\n======================================================')
-  console.log(`📩 [سَنَد] تم توليد رمز التحقق السري لبريد: ${cleanEmail}`)
+  console.log(`📩 [سَنَد] تم توليد رمز التحقق (${isReset ? 'استعادة كلمة المرور' : 'تسجيل الدخول'}) لبريد: ${cleanEmail}`)
   console.log(`🔑 الرمز: ${otpCode} (صالح لمدة 10 دقائق)`)
   console.log('======================================================\n')
 
@@ -67,10 +72,14 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
 
   // الإرسال المباشر عبر Gmail SMTP المعتمد
   try {
-    const html = buildVerificationEmailHtml(otpCode)
+    const html = buildVerificationEmailHtml(otpCode, purpose)
+    const subject = isReset
+      ? `رمز استعادة كلمة المرور في منصة سَنَد: ${otpCode}`
+      : `رمز التحقق السري لدخول منصة سَنَد: ${otpCode}`
+
     const directResult = await sendRealEmail({
       to: cleanEmail,
-      subject: `رمز التحقق السري لدخول منصة سَنَد: ${otpCode}`,
+      subject,
       html,
       code: otpCode,
     })
@@ -87,7 +96,9 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
   return {
     success: true,
     message: isEmailSent
-      ? 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
+      ? isReset
+        ? 'تم إرسال رمز استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح. راجع صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
+        : 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
       : 'تم توليد رمز التحقق بنجاح. تفقد بريدك الإلكتروني أو أعد المحاولة.',
     method: sendMethod,
   }

@@ -24,13 +24,13 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
-  sendPasswordResetEmail,
   signOut,
 } from 'firebase/auth'
 import { syncUserToFirestore, verifyUserAccount, SUPER_ADMIN_EMAIL } from '@/lib/user-service'
 import {
   requestOtpAction,
   verifyOtpAction,
+  requestPasswordResetOtpAction,
   resetPasswordAction,
 } from './actions'
 
@@ -51,6 +51,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
 
   const isVerifyEmailOtp = params.mode === 'verify-otp'
   const isResetStep2 = params.mode === 'reset-step2'
+  const isExplicitForgot = params.mode === 'forgot'
   const isExplicitSignup = params.mode === 'signup'
   const isExplicitLogin = params.mode === 'login' || params.mode === 'password'
   const isLoggedOut = params.loggedOut === 'true'
@@ -62,7 +63,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   // التبويبات والخيارات — الوضع الافتراضي دائماً تسجيل الدخول إلا إذا طُلب حساب جديد صراحة
   const [authTab, setAuthTab] = useState<'password' | 'otp'>('password')
   const [isSignup, setIsSignup] = useState<boolean>(isExplicitSignup)
-  const [isForgot, setIsForgot] = useState<boolean>(params.mode === 'forgot')
+  const [isForgot, setIsForgot] = useState<boolean>(isExplicitForgot)
 
   // حالات إظهار/إخفاء كلمة المرور للتحقق البصري
   const [showPassword, setShowPassword] = useState(false)
@@ -299,49 +300,100 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         completeLoginAndRedirect(dest)
       } else {
         // تسجيل الدخول بالبريد وكلمة المرور
-        const cred = await signInWithEmailAndPassword(auth, cleanEmail, password)
-        const fbUser = cred.user
-
-        // 1. فحص حالة الحساب (حظر أو نشط)
-        let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
         try {
-          const check = await verifyUserAccount(fbUser.uid)
-          if (!check.allowed) {
-            await signOut(auth).catch(() => {})
-            setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-            setEmailLoading(false)
-            return
+          // 1. المحاولة الأولى: الدخول الموثق عبر Firebase Auth
+          const cred = await signInWithEmailAndPassword(auth, cleanEmail, password)
+          const fbUser = cred.user
+
+          let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+          try {
+            const check = await verifyUserAccount(fbUser.uid)
+            if (!check.allowed) {
+              await signOut(auth).catch(() => {})
+              setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+              setEmailLoading(false)
+              return
+            }
+            if (check.role) {
+              userRole = check.role
+            }
+          } catch (checkErr) {
+            console.warn('verifyUserAccount notice:', checkErr)
           }
-          if (check.role) {
-            userRole = check.role
-          }
-        } catch (checkErr) {
-          console.warn('verifyUserAccount notice:', checkErr)
-        }
 
-        // 2. مزامنة الكوكي عبر السيرفر
-        try {
-          const idToken = await fbUser.getIdToken()
-          await syncFirebaseSession(idToken, 'email')
-        } catch {}
+          // مزامنة الكوكي عبر السيرفر
+          try {
+            const idToken = await fbUser.getIdToken()
+            await syncFirebaseSession(idToken, 'email')
+          } catch {}
 
-        // 3. حفظ الجلسة محلياً
-        try {
-          localStorage.setItem(
-            'sanad_student_user',
-            JSON.stringify({
-              id: fbUser.uid,
-              email: cleanEmail,
-              name: fbUser.displayName || cleanEmail.split('@')[0],
-              role: userRole,
+          // حفظ الجلسة محلياً
+          try {
+            localStorage.setItem(
+              'sanad_student_user',
+              JSON.stringify({
+                id: fbUser.uid,
+                email: cleanEmail,
+                name: fbUser.displayName || cleanEmail.split('@')[0],
+                role: userRole,
+              })
+            )
+            localStorage.setItem('sanad_student_registered', 'true')
+          } catch {}
+
+          const dest = userRole === 'admin' ? '/admin' : targetRedirect
+          completeLoginAndRedirect(dest)
+          return
+        } catch (fbLoginErr: unknown) {
+          const fbErr = fbLoginErr as { code?: string; message?: string }
+          // المحاولة الثانية الاحتياطية الموثقة: التحقق من كلمة المرور المسجلة محلياً في سَنَد (بعد تعيينها)
+          try {
+            const localRes = await fetch('/api/auth/login-local', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: cleanEmail, password }),
             })
-          )
-          localStorage.setItem('sanad_student_registered', 'true')
-        } catch {}
+            const localData = await localRes.json()
 
-        // 4. التوجيه بناءً على الصلاحيات
-        const dest = userRole === 'admin' ? '/admin' : targetRedirect
-        completeLoginAndRedirect(dest)
+            if (localRes.ok && localData.success && localData.user) {
+              try {
+                localStorage.setItem(
+                  'sanad_student_user',
+                  JSON.stringify({
+                    id: localData.user.id || cleanEmail,
+                    email: cleanEmail,
+                    name: localData.user.name,
+                    role: localData.user.role,
+                  })
+                )
+                localStorage.setItem('sanad_student_registered', 'true')
+              } catch {}
+
+              const dest = localData.redirect || (localData.user.role === 'admin' ? '/admin' : targetRedirect)
+              completeLoginAndRedirect(dest)
+              return
+            } else if (localRes.status === 403) {
+              setFirebaseError(localData.error || 'تم تعليق هذا الحساب إدارياً من قِبل إدارة منصة سَنَد.')
+              setEmailLoading(false)
+              return
+            }
+          } catch (localErr) {
+            console.warn('Local login fallback notice:', localErr)
+          }
+
+          // في حال فشل المصادقة في النظامين معاً
+          if (
+            fbErr.code === 'auth/invalid-credential' ||
+            fbErr.code === 'auth/wrong-password' ||
+            fbErr.code === 'auth/user-not-found'
+          ) {
+            setFirebaseError('بيانات الدخول غير صحيحة، أو الحساب غير مسجل بعد. تأكد من البريد وكلمة المرور أو أنشئ حساباً جديداً.')
+          } else if (fbErr.code === 'auth/too-many-requests') {
+            setFirebaseError('تم إجراء محاولات متكررة، يرجى الانتظار قليلاً أو استعادة كلمة المرور.')
+          } else {
+            setFirebaseError(fbErr.message || 'بيانات الدخول غير صحيحة. يرجى التأكد من البريد وكلمة المرور أو استعادة كلمة المرور.')
+          }
+        }
       }
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
@@ -349,56 +401,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       if (fbErr.code === 'auth/email-already-in-use') {
         setIsSignup(false)
         setFirebaseError('هذا البريد مسجل مسبقاً في سَنَد. تم تحويلك لتسجيل الدخول، يرجى كتابة كلمة المرور للمتابعة.')
-      } else if (
-        fbErr.code === 'auth/invalid-credential' ||
-        fbErr.code === 'auth/wrong-password' ||
-        fbErr.code === 'auth/user-not-found'
-      ) {
-        setFirebaseError('بيانات الدخول غير صحيحة، أو الحساب غير مسجل بعد. تأكد من البريد وكلمة المرور أو أنشئ حساباً جديداً.')
       } else if (fbErr.code === 'auth/invalid-email') {
         setFirebaseError('عنوان البريد الإلكتروني غير صحيح.')
       } else if (fbErr.code === 'auth/weak-password') {
         setFirebaseError('كلمة المرور ضعيفة، يجب أن تحتوي على 6 أحرف أو أرقام على الأقل.')
-      } else if (fbErr.code === 'auth/too-many-requests') {
-        setFirebaseError('تم إجراء محاولات متكررة، يرجى الانتظار قليلاً أو استعادة كلمة المرور.')
-      } else if (
-        fbErr.code === 'auth/network-request-failed' ||
-        msg.includes('offline') ||
-        msg.includes('client is offline') ||
-        msg.includes('network') ||
-        msg.includes('Failed to get document')
-      ) {
-        setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
-      } else {
-        setFirebaseError(fbErr.message || 'حدث خطأ أثناء الاتصال بخادم المصادقة.')
-      }
-    } finally {
-      setEmailLoading(false)
-    }
-  }
-
-  // استعادة كلمة المرور عبر رابط Firebase Auth الرسمي
-  const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setResetLoading(true)
-    setFirebaseError(null)
-    setResetSuccessMsg(null)
-
-    const cleanEmail = emailInput.trim().toLowerCase()
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setFirebaseError('يرجى كتابة عنوان بريد إلكتروني صحيح.')
-      setResetLoading(false)
-      return
-    }
-
-    try {
-      await sendPasswordResetEmail(auth, cleanEmail)
-      setResetSuccessMsg('تم إرسال رابط استعادة وتعديل كلمة المرور إلى بريدك الإلكتروني بنجاح. راجع صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).')
-    } catch (err: unknown) {
-      const fbErr = err as { code?: string; message?: string }
-      const msg = fbErr.message || ''
-      if (fbErr.code === 'auth/user-not-found') {
-        setFirebaseError('هذا البريد الإلكتروني غير مسجل في المنصة.')
       } else if (
         fbErr.code === 'auth/network-request-failed' ||
         msg.includes('offline') ||
@@ -406,10 +412,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       ) {
         setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
       } else {
-        setFirebaseError(fbErr.message || 'تعذر إرسال رابط استعادة كلمة المرور حالياً.')
+        setFirebaseError(fbErr.message || 'حدث خطأ أثناء الاتصال بخادم المصادقة.')
       }
     } finally {
-      setResetLoading(false)
+      setEmailLoading(false)
     }
   }
 
@@ -680,13 +686,71 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               <span>تحديث كلمة المرور والدخول إلى المنصة ←</span>
             </button>
 
-            <div className="pt-2 text-center">
+            <div className="pt-2 text-center flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgot(true)
+                  router.push(`/login?mode=forgot&email=${encodeURIComponent(params.email || emailInput || '')}`)
+                }}
+                className="text-[11px] font-bold text-amber-700 hover:text-amber-800 underline dark:text-amber-400 cursor-pointer"
+              >
+                لم يصلك الرمز؟ اضغط هنا لإعادة الإرسال
+              </button>
               <Link
                 href="/login"
                 className="text-xs font-bold text-stone-500 hover:text-emerald-800 transition dark:text-stone-400 dark:hover:text-emerald-400"
               >
                 ← العودة إلى تسجيل الدخول
               </Link>
+            </div>
+          </form>
+        ) : isForgot ? (
+          /* ========================================================
+             حالة 3: استرجاع كلمة المرور - الخطوة 1 (طلب رمز التحقق عبر البريد)
+             ======================================================== */
+          <form action={requestPasswordResetOtpAction} className="mt-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                البريد الإلكتروني المسجل في سَنَد *
+              </label>
+              <div className="relative">
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="student@example.com"
+                  className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                />
+                <Mail className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
+              </div>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                🔒 سنرسل رمز تحقق سرياً (6 أرقام) إلى هذا البريد لتعيين كلمة مرور جديدة فوراً وبأمان.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full rounded-2xl bg-linear-to-r from-emerald-800 to-emerald-950 py-3.5 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-950/20 hover:from-emerald-700 hover:to-emerald-900 transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-600/30"
+            >
+              <Send className="h-4 w-4 text-amber-300" />
+              <span>إرسال رمز التحقق إلى البريد ←</span>
+            </button>
+
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgot(false)
+                  setFirebaseError(null)
+                  router.push('/login?mode=login')
+                }}
+                className="text-xs font-bold text-stone-500 hover:text-emerald-800 transition dark:text-stone-400 dark:hover:text-emerald-400 cursor-pointer"
+              >
+                ← العودة إلى تسجيل الدخول
+              </button>
             </div>
           </form>
         ) : (
@@ -809,61 +873,12 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               </form>
             )}
 
-            {/* النموذج 2: كلمة المرور (دخول / إنشاء حساب / استرجاع) عبر Firebase */}
+            {/* النموذج 2: كلمة المرور (دخول / إنشاء حساب) عبر Firebase والتحقق المحلي المعتمد */}
             {authTab === 'password' && (
-              isForgot ? (
-                /* استرجاع كلمة المرور: إرسال رابط رسمي عبر Firebase Auth */
-                <form onSubmit={handleResetPassword} className="mt-5 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                      البريد الإلكتروني المسجل في سَنَد *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        name="email"
-                        required
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="student@example.com"
-                        className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] px-4 py-2.5 pr-10 text-xs text-stone-900 focus:border-emerald-800 focus:bg-white dark:focus:bg-stone-800 dark:text-stone-100 focus:outline-hidden dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                      />
-                      <Mail className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
-                    </div>
-                    <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                      🔒 سنرسل رابط استعادة وتعديل كلمة المرور المعتمد رسمياً إلى هذا البريد.
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isAnyLoading}
-                    className="w-full rounded-2xl bg-linear-to-r from-emerald-800 to-emerald-950 py-3.5 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-950/20 hover:from-emerald-700 hover:to-emerald-900 transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-600/30 disabled:opacity-50"
-                  >
-                    {resetLoading ? (
-                      <RefreshCw className="h-4 w-4 animate-spin text-amber-300" />
-                    ) : (
-                      <Send className="h-4 w-4 text-amber-300" />
-                    )}
-                    <span>إرسال رابط إعادة التعيين للبريد ←</span>
-                  </button>
-
-                  <div className="pt-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setIsForgot(false)}
-                      className="text-xs font-bold text-stone-500 hover:text-emerald-800 transition dark:text-stone-400 dark:hover:text-emerald-400 cursor-pointer"
-                    >
-                      ← الرجوع لتسجيل الدخول بكلمة المرور
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                /* دخول أو إنشاء حساب بكلمة المرور عبر Firebase Auth الموثق */
-                <form
-                  onSubmit={handleEmailPasswordSubmit}
-                  className="mt-5 space-y-4"
-                >
+              <form
+                onSubmit={handleEmailPasswordSubmit}
+                className="mt-5 space-y-4"
+              >
                   {isSignup && (
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -983,7 +998,6 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
                     </button>
                   </div>
                 </form>
-              )
             )}
           </>
         )}

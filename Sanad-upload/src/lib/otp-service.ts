@@ -1,5 +1,4 @@
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent } from '@/lib/student-tracking'
 import { sendRealEmail, buildVerificationEmailHtml } from '@/lib/email-service'
@@ -27,7 +26,10 @@ if (!globalForOtp.otpStore) {
 }
 
 // 1. توليد وإرسال رمز التحقق للبريد الإلكتروني
-export async function sendOtpToEmail(email: string): Promise<{ success: boolean; message: string; method?: string }> {
+export async function sendOtpToEmail(
+  email: string,
+  purpose: 'login' | 'reset-password' = 'login'
+): Promise<{ success: boolean; message: string; method?: string }> {
   const cleanEmail = email.toLowerCase().trim()
 
   if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
@@ -57,21 +59,27 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
     attempts: 0,
   })
 
+  const isReset = purpose === 'reset-password'
+
   // طباعة الكود في سجل طرفية الخادم للمطور فقط
   console.log('\n======================================================')
-  console.log(`📩 [سَنَد] تم توليد رمز التحقق السري لبريد: ${cleanEmail}`)
+  console.log(`📩 [سَنَد] تم توليد رمز التحقق (${isReset ? 'استعادة كلمة المرور' : 'تسجيل الدخول'}) لبريد: ${cleanEmail}`)
   console.log(`🔑 الرمز: ${otpCode} (صالح لمدة 10 دقائق)`)
   console.log('======================================================\n')
 
   let isEmailSent = false
   let sendMethod = 'none'
 
-  // 1. المحاولة الأولى: الإرسال المباشر عبر Resend API أو SMTP (Google/Custom)
+  // الإرسال المباشر عبر Gmail SMTP المعتمد
   try {
-    const html = buildVerificationEmailHtml(otpCode)
+    const html = buildVerificationEmailHtml(otpCode, purpose)
+    const subject = isReset
+      ? `رمز استعادة كلمة المرور في منصة سَنَد: ${otpCode}`
+      : `رمز التحقق السري لدخول منصة سَنَد: ${otpCode}`
+
     const directResult = await sendRealEmail({
       to: cleanEmail,
-      subject: `رمز التحقق السري لدخول منصة سَنَد: ${otpCode}`,
+      subject,
       html,
       code: otpCode,
     })
@@ -84,30 +92,14 @@ export async function sendOtpToEmail(email: string): Promise<{ success: boolean;
     console.warn('[Sanad OTP] Direct email transport failed:', err)
   }
 
-  // 2. المحاولة الثانية: الإرسال عبر Supabase Auth إن لم يُرسل مباشرة
-  if (!isEmailSent) {
-    try {
-      const supabase = await createClient()
-      const { error } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          shouldCreateUser: true,
-        },
-      })
-
-      if (!error) {
-        isEmailSent = true
-        sendMethod = 'supabase'
-      }
-    } catch {
-      // استمرار
-    }
-  }
-
   // رسالة أمان موحدة دون كشف الرمز إطلاقاً في الواجهة
   return {
     success: true,
-    message: 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).',
+    message: isEmailSent
+      ? isReset
+        ? 'تم إرسال رمز استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح. راجع صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
+        : 'تم إرسال رمز التحقق السري إلى بريدك الإلكتروني بنجاح. تفقد صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).'
+      : 'تم توليد رمز التحقق بنجاح. تفقد بريدك الإلكتروني أو أعد المحاولة.',
     method: sendMethod,
   }
 }
@@ -130,31 +122,11 @@ export async function verifyOtpCode(
   const record = globalOtpStore.get(cleanEmail)
   const now = Date.now()
 
-  // فحص عبر Supabase verifyOtp أولاً إن كان أُرسل عبرها
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanCode,
-      type: 'email',
-    })
-
-    if (!error && data?.user) {
-      globalOtpStore.delete(cleanEmail)
-      const name = data.user.user_metadata?.full_name || cleanEmail.split('@')[0]
-      await setStudentSessionCookie(name, cleanEmail)
-      registerOrUpdateStudent(cleanEmail, name)
-      return {
-        success: true,
-        message: 'تم التحقق بنجاح من حسابك. أهلاً بك في منصة سَنَد.',
-      }
-    }
-  } catch {
-    // متابعة الفحص عبر الـ Store الداخلي
-  }
-
-  // فحص الرمز السري الداخلي
-  const isMasterDevCode = cleanCode === '123456'
+  // فحص الرمز السري الداخلي (معطّل قطعياً إلا في حال تفعيله الصريح بالمطور)
+  const isMasterDevCode =
+    process.env.NODE_ENV === 'development' &&
+    process.env.ENABLE_DEV_OTP === 'true' &&
+    cleanCode === '123456'
 
   if (!record && !isMasterDevCode) {
     return {

@@ -245,14 +245,24 @@ export async function sendRealEmail(params: SendEmailParams): Promise<SendEmailR
 /**
  * قالب رسالة التحقق البريدية الفاخر لمنصة سَنَد
  */
-export function buildVerificationEmailHtml(code: string): string {
+export function buildVerificationEmailHtml(code: string, purpose: 'login' | 'reset-password' = 'login'): string {
+  const isReset = purpose === 'reset-password'
+  const title = isReset ? 'رمز استعادة كلمة المرور - منصة سَنَد' : 'رمز التحقق السري - منصة سَنَد'
+  const heading = isReset ? 'استعادة وتعيين كلمة المرور' : 'حيّاك الله يا طالب العلم'
+  const introText = isReset
+    ? 'وصلنا طلب لإعادة تعيين كلمة المرور لحسابك في منصة <strong>سَنَد</strong>. استخدم رمز التحقق السري التالي لتأكيد هويتك وتعيين كلمة مرورك الجديدة:'
+    : 'وصلنا طلب لتسجيل الدخول إلى حسابك في منصة <strong>سَنَد</strong>. استخدم رمز التحقق السري التالي لتأكيد ملكية بريدك:'
+  const warningText = isReset
+    ? '🔒 إذا لم تكن أنت من طلب استعادة كلمة المرور، يمكنك تجاهل هذه الرسالة بأمان ولن يتم تعديل أي بيانات في حسابك.'
+    : '🔒 للحفاظ على أمان حسابك وكشكولك، لا تشارك هذا الرمز مع أي شخص.'
+
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>رمز التحقق السري - منصة سَنَد</title>
+  <title>${title}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f7f5ef; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f7f5ef; padding: 40px 10px;">
@@ -271,9 +281,9 @@ export function buildVerificationEmailHtml(code: string): string {
           <!-- محتوى الرسالة -->
           <tr>
             <td style="padding: 36px 30px; text-align: center; color: #1c1917;">
-              <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 800; color: #064e3b;">حيّاك الله يا طالب العلم</h2>
+              <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 800; color: #064e3b;">${heading}</h2>
               <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.7; color: #57534e;">
-                وصلنا طلب لتسجيل الدخول إلى حسابك في منصة <strong>سَنَد</strong>. استخدم رمز التحقق السري التالي لتأكيد ملكية بريدك:
+                ${introText}
               </p>
 
               <!-- صندوق رمز التحقق -->
@@ -285,7 +295,7 @@ export function buildVerificationEmailHtml(code: string): string {
 
               <p style="margin: 20px 0 0 0; font-size: 12px; color: #78716c; line-height: 1.6;">
                 ⏳ الرمز صالح للاستخدام لمدة <strong>10 دقائق</strong> فقط.<br>
-                🔒 للحفاظ على أمان حسابك وكشكولك، لا تشارك هذا الرمز مع أي شخص.
+                ${warningText}
               </p>
             </td>
           </tr>
@@ -294,7 +304,6 @@ export function buildVerificationEmailHtml(code: string): string {
           <tr>
             <td style="background-color: #faf8f5; padding: 20px 30px; text-align: center; border-top: 1px solid #f0ede6;">
               <p style="margin: 0; font-size: 11px; color: #a8a29e;">
-                إذا لم تكن أنت من طلب هذا الرمز، يمكنك تجاهل هذه الرسالة بأمان.<br>
                 منصة سَنَد التعليمية التأصيلية • بإشراف المهندس بهاء طارق
               </p>
             </td>

@@ -226,14 +226,24 @@ export async function requestPasswordResetOtpAction(formData: FormData) {
     )
   }
 
-  const result = await sendOtpToEmail(cleanEmail)
+  const result = await sendOtpToEmail(cleanEmail, 'reset-password')
   if (!result.success) {
     return redirect(`/login?mode=forgot&error=${encodeURIComponent(result.message)}&email=${encodeURIComponent(cleanEmail)}`)
   }
 
+  // إرسال طلب رابط Firebase Auth في الخلفية بشكل صامت كنسخة إضافية
+  try {
+    const fbApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBr8Ch1B8YCx6AC7uTcrZIhD5D3s-iSxy4'
+    fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${fbApiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestType: 'PASSWORD_RESET', email: cleanEmail }),
+    }).catch(() => {})
+  } catch {}
+
   redirect(
     `/login?mode=reset-step2&email=${encodeURIComponent(cleanEmail)}&message=${encodeURIComponent(
-      'تم إرسال رمز التحقق إلى بريدك الإلكتروني. أدخل الرمز وكلمة المرور الجديدة لإتمام التحديث.'
+      'تم إرسال رمز التحقق إلى بريدك الإلكتروني بنجاح. أدخل الرمز وكلمة المرور الجديدة لإتمام التحديث.'
     )}`
   )
 }
@@ -302,7 +312,8 @@ export async function resetPasswordAction(formData: FormData) {
     // تحديث كلمة المرور وتعيين جلسة آمنة
     saveStudentLocalPassword(cleanEmail, newPassword, fullName)
     await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
-    registerOrUpdateStudent(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    syncStudentToFirebaseAuth(cleanEmail, newPassword, fullName).catch(() => {})
 
     try {
       depositSecurityAlert(
@@ -312,7 +323,8 @@ export async function resetPasswordAction(formData: FormData) {
       )
     } catch {}
 
-    redirectTo = '/courses'
+    const isUserAdmin = cleanEmail === 'bhaaljml480@gmail.com' || student?.role === 'admin'
+    redirectTo = isUserAdmin ? '/admin' : '/courses'
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err
     errorMessage = err instanceof Error ? err.message : 'حدث خطأ أثناء تعديل كلمة المرور.'
