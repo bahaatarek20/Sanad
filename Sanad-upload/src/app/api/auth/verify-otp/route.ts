@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPhoneOtp } from '@/lib/phone-auth-service'
+import { registerOrUpdateStudentAsync } from '@/lib/student-tracking'
+import { setStudentSessionCookie } from '@/lib/auth-helper'
+import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,19 +31,37 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (result.success && result.phone) {
+      const clientTelemetry = extractClientTelemetry(req.headers)
+      const syntheticEmail = `${result.phone.replace(/[^0-9]/g, '')}@student.sanad.edu`
+      const studentName = result.studentName || `طالب (${result.phone})`
+
+      await registerOrUpdateStudentAsync(syntheticEmail, studentName, {
+        phone: result.phone,
+        authProvider: 'phone',
+        ...clientTelemetry,
+      })
+
+      await setStudentSessionCookie(studentName, syntheticEmail, {
+        phone: result.phone,
+        authProvider: 'phone',
+      })
+    }
+
     return NextResponse.json({
       success: true,
       message: result.message,
       phone: result.phone,
       studentName: result.studentName,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [API /api/auth/verify-otp Error]:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
         message: 'حدث خطأ أثناء التحقق من الرمز.',
-        error: error?.message,
+        error: errorMessage,
       },
       { status: 500 }
     )

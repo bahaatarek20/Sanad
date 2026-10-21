@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, Compass, Users, Sparkles, Globe, ShieldCheck } from 'lucide-react'
+import { BookOpen, Compass, Users, Sparkles, Globe, ShieldCheck, Smartphone } from 'lucide-react'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import SupportPlatformCard from '@/components/support-platform-card'
 
@@ -66,6 +66,12 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2.5 text-xs text-stone-500 dark:text-stone-400">
               <li>
+                <Link href="/download" className="flex items-center gap-2 font-bold text-emerald-800 hover:text-emerald-950 transition dark:text-emerald-400 dark:hover:text-emerald-300">
+                  <Smartphone className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                  <span>تحميل تطبيق سَنَد على هاتفك (📱 App)</span>
+                </Link>
+              </li>
+              <li>
                 <Link href="/community" className="flex items-center gap-2 hover:text-emerald-900 transition dark:hover:text-emerald-400">
                   <Users className="h-4 w-4 text-emerald-700" />
                   <span>مجلس المذاكرة العام (المجهول)</span>
@@ -89,12 +95,7 @@ export default function Footer() {
                   <span>بوابة التحقق من الإجازات والشهادات</span>
                 </Link>
               </li>
-              <li>
-                <Link href="/offline" className="flex items-center gap-2 hover:text-emerald-900 transition dark:hover:text-emerald-400">
-                  <Sparkles className="h-4 w-4 text-amber-600" />
-                  <span>رفيق المسجد والأسفار (بلا إنترنت)</span>
-                </Link>
-              </li>
+
               <li>
                 <Link href="/about" className="flex items-center gap-2 hover:text-emerald-900 transition dark:hover:text-emerald-400">
                   <BookOpen className="h-4 w-4 text-emerald-800" />
@@ -114,32 +115,77 @@ export default function Footer() {
           {/* بطاقة دعم المنصة والمساهمة الوقفية (اتصالات كاش: 01140373702) */}
           <SupportPlatformCard />
 
-          {/* هوية منصة سَنَد الرسمية والاعتماد الأكاديمي */}
+          {/* هوية منصة سَنَد الرسمية والاعتماد الأكاديمي وحقوق المطور */}
           <div className="border-t border-stone-200/80 pt-8 dark:border-stone-800">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="text-center md:text-right space-y-1">
+              <div className="text-center md:text-right space-y-1.5">
                 <p className="text-sm font-black text-stone-900 dark:text-white">
                   منصة «سَنَد» لعلوم الشريعة والتأصيل المنهجي
                 </p>
-                <p className="text-xs text-stone-600 dark:text-stone-300">
-                  إشراف واعتماد: <span className="font-extrabold text-emerald-800 dark:text-emerald-400"> إدارة منصة سَنَد للتأصيل الشرعي </span>
-                </p>
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 text-xs text-stone-600 dark:text-stone-300">
+                  <span>إشراف واعتماد: <strong className="text-emerald-800 dark:text-emerald-400">إدارة منصة سَنَد للتأصيل الشرعي</strong></span>
+                  <span className="hidden sm:inline text-stone-300 dark:text-stone-700">•</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 font-bold text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/70">
+                    💻 برمجة وتطوير: <strong className="font-black">بشمهندس بهاء طارق</strong>
+                  </span>
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
+              {/* أزرار وسائل التواصل المباشرة للبشمهندس بهاء طارق */}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {/* واتساب */}
+                <a
+                  href="https://wa.me/201012728516"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="محادثة واتساب مع المطور: 01012728516"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50/70 px-3 py-1.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 shadow-2xs"
+                >
+                  <span className="text-[#25D366] text-sm">💬</span>
+                  <span>واتساب</span>
+                </a>
+
+                {/* البريد الإلكتروني */}
+                <a
+                  href="mailto:bhaaljml480@gmail.com"
+                  title="مراسلة البريد الإلكتروني: bhaaljml480@gmail.com"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-1.5 text-xs font-bold text-sky-900 hover:bg-sky-100 transition dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300 shadow-2xs"
+                >
+                  <span>✉️</span>
+                  <span>البريد</span>
+                </a>
+
+                {/* معرض الأعمال Portfolio */}
+                <a
+                  href="https://bahaatarek20.github.io/Bahaa-Portfolio/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="معرض أعمال البشمهندس بهاء طارق"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-50 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 shadow-2xs"
+                >
+                  <span>🌐</span>
+                  <span>Portfolio</span>
+                </a>
+
+                {/* LinkedIn */}
+                <a
+                  href="https://www.linkedin.com/in/bahaa-tarek-5008b0340"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="حساب لينكد إن"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-100 transition dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 shadow-2xs"
+                >
+                  <span>💼</span>
+                  <span>LinkedIn</span>
+                </a>
+
+                {/* رابط سجل الإجازات */}
                 <Link
                   href="/verify-ijaza"
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"
                 >
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  <span>سجل الإجازات الموثق</span>
-                </Link>
-                <Link
-                  href="/offline"
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-100 transition dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
-                >
-                  <Sparkles className="h-4 w-4 text-amber-600" />
-                  <span>رفيق المسجد (أوفلاين)</span>
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>سجل الإجازات</span>
                 </Link>
               </div>
             </div>

@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: LessonPageProps) {
     : `مجلس ${lessonId} - مدارسة ${course.title}`
 
   const description = `مدارسة ${lessonTitle} من متن ${course.title} مع الشارح ${course.instructor} على منصة سَنَد للعلوم الشرعية.`
-  const url = `https://sanad.vercel.app/courses/${slug}/lessons/${lessonId}`
+  const url = `https://sanad-edu1.vercel.app/courses/${slug}/lessons/${lessonId}`
 
   return {
     title: lessonTitle,

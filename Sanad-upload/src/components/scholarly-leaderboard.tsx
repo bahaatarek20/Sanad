@@ -39,12 +39,31 @@ export default function ScholarlyLeaderboard({
   const [blessedStudents, setBlessedStudents] = useState<Record<string, number>>({})
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  // وظيفة إرسال الدعاء بظهر الغيب لرفيق المدارسة
+  // استرجاع الأدعية السابقة من التخزين المحلي لضمان عدم ضياعها عند إعادة التحميل
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sanad_leaderboard_blessings')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === 'object') {
+          setBlessedStudents(parsed)
+        }
+      }
+    } catch {}
+  }, [])
+
+  // وظيفة إرسال الدعاء بظهر الغيب لرفيق المدارسة وحفظه دائماً
   const handleBlessStudent = (studentId: string, studentName: string) => {
-    setBlessedStudents((prev) => ({
-      ...prev,
-      [studentId]: (prev[studentId] || 0) + 1,
-    }))
+    setBlessedStudents((prev) => {
+      const next = {
+        ...prev,
+        [studentId]: (prev[studentId] || 0) + 1,
+      }
+      try {
+        localStorage.setItem('sanad_leaderboard_blessings', JSON.stringify(next))
+      } catch {}
+      return next
+    })
 
     setToastMessage(`دَعَوْتَ لأخيك «${studentName}» بظهر الغيب، وقال الملك: «ولك بمثل» 🤲`)
     setTimeout(() => {

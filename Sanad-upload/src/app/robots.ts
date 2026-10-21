@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sanad.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sanad-edu1.vercel.app'
 
   return {
     rules: [
@@ -15,9 +15,11 @@ export default function robots(): MetadataRoute.Robots {
           '/community',
           '/about',
           '/contact',
+          '/download',
+          '/verify-ijaza',
+          '/verify-ijaza/*',
           '/privacy',
           '/terms',
-          '/login',
         ],
         disallow: [
           '/sanad-control-gate',
@@ -28,8 +30,11 @@ export default function robots(): MetadataRoute.Robots {
           '/dashboard/*',
           '/settings',
           '/settings/*',
+          '/inbox',
+          '/inbox/*',
           '/api/*',
           '/auth/*',
+          '/login',
         ],
       },
     ],

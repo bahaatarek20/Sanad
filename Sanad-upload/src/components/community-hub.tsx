@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   Users,
   MessageSquare,
@@ -13,15 +14,24 @@ import {
   ShieldCheck,
   Filter,
   CheckCircle2,
-  FileText
+  FileText,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
-import { createCommunityPost, upvotePost, addCommunityReply } from '@/app/community/actions'
+import {
+  createCommunityPost,
+  upvotePost,
+  addCommunityReply,
+  getLatestCommunityPostsAction,
+} from '@/app/community/actions'
 
 export interface CommunityReply {
   id: string
   post_id: string
   anonymous_alias: string
+  author_role?: 'student' | 'admin'
+  author_scholarly_id?: string
   content: string
   created_at: string
 }
@@ -29,6 +39,8 @@ export interface CommunityReply {
 export interface CommunityPost {
   id: string
   anonymous_alias: string
+  author_role?: 'student' | 'admin'
+  author_scholarly_id?: string
   course_slug?: string | null
   post_type: 'question' | 'summary' | 'benefit'
   content: string
@@ -51,12 +63,86 @@ export default function CommunityHub({
   const [posts, setPosts] = useState<CommunityPost[]>(initialPosts)
   const [activeFilter, setActiveFilter] = useState<'all' | 'question' | 'summary' | 'benefit'>('all')
   const [isPosting, setIsPosting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [postError, setPostError] = useState<string | null>(null)
+  const [postSuccess, setPostSuccess] = useState<string | null>(null)
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({})
   const [postContent, setPostContent] = useState('')
   const [postType, setPostType] = useState<'question' | 'summary' | 'benefit'>('benefit')
   const [selectedCourseSlug, setSelectedCourseSlug] = useState<string>('')
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set())
+
+  // استرجاع الإعجابات السابقة من التخزين المحلي لمنع التكرار (1 blessing per user)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('sanad_user_upvotes')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            setUserUpvotes(new Set(parsed))
+          }
+        }
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
+  }, [])
+
+  // المزامنة الدورية الخلفية كل 8 ثوانٍ لجلب أي مشاركات جديدة للطلاب تلقائياً ولحظياً
+  useEffect(() => {
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch('/api/community/posts', { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data?.success && Array.isArray(data.posts) && data.posts.length > 0) {
+            setPosts(data.posts)
+            return
+          }
+        }
+      } catch {}
+
+      try {
+        const updated = await getLatestCommunityPostsAction()
+        if (updated && updated.length > 0) {
+          setPosts(updated)
+        }
+      } catch {}
+    }
+
+    fetchLatest()
+    const timer = setInterval(fetchLatest, 8000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // تحديث يدوي للمجلس
+  const handleRefreshPosts = async () => {
+    setIsRefreshing(true)
+    try {
+      const res = await fetch('/api/community/posts', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.success && Array.isArray(data.posts) && data.posts.length > 0) {
+          setPosts(data.posts)
+          setIsRefreshing(false)
+          return
+        }
+      }
+    } catch {}
+
+    try {
+      const updated = await getLatestCommunityPostsAction()
+      if (updated && updated.length > 0) {
+        setPosts(updated)
+      }
+    } catch (err) {
+      console.error('Refresh error:', err)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // تصفية المنشورات
   const filteredPosts = posts.filter(
@@ -66,9 +152,44 @@ export default function CommunityHub({
   // إرسال منشور جديد
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
+    setPostError(null)
+    setPostSuccess(null)
+
     if (!postContent.trim() || isPosting) return
 
     setIsPosting(true)
+
+    // 1. محاولة الإرسال الفوري عبر الـ API
+    try {
+      const apiRes = await fetch('/api/community/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: postContent.trim(),
+          postType,
+          courseSlug: selectedCourseSlug || null,
+        }),
+      })
+      if (apiRes.ok) {
+        const apiData = await apiRes.json()
+        if (apiData?.success && apiData.post) {
+          const newPost: CommunityPost = {
+            ...apiData.post,
+            post_type: apiData.post.post_type as 'question' | 'summary' | 'benefit',
+            replies: [],
+          }
+          setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)])
+          setPostContent('')
+          setSelectedCourseSlug('')
+          setPostSuccess('تم نشر مسألتك بنجاح في المجلس وستظهر لكافة إخوانك الطلاب!')
+          setTimeout(() => setPostSuccess(null), 6000)
+          setIsPosting(false)
+          return
+        }
+      }
+    } catch {}
+
+    // 2. المحاولة عبر Server Action كطبقة بديلة موثوقة
     const formData = new FormData()
     formData.append('content', postContent.trim())
     formData.append('postType', postType)
@@ -83,33 +204,80 @@ export default function CommunityHub({
         post_type: res.post.post_type as 'question' | 'summary' | 'benefit',
         replies: [],
       }
-      setPosts([newPost, ...posts])
+      setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)])
       setPostContent('')
       setSelectedCourseSlug('')
+      setPostSuccess('تم نشر مسألتك بنجاح في المجلس وستظهر لكافة إخوانك الطلاب!')
+      setTimeout(() => setPostSuccess(null), 6000)
+    } else {
+      setPostError(res.error || 'تعذر نشر المسألة، يرجى المحاولة مرة أخرى.')
     }
     setIsPosting(false)
   }
 
-  // تسجيل إعجاب
+  // تسجيل دعوة بالبركة / إعجاب (مقتصر على مرة واحدة فقط لكل طالب)
   const handleUpvote = async (postId: string) => {
     if (userUpvotes.has(postId)) return
 
-    setUserUpvotes((prev) => new Set([...prev, postId]))
+    const nextUpvotes = new Set([...userUpvotes, postId])
+    setUserUpvotes(nextUpvotes)
+    try {
+      localStorage.setItem('sanad_user_upvotes', JSON.stringify(Array.from(nextUpvotes)))
+    } catch {}
+
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId ? { ...p, upvotes_count: p.upvotes_count + 1 } : p
       )
     )
 
+    // إشعار نظام التشغيل المباشر عبر Web Notification API
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        try {
+          new Notification('منصة سَنَد — مجلس المذاكرة', {
+            body: 'دعوتَ لأخيك طالب العلم بالتوفيق والبركة في مدارسته! 🌟',
+            icon: '/icon.png',
+          })
+        } catch {}
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission()
+      }
+    }
+
     await upvotePost(postId)
   }
 
-  // إضافة رد مجهول
+  // إضافة رد مجهول فوري وتفاؤلي (Optimistic UI Update)
   const handleAddReply = async (postId: string) => {
+    setReplyErrors((prev) => ({ ...prev, [postId]: '' }))
+
     const text = (replyInputs[postId] || '').trim()
     if (!text) return
 
     setReplyInputs((prev) => ({ ...prev, [postId]: '' }))
+
+    const tempReplyId = `temp-${Date.now()}`
+    const optimisticReply: CommunityReply = {
+      id: tempReplyId,
+      post_id: postId,
+      anonymous_alias: 'طالب علم (أنت)',
+      content: text,
+      created_at: new Date().toISOString(),
+    }
+
+    // إضافة فورية في واجهة المستخدم
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            replies: [...(p.replies || []), optimisticReply],
+          }
+        }
+        return p
+      })
+    )
 
     const res = await addCommunityReply(postId, text)
     if (res.success && res.reply) {
@@ -118,12 +286,27 @@ export default function CommunityHub({
           if (p.id === postId) {
             return {
               ...p,
-              replies: [...(p.replies || []), res.reply as CommunityReply],
+              replies: (p.replies || []).map((r) =>
+                r.id === tempReplyId ? (res.reply as CommunityReply) : r
+              ),
             }
           }
           return p
         })
       )
+    } else {
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id === postId) {
+            return {
+              ...p,
+              replies: (p.replies || []).filter((r) => r.id !== tempReplyId),
+            }
+          }
+          return p
+        })
+      )
+      setReplyErrors((prev) => ({ ...prev, [postId]: res.error || 'تعذر إضافة الرد.' }))
     }
   }
 
@@ -170,9 +353,42 @@ export default function CommunityHub({
         </div>
       </div>
 
+      {/* تنبيه تسجيل الدخول للمشاركة */}
+      {!isLoggedIn && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-amber-500/10 border border-amber-500/25 text-amber-950 dark:text-amber-200 text-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-medium">
+              للمشاركة في مجلس المذاكرة وطرح المسائل أو كتابة الردود، يلزم تسجيل الدخول بحساب طالب مسجل.
+            </span>
+          </div>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-700 px-4 py-2 font-bold text-white hover:bg-amber-800 transition shrink-0 shadow-2xs"
+          >
+            <span>تسجيل الدخول / إنشاء حساب</span>
+          </Link>
+        </div>
+      )}
+
       {/* 2. نموذج طرح مسألة أو فائدة في المجلس */}
       <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900/95">
         <form onSubmit={handleCreatePost} className="space-y-4">
+          {/* رسائل التنبيه والنجاح */}
+          {postError && (
+            <div className="flex items-center gap-2 rounded-2xl bg-rose-50 p-3 text-xs font-medium text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+              <span>{postError}</span>
+            </div>
+          )}
+
+          {postSuccess && (
+            <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-xs font-medium text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>{postSuccess}</span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs font-bold text-stone-900 dark:text-white">
               شارك المجلس مسألة أو فائدة:
@@ -245,15 +461,15 @@ export default function CommunityHub({
       <div className="flex items-center justify-between border-b border-stone-200/80 pb-4 dark:border-stone-800">
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-stone-400" />
-          {[
+          {([
             { key: 'all', label: 'كافة المشاركات' },
             { key: 'question', label: 'استشكالات ومسائل' },
             { key: 'summary', label: 'تلخيصات وخرائط' },
             { key: 'benefit', label: 'فوائد وضوابط' },
-          ].map((f) => (
+          ] as const).map((f) => (
             <button
               key={f.key}
-              onClick={() => setActiveFilter(f.key as any)}
+              onClick={() => setActiveFilter(f.key)}
               className={`rounded-xl px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
                 activeFilter === f.key
                   ? 'bg-emerald-900 text-white shadow-xs dark:bg-emerald-800'
@@ -264,9 +480,21 @@ export default function CommunityHub({
             </button>
           ))}
         </div>
-        <span className="text-xs text-stone-500 font-bold dark:text-stone-400">
-          {filteredPosts.length} مشاركة
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefreshPosts}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-600 hover:bg-stone-50 hover:text-emerald-900 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-emerald-400 cursor-pointer disabled:opacity-50 shadow-2xs"
+            title="تحديث المنشورات وجلب الجديد فوراً"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
+            <span>{isRefreshing ? 'جارٍ التحديث...' : 'تحديث المجلس'}</span>
+          </button>
+          <span className="text-xs text-stone-500 font-bold dark:text-stone-400">
+            {filteredPosts.length} مشاركة
+          </span>
+        </div>
       </div>
 
       {/* 4. قائمة المنشورات في المجلس */}
@@ -297,12 +525,25 @@ export default function CommunityHub({
                 <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-900 font-bold text-xs ring-1 ring-amber-300/40 dark:bg-amber-950 dark:text-amber-200">
-                      📖
+                      {post.author_role === 'admin' || post.anonymous_alias?.includes('مشرف عام') ? '🛡️' : '📖'}
                     </div>
                     <div>
-                      <span className="text-xs font-black text-stone-900 dark:text-white block">
-                        {post.anonymous_alias}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-black text-stone-900 dark:text-white block">
+                          {post.anonymous_alias}
+                        </span>
+                        {(post.author_role === 'admin' || post.anonymous_alias?.includes('مشرف عام')) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded-md dark:bg-amber-950 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800">
+                            <ShieldCheck className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                            <span>مشرف المنصة</span>
+                          </span>
+                        )}
+                        {post.author_scholarly_id && (
+                          <span className="text-[10px] font-mono text-stone-400">
+                            [{post.author_scholarly_id}]
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-stone-400">
                         {new Date(post.created_at).toLocaleDateString('ar-EG', {
                           month: 'short',
@@ -372,9 +613,17 @@ export default function CommunityHub({
                             className="rounded-xl border border-stone-200 bg-white p-3 text-xs dark:border-stone-700 dark:bg-stone-800"
                           >
                             <div className="flex items-center justify-between text-[10px] text-stone-400 mb-1">
-                              <span className="font-bold text-emerald-900 dark:text-emerald-400">
-                                {reply.anonymous_alias}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`font-bold ${reply.author_role === 'admin' || reply.anonymous_alias?.includes('مشرف عام') ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-900 dark:text-emerald-400'}`}>
+                                  {reply.anonymous_alias}
+                                </span>
+                                {(reply.author_role === 'admin' || reply.anonymous_alias?.includes('مشرف عام')) && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded dark:bg-amber-950 dark:text-amber-300">
+                                    <ShieldCheck className="h-2.5 w-2.5 text-amber-600" />
+                                    <span>مشرف</span>
+                                  </span>
+                                )}
+                              </div>
                               <span>
                                 {new Date(reply.created_at).toLocaleTimeString('ar-EG', {
                                   hour: '2-digit',
@@ -389,6 +638,14 @@ export default function CommunityHub({
                         ))
                       )}
                     </div>
+
+                    {/* رسالة الخطأ للرد إن وجدت */}
+                    {replyErrors[post.id] && (
+                      <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-2.5 text-[11px] font-medium text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        <span>{replyErrors[post.id]}</span>
+                      </div>
+                    )}
 
                     {/* حقل إضافة رد */}
                     <div className="flex items-center gap-2 pt-2">

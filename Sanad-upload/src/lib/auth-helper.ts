@@ -89,7 +89,7 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
         }
 
         const isAdmin =
-          ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+          email === 'bhaaljml480@gmail.com' ||
           cookieStore.has('sanad_admin_gate_token') ||
           parsed.role === 'admin'
 
@@ -146,7 +146,7 @@ export async function setStudentSessionCookie(
   const cleanName = fullName.trim() || 'طالب العلم'
 
   const isAdmin =
-    ['bhaaljml480@gmail.com', 'bhaaljml48@gmail.com', 'bhaaljml66@gmail.com', 'bhaaljml3@gmail.com', 'bhaaljml62@gmail.com'].includes(email) ||
+    email === 'bhaaljml480@gmail.com' ||
     options?.role === 'admin'
 
   const studentData: Record<string, unknown> = {
@@ -187,6 +187,15 @@ export async function setStudentSessionCookie(
       secure: process.env.NODE_ENV === 'production',
     }
   )
+
+  // 3. مسح أي علامة خروج سابقة صريحة لضمان عدم تصفير الجلسة أو تعليق الدخول
+  cookieStore.set('sanad_explicit_logout', '', {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    sameSite: 'lax',
+  })
+  cookieStore.delete('sanad_explicit_logout')
 
   return studentData
 }

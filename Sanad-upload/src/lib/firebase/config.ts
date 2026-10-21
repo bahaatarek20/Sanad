@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth'
+import { getFirestore, Firestore } from 'firebase/firestore'
 
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBr8Ch1B8YCx6AC7uTcrZIhD5D3s-iSxy4",
@@ -14,12 +15,20 @@ export const firebaseConfig = {
 // تهيئة تطبيق Firebase بشكل آمن يمنع التكرار ويدعم SSR في Next.js
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 
-// خدمة التحقق والمصادقة (Google + Phone Auth)
+// خدمة التحقق والمصادقة (Google + Email + Phone Auth)
 export const auth: Auth = getAuth(app)
-auth.useDeviceLanguage()
+if (typeof window !== 'undefined') {
+  try {
+    auth.useDeviceLanguage()
+  } catch {}
+}
+
+// قاعدة بيانات Cloud Firestore الرسمية المعتمدة
+export const db: Firestore = getFirestore(app)
 
 // موفّر تسجيل الدخول المباشر بحساب Google
 export const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 })
+

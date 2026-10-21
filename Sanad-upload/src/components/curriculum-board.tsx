@@ -34,35 +34,41 @@ export default function CurriculumBoard({
 
   // مزامنة حالة الإنجاز والتعديلات الإدارية على المتون مع المتصفح
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sanad_completed_courses')
-      if (stored) {
-        const localList: string[] = JSON.parse(stored)
-        setCompletedSlugs((prev) => new Set([...prev, ...localList]))
-      } else if (completedCourseSlugs.length > 0) {
-        setCompletedSlugs(new Set(completedCourseSlugs))
-      }
+    const t = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('sanad_completed_courses')
+        if (stored) {
+          const localList: string[] = JSON.parse(stored)
+          setCompletedSlugs((prev) => new Set([...prev, ...localList]))
+        } else if (completedCourseSlugs.length > 0) {
+          setCompletedSlugs(new Set(completedCourseSlugs))
+        }
 
-      // اعتماد المتون المعتمدة القادمة من السيرفر كمرجع نهائي موحد للمنصة
-      setDisplayCourses(courses)
-    } catch {
-      setDisplayCourses(courses)
-    }
+        // اعتماد المتون المعتمدة القادمة من السيرفر كمرجع نهائي موحد للمنصة
+        setDisplayCourses(courses)
+      } catch {
+        setDisplayCourses(courses)
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [completedCourseSlugs, courses])
 
   // قراءة فئة المتن أو كلمة البحث من الرابط لدعم بحث Google والروابط المباشرة
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const catParam = params.get('cat') || params.get('category')
-      if (catParam) {
-        setActiveCategoryTab(catParam)
-      }
-      const qParam = params.get('q') || params.get('search')
-      if (qParam) {
-        setSearchQuery(qParam)
-      }
-    } catch {}
+    const t = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const catParam = params.get('cat') || params.get('category')
+        if (catParam) {
+          setActiveCategoryTab(catParam)
+        }
+        const qParam = params.get('q') || params.get('search')
+        if (qParam) {
+          setSearchQuery(qParam)
+        }
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   // تبديل حالة إنجاز المتن مع الحفظ السحابي الدائم المرتبط بحساب الطالب
@@ -158,11 +164,11 @@ export default function CurriculumBoard({
         </div>
       </div>
 
-      {/* فلاتر الفنون الهادئة */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* فلاتر الفنون الهادئة مع تمرير أفقي سلس للجوال */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => setActiveCategoryTab('all')}
-          className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
             activeCategoryTab === 'all'
               ? 'bg-emerald-900 text-white shadow-xs dark:bg-emerald-800'
               : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'
@@ -178,7 +184,7 @@ export default function CurriculumBoard({
             <button
               key={cat.slug}
               onClick={() => setActiveCategoryTab(cat.slug)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+              className={`shrink-0 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
                 activeCategoryTab === cat.slug
                   ? 'bg-emerald-900 text-white shadow-xs dark:bg-emerald-800'
                   : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'

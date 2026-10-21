@@ -33,13 +33,14 @@ export async function POST(req: NextRequest) {
       message: result.message,
       formattedPhone: result.formattedPhone,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [API /api/auth/send-otp Error]:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
         message: 'فشل إرسال رمز التحقق. يرجى المحاولة لاحقاً.',
-        error: error?.message,
+        error: errorMessage,
       },
       { status: 500 }
     )

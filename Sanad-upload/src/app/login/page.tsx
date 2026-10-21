@@ -94,17 +94,21 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     } catch {}
   }, [isLoggedOut])
 
-  // دالة توجيه مؤكدة بعد تسجيل الدخول (تضمن وصول الكوكيز فوراً للسيرفر)
+  // دالة توجيه مؤكدة بعد تسجيل الدخول (تضمن وصول الكوكيز فوراً للسيرفر وتنظيف أي علامة خروج)
   const completeLoginAndRedirect = (destination: string) => {
+    try {
+      document.cookie = 'sanad_explicit_logout=; path=/; max-age=0;'
+      document.cookie = 'sanad_explicit_logout=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;'
+    } catch {}
     window.location.href = destination
   }
 
-  // مزامنة جلسة الكوكي في الخادم مع مؤقت لمنع التعليق
+  // مزامنة جلسة الكوكي في الخادم مع استجابة فورية فائقة السرعة
   const syncFirebaseSession = async (idToken: string, provider: 'google' | 'email') => {
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 6000)
-      await fetch('/api/auth/firebase-session', {
+      const timer = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch('/api/auth/firebase-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,6 +118,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         signal: controller.signal,
       })
       clearTimeout(timer)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        console.warn('Session endpoint response notice:', data)
+      }
     } catch (e) {
       console.warn('Session endpoint notice:', e)
     }
@@ -192,6 +200,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       }
       if (fbErr.code === 'auth/popup-blocked') {
         setFirebaseError('تم حظر النافذة المنبثقة بواسطة المتصفح. يرجى السماح بالنوافذ المنبثقة أو استخدام الدخول بالبريد.')
+        return
+      }
+      if (fbErr.code === 'auth/account-exists-with-different-credential') {
+        setFirebaseError('هذا البريد مسجل مسبقاً بطريقة مصادقة أخرى (مثل كلمة المرور). يرجى تسجيل الدخول بالبريد وكلمة المرور أدناه.')
         return
       }
       if (fbErr.code === 'auth/unauthorized-domain') {
@@ -387,7 +399,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
             fbErr.code === 'auth/wrong-password' ||
             fbErr.code === 'auth/user-not-found'
           ) {
-            setFirebaseError('بيانات الدخول غير صحيحة، أو الحساب غير مسجل بعد. تأكد من البريد وكلمة المرور أو أنشئ حساباً جديداً.')
+            setFirebaseError('بيانات الدخول غير صحيحة، أو لم يتم تعيين كلمة مرور لهذا الحساب بعد. يمكنك الضغط على "نسيت كلمة المرور؟" أدناه لتعيين كلمة مرور جديدة فوراً، أو إنشاء حساب جديد.')
           } else if (fbErr.code === 'auth/too-many-requests') {
             setFirebaseError('تم إجراء محاولات متكررة، يرجى الانتظار قليلاً أو استعادة كلمة المرور.')
           } else {

@@ -2,10 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const AUTHORIZED_ADMIN_EMAILS = [
   'bhaaljml480@gmail.com',
-  'bhaaljml48@gmail.com',
-  'bhaaljml66@gmail.com',
-  'bhaaljml3@gmail.com',
-  'bhaaljml62@gmail.com',
 ]
 
 function attachSecurityHeaders(response: NextResponse): NextResponse {

@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { cookies, headers } from 'next/headers'
+import { verifySessionToken } from '@/lib/auth-helper'
 
 // إعدادات أمان بوابة الإدارة
 const ADMIN_SECRET_KEY = process.env.SANAD_ADMIN_SECRET || 'Sanad-Secure-Master-Key-2025-Eng-Bahaa'
@@ -178,22 +179,20 @@ export async function verifyAdminSession(): Promise<boolean> {
       return true
     }
 
-    // 3. التحقق من كوكي مالك المنصة
-    const isOwner = cookieStore.get('sanad_is_platform_owner')?.value === 'true'
-    const role = cookieStore.get('sanad_role')?.value
-    if (isOwner || role === 'admin') {
-      return true
-    }
-
-    // 4. التحقق من حساب المشرف المعتمد (المهندس بهاء طارق)
+    // 3. التحقق المشفر من حساب المشرف المعتمد (المهندس بهاء طارق)
     const studentCookie = cookieStore.get('sanad_student_user')?.value
     if (studentCookie) {
       try {
-        const student = JSON.parse(studentCookie)
-        const email = (student.email || '').toLowerCase()
-        const adminEmail = (process.env.SANAD_ADMIN_EMAIL || 'bhaaljml48').toLowerCase()
-        if (email.includes('bhaaljml48') || email.includes('bahaa') || email === adminEmail) {
-          return true
+        const verified = verifySessionToken(studentCookie)
+        if (verified && verified.email) {
+          const email = String(verified.email).toLowerCase().trim()
+          const authorizedAdminEmails = [
+            'bhaaljml480@gmail.com',
+            (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim(),
+          ].filter(Boolean)
+          if (authorizedAdminEmails.includes(email)) {
+            return true
+          }
         }
       } catch {}
     }
@@ -217,7 +216,7 @@ export async function refreshAdminSessionCookie(): Promise<boolean> {
       maxAge: 60 * 60 * 24 * 30, // 30 يوماً
       httpOnly: true,
       sameSite: 'lax',
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
     })
 
     cookieStore.set('sanad_is_platform_owner', 'true', {
@@ -291,7 +290,7 @@ export async function authenticateAdmin(passcode: string, identifier = 'default'
     maxAge: 60 * 60 * 24 * 30, // 30 يوماً متواصلة
     httpOnly: true,
     sameSite: 'lax',
-    secure: false, // متوافق مع HTTP و HTTPS لتفادي رفض المتصفحات حفظ الكوكي
+    secure: process.env.NODE_ENV === 'production',
   })
 
   // علامة دائمة تميز متصفح صاحب المنصة لاستثنائه قطعياً من عداد الزيارات والإحصائيات

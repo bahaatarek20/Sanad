@@ -2,13 +2,18 @@
 
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import {
   authenticateAdmin,
   verifyAdminSession,
   revokeAdminSession,
 } from '@/lib/admin-security'
-import { getAdminDashboardData, toggleStudentBan, resetVisitorCount } from '@/lib/student-tracking'
+import {
+  getAdminDashboardData,
+  getAdminDashboardDataAsync,
+  toggleStudentBan,
+  updateStudentRole,
+  resetVisitorCount,
+} from '@/lib/student-tracking'
 import {
   getActiveCourses,
   saveCourseToServer,
@@ -25,6 +30,8 @@ import {
   CategoryItem,
 } from '@/lib/courses-store'
 import { MatnCourse } from '@/lib/curriculum-data'
+import { deleteLocalCommunityPost, deleteLocalCommunityReply } from '@/lib/community-store'
+import { deleteCommunityPostFromCloud, deleteCommunityReplyFromCloud } from '@/lib/cloud-db'
 
 /**
  * 1. تسجيل دخول المشرف العام بالتحقق الخادمي والحماية ضد التخمين (Brute-force)
@@ -60,7 +67,7 @@ export async function getAdminDashboardAction() {
     return { success: false, error: 'غير مصرح بالوصول إلى بيانات الطلاب' }
   }
 
-  const data = getAdminDashboardData()
+  const data = await getAdminDashboardDataAsync()
   const courses = getActiveCourses()
   const categories = getActiveCategories()
   const broadcast = getBroadcastNotice()
@@ -227,55 +234,40 @@ export async function deleteCommunityPostAdminAction(postId: string) {
     return { success: false, error: 'غير مصرح' }
   }
 
+  // 1. الحذف من السجل المحلي
+  deleteLocalCommunityPost(postId)
+
+  // 2. الحذف من Cloud Firestore
   try {
-    const supabase = await createClient()
-    const { error } = await supabase
-      .from('community_posts')
-      .delete()
-      .eq('id', postId)
+    await deleteCommunityPostFromCloud(postId)
+  } catch {}
 
-    if (error) {
-      console.error('Error deleting post:', error)
-      return { success: false, error: error.message }
-    }
-
-    revalidatePath('/community')
-    revalidatePath('/sanad-control-gate')
-    return { success: true }
-  } catch (err) {
-    console.error('Delete post exception:', err)
-    return { success: false, error: 'تعذر حذف المنشور' }
-  }
+  revalidatePath('/community')
+  revalidatePath('/sanad-control-gate')
+  return { success: true }
 }
 
 /**
  * 8. حذف تعليق مخالف (مشرف فقط)
  */
-export async function deleteCommunityReplyAdminAction(replyId: string) {
+export async function deleteCommunityReplyAdminAction(replyId: string, postId?: string) {
   const isValid = await verifyAdminSession()
   if (!isValid) {
     return { success: false, error: 'غير مصرح' }
   }
 
-  try {
-    const supabase = await createClient()
-    const { error } = await supabase
-      .from('community_replies')
-      .delete()
-      .eq('id', replyId)
-
-    if (error) {
-      console.error('Error deleting reply:', error)
-      return { success: false, error: error.message }
-    }
-
-    revalidatePath('/community')
-    revalidatePath('/sanad-control-gate')
-    return { success: true }
-  } catch (err) {
-    console.error('Delete reply exception:', err)
-    return { success: false, error: 'تعذر حذف التعليق' }
+  // 1. الحذف من السجل المحلي
+  if (postId) {
+    deleteLocalCommunityReply(postId, replyId)
+    // 2. الحذف من Cloud Firestore
+    try {
+      await deleteCommunityReplyFromCloud(postId, replyId)
+    } catch {}
   }
+
+  revalidatePath('/community')
+  revalidatePath('/sanad-control-gate')
+  return { success: true }
 }
 
 /**
@@ -368,3 +360,27 @@ export async function resetVisitorCountAdminAction(targetCount: number = 0) {
   revalidatePath('/')
   return { success: true, totalVisitors: updatedCount }
 }
+
+/**
+ * 13. تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) وحفظها فورياً
+ */
+export async function updateStudentRoleAdminAction(
+  studentEmailOrId: string,
+  role: 'student' | 'admin'
+) {
+  const isValid = await verifyAdminSession()
+  if (!isValid) {
+    return { success: false, error: 'غير مصرح بتعديل رتب وصلاحيات الأعضاء' }
+  }
+
+  const result = await updateStudentRole(studentEmailOrId, role)
+
+  revalidatePath('/sanad-control-gate')
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/community')
+  revalidatePath('/courses')
+
+  return result
+}
+

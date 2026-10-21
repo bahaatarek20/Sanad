@@ -1184,14 +1184,38 @@ export function findCanonicalMatn(title: string): CanonicalMatn | undefined {
 /**
  * تحليل عنوان المتن ووصفه ومؤلفه وتحديد المرحلة المناسبة وفنه الشرعي
  */
-export function analyzeMatnStage(params: {
-  title: string
-  categorySlug?: string
-  categoryTitle?: string
-  author?: string
-  description?: string
-}): MatnIntelligenceAnalysis {
-  const { title, categorySlug, author, description } = params
+export function analyzeMatnStage(
+  paramsOrTitle:
+    | string
+    | {
+        title: string
+        categorySlug?: string
+        categoryTitle?: string
+        stage?: number
+        author?: string
+        description?: string
+      },
+  categorySlugArg?: string,
+  _stageArg?: number,
+  authorArg?: string,
+  descriptionArg?: string
+): MatnIntelligenceAnalysis {
+  let title = ''
+  let categorySlug: string | undefined
+  let author: string | undefined
+  let description: string | undefined
+
+  if (typeof paramsOrTitle === 'string') {
+    title = paramsOrTitle
+    categorySlug = categorySlugArg
+    author = authorArg
+    description = descriptionArg
+  } else if (paramsOrTitle && typeof paramsOrTitle === 'object') {
+    title = paramsOrTitle.title || ''
+    categorySlug = paramsOrTitle.categorySlug
+    author = paramsOrTitle.author
+    description = paramsOrTitle.description
+  }
 
   if (!title || title.trim().length === 0) {
     return {
@@ -1732,4 +1756,66 @@ export function resolveCourseProgression(
       total: Math.max(1, disciplineSequence.length),
     },
   }
+}
+
+export interface RecommendedNextStudy {
+  course: MatnCourse
+  reason: string
+  prerequisiteCompletedTitle?: string
+  isFoundational: boolean
+}
+
+/**
+ * استخراج المتون الموصى بمدارستها تالياً لطالب العلم بناءً على ما أنجزه والمتطلبات السابقة
+ */
+export function getRecommendedCoursesForStudent(
+  completedSlugs: string[],
+  allCourses: MatnCourse[]
+): RecommendedNextStudy[] {
+  const completedSet = new Set(completedSlugs)
+  const recommendations: RecommendedNextStudy[] = []
+  const addedSlugs = new Set<string>()
+
+  // 1. إذا كان الطالب قد أنجز متوناً، نبحث عما ترتب عليها مباشرة
+  for (const slug of completedSlugs) {
+    const completedCourse = allCourses.find((c) => c.slug === slug)
+    if (!completedCourse) continue
+
+    const progression = resolveCourseProgression(completedCourse, allCourses)
+    for (const nextStep of progression.nextCourses) {
+      if (nextStep.slug && !completedSet.has(nextStep.slug) && !addedSlugs.has(nextStep.slug)) {
+        const nextCourse = allCourses.find((c) => c.slug === nextStep.slug)
+        if (nextCourse) {
+          recommendations.push({
+            course: nextCourse,
+            reason: `المتن التالي الموصى به بعد إتمامك لمتن «${completedCourse.title}»`,
+            prerequisiteCompletedTitle: completedCourse.title,
+            isFoundational: false,
+          })
+          addedSlugs.add(nextCourse.slug)
+        }
+      }
+    }
+  }
+
+  // 2. ترشيح متون تأسيسية مدخلية في الفنون التي لم يبدأها الطالب بعد
+  if (recommendations.length < 4) {
+    const foundationalCourses = allCourses.filter((c) => {
+      if (completedSet.has(c.slug) || addedSlugs.has(c.slug)) return false
+      const prog = resolveCourseProgression(c, allCourses)
+      return prog.isFoundational || (c.stage === 1 && (!c.prerequisites || c.prerequisites.length === 0))
+    })
+
+    for (const fCourse of foundationalCourses) {
+      if (recommendations.length >= 4) break
+      recommendations.push({
+        course: fCourse,
+        reason: `متن تأسيسي مدخلي أصيل لنقطة انطلاق متينة في ${fCourse.category}`,
+        isFoundational: true,
+      })
+      addedSlugs.add(fCourse.slug)
+    }
+  }
+
+  return recommendations
 }

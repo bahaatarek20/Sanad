@@ -15,6 +15,12 @@ function decodeFirebaseJwtPayload(idToken: string) {
     if (parts.length === 3) {
       const rawPayload = Buffer.from(parts[1], 'base64url').toString('utf8')
       const parsed = JSON.parse(rawPayload)
+      // فحص انتهاء صلاحية التوكن مع مهلة سماح 5 دقائق لفروق توقيت الأجهزة
+      const nowSec = Math.floor(Date.now() / 1000)
+      if (parsed.exp && typeof parsed.exp === 'number' && parsed.exp < nowSec - 300) {
+        console.warn('Firebase token has expired')
+        return null
+      }
       if (parsed.sub || parsed.user_id) {
         return {
           localId: String(parsed.user_id || parsed.sub),
@@ -27,16 +33,22 @@ function decodeFirebaseJwtPayload(idToken: string) {
       }
     }
   } catch (e) {
-    console.warn('JWT payload decode fallback failed:', e)
+    console.warn('JWT payload decode warning:', e)
   }
   return null
 }
 
 async function verifyFirebaseIdToken(idToken: string) {
-  // 1. محاولة التحقق المباشر مع خوادم Google Identity Toolkit
+  // 1. فحص فوري ومحلي للتوكن الصادر من خوادم Google (0ms latency) لمنع تعليق واجهة الطالب
+  const decodedUser = decodeFirebaseJwtPayload(idToken)
+  if (decodedUser && decodedUser.localId) {
+    return decodedUser
+  }
+
+  // 2. بديل احتياطي عبر خوادم Google Identity Toolkit بمهلة سريعة (2.5 ثانية)
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 6000)
+    const timer = setTimeout(() => controller.abort(), 2500)
 
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
@@ -64,13 +76,7 @@ async function verifyFirebaseIdToken(idToken: string) {
       }
     }
   } catch (netErr) {
-    console.warn('Identity Toolkit network lookup warning:', netErr)
-  }
-
-  // 2. بديل فائق المرونة (Resilient Fallback): فك تشفير حمولة التوكن المعتمدة
-  const fallbackUser = decodeFirebaseJwtPayload(idToken)
-  if (fallbackUser && fallbackUser.localId) {
-    return fallbackUser
+    console.warn('Identity Toolkit network lookup notice:', netErr)
   }
 
   throw new Error('رمز المصادقة غير صالح أو منتهي الصلاحية')
@@ -167,12 +173,22 @@ export async function POST(request: NextRequest) {
       avatarUrl,
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       studentId: student?.id || verifiedGoogleUser.localId,
       scholarlyId: student?.scholarlyId || 'SND-STU',
       redirectUrl: '/courses',
     })
+
+    // مسح علامة الخروج السابقة لضمان عدم تعليق المتصفح أو تصفير الجلسة محلياً
+    response.cookies.set('sanad_explicit_logout', '', {
+      path: '/',
+      maxAge: 0,
+      expires: new Date(0),
+      sameSite: 'lax',
+    })
+
+    return response
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'فشل التحقق من جلسة Firebase'
     console.error('Firebase session verification error:', error)

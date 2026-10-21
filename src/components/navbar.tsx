@@ -22,11 +22,7 @@ export default async function Navbar() {
   const cleanUserEmail = (user?.email || '').toLowerCase().trim()
   const isAdmin =
     user?.role === 'admin' ||
-    cleanUserEmail === 'bhaaljml480@gmail.com' ||
-    cleanUserEmail === 'bhaaljml48@gmail.com' ||
-    cleanUserEmail === 'bhaaljml66@gmail.com' ||
-    cleanUserEmail === 'bhaaljml3@gmail.com' ||
-    cleanUserEmail === 'bhaaljml62@gmail.com'
+    cleanUserEmail === 'bhaaljml480@gmail.com'
 
   return (
     <header className="no-print sticky top-0 z-50 w-full border-b border-stone-200/80 bg-[#fdfbf7]/95 backdrop-blur-md transition-colors duration-300 dark:border-stone-800 dark:bg-[#1c1917]/95">

@@ -84,6 +84,24 @@ export async function POST(req: Request) {
       finalSize = stat.size
     } catch {}
 
+    // فحص البصمة السحرية (Magic Bytes Sniffing) للتأكد الصارم أن الملف هو PDF حقيقي
+    try {
+      const fd = await fs.promises.open(dataFilePath, 'r')
+      const headerBuf = Buffer.alloc(8)
+      await fd.read(headerBuf, 0, 8, 0)
+      await fd.close()
+      const magic = headerBuf.toString('ascii')
+      if (!magic.startsWith('%PDF-')) {
+        await fs.promises.unlink(dataFilePath).catch(() => {})
+        return NextResponse.json(
+          { success: false, error: 'أمان الرفع: الملف المرفوع لا يحتوي على توقيع PDF سليم وموثوق (Invalid Magic Header)' },
+          { status: 400 }
+        )
+      }
+    } catch (sniffErr) {
+      console.warn('PDF sniffing check failed:', sniffErr)
+    }
+
     // نسخ متزامن غير معطل في الخلفية للمجلد العام
     fs.promises.copyFile(dataFilePath, publicFilePath).catch(() => {})
 

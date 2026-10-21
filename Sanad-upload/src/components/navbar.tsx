@@ -1,12 +1,14 @@
 import Link from 'next/link'
-import { BookOpen, Compass, Flame, User, LogOut, Users, FileText, LogIn, ShieldCheck, Map, GitFork } from 'lucide-react'
+import { BookOpen, Compass, User, Users, FileText, LogIn, GitFork, ShieldCheck } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { signOutAction } from '@/app/login/actions'
+import LogoutButton from '@/components/logout-button'
 import ThemeToggle from '@/components/theme-toggle'
 import PomodoroTimer from '@/components/pomodoro-timer'
 import MobileMenu from '@/components/mobile-menu'
 import AiTriggerButton from '@/components/ai-trigger-button'
 import InboxDropdown from '@/components/inbox-dropdown'
+import PwaInstallButton from '@/components/pwa-install-button'
 import { getStudentProfileData } from '@/lib/student-tracking'
 
 export default async function Navbar() {
@@ -16,6 +18,11 @@ export default async function Navbar() {
     const profile = getStudentProfileData(user.email)
     scholarlyId = profile?.scholarlyId
   }
+
+  const cleanUserEmail = (user?.email || '').toLowerCase().trim()
+  const isAdmin =
+    user?.role === 'admin' ||
+    cleanUserEmail === 'bhaaljml480@gmail.com'
 
   return (
     <header className="no-print sticky top-0 z-50 w-full border-b border-stone-200/80 bg-[#fdfbf7]/95 backdrop-blur-md transition-colors duration-300 dark:border-stone-800 dark:bg-[#1c1917]/95">
@@ -55,81 +62,92 @@ export default async function Navbar() {
 
         {/* أدوات الطالب المضبوطة بحجم مدمج وأنيق */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* حزمة أدوات المدارسة التفاعلية */}
-          <div className="flex items-center gap-1">
-            <AiTriggerButton />
-            <PomodoroTimer />
-          </div>
+          {user ? (
+            <>
+              {/* حزمة أدوات المدارسة التفاعلية للطالب المسجل */}
+              <div className="flex items-center gap-1">
+                <AiTriggerButton />
+                <div className="hidden sm:block">
+                  <PomodoroTimer />
+                </div>
+              </div>
 
-          {/* فاصل رأسي خفيف */}
-          <div className="hidden sm:block h-4 w-px bg-stone-200 dark:bg-stone-800" />
+              {/* فاصل رأسي خفيف */}
+              <div className="hidden sm:block h-4 w-px bg-stone-200 dark:bg-stone-800" />
 
-          {/* التفضيلات والحساب */}
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <InboxDropdown />
+              {/* التفضيلات والحساب وتثبيت التطبيق */}
+              <div className="flex items-center gap-1">
+                <div className="hidden sm:block">
+                  <PwaInstallButton />
+                </div>
+                <ThemeToggle />
+                <InboxDropdown />
 
-            {user ? (
-              <div className="hidden md:flex items-center gap-1">
-                {/* رابط كشكول الطالب الخاص */}
-                <Link
-                  href="/dashboard"
-                  title="كشكول الفوائد ومتابعة الإنجاز"
-                  className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
-                >
-                  <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>الكشكول</span>
-                </Link>
+                <div className="hidden md:flex items-center gap-1.5">
+                  {/* زر لوحة التحكم للمشرف العام فقط */}
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      title="لوحة الإدارة والتحكم الشاملة (مشرف)"
+                      className="flex h-8 items-center gap-1.5 rounded-lg bg-linear-to-r from-amber-600 via-amber-700 to-emerald-900 px-3 text-xs font-black text-amber-100 shadow-xs hover:from-amber-500 hover:to-emerald-800 transition border border-amber-400/40"
+                    >
+                      <ShieldCheck className="h-4 w-4 text-amber-300" />
+                      <span>لوحة التحكم</span>
+                    </Link>
+                  )}
 
-                {/* رابط إعدادات الحساب */}
-                <Link
-                  href="/settings"
-                  title="إعدادات الحساب والملف الشخصي"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
-                >
-                  <User className="h-3.5 w-3.5" />
-                </Link>
-
-                {/* زر الخروج */}
-                <form action={signOutAction} className="inline-flex">
-                  <button
-                    type="submit"
-                    title="تسجيل الخروج"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition cursor-pointer dark:border-stone-800 dark:bg-stone-900 dark:hover:text-rose-400 dark:hover:bg-rose-950/50"
+                  {/* رابط كشكول الطالب الخاص */}
+                  <Link
+                    href="/dashboard"
+                    title="كشكول الفوائد ومتابعة الإنجاز"
+                    className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
                   >
-                    <LogOut className="h-3.5 w-3.5" />
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="hidden md:flex items-center gap-1">
-                {/* زر كشكول الطالب المستقل */}
-                <Link
-                  href="/dashboard"
-                  title="كشكول الفوائد والشوارد"
-                  className="flex h-8 items-center gap-1 rounded-lg border border-stone-200/90 bg-white/90 px-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:border-amber-500 hover:text-amber-900 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:text-amber-300"
-                >
-                  <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>الكشكول</span>
-                </Link>
+                    <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>الكشكول</span>
+                  </Link>
 
-                {/* زر تسجيل الدخول */}
-                <Link
-                  href="/login"
-                  title="تسجيل الدخول إلى المنصة"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-emerald-900 px-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800 dark:hover:bg-emerald-700"
-                >
-                  <LogIn className="h-3.5 w-3.5" />
-                  <span>دخول</span>
-                </Link>
+                  {/* رابط إعدادات الحساب */}
+                  <Link
+                    href="/settings"
+                    title="إعدادات الحساب والملف الشخصي"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
+                  >
+                    <User className="h-3.5 w-3.5" />
+                  </Link>
+
+                  {/* زر الخروج الشامل والتبديل لحساب آخر */}
+                  <LogoutButton />
+                </div>
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <ThemeToggle />
+              <Link
+                href="/login?mode=password"
+                title="تسجيل الدخول"
+                className="flex h-8 sm:h-8.5 items-center gap-1 rounded-xl border border-stone-200/90 bg-white/90 px-2 sm:px-3 text-xs font-bold text-stone-700 hover:border-emerald-700 hover:text-emerald-950 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+              >
+                <LogIn className="h-3.5 w-3.5 text-stone-500 dark:text-stone-400" />
+                <span className="hidden sm:inline">تسجيل الدخول</span>
+                <span className="sm:hidden">دخول</span>
+              </Link>
+              <Link
+                href="/login?mode=signup"
+                title="إنشاء حساب جديد"
+                className="flex h-8 sm:h-8.5 items-center gap-1 rounded-xl bg-linear-to-r from-emerald-800 to-emerald-950 px-2.5 sm:px-3.5 text-xs font-bold text-white shadow-xs hover:from-emerald-700 hover:to-emerald-900 transition border border-emerald-600/30"
+              >
+                <User className="h-3.5 w-3.5 text-amber-300" />
+                <span>إنشاء حساب</span>
+              </Link>
+            </div>
+          )}
 
           {/* زر الهامبرجر للجوال — يظهر فقط تحت lg */}
           <div className="lg:hidden">
             <MobileMenu
               isLoggedIn={!!user}
+              isAdmin={isAdmin}
               userName={user?.user_metadata?.full_name}
               userEmail={user?.email}
               scholarlyId={scholarlyId}

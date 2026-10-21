@@ -2,9 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
-import { registerOrUpdateStudent, saveStudentLocalPassword } from '@/lib/student-tracking'
+import { registerOrUpdateStudentAsync, saveStudentLocalPassword } from '@/lib/student-tracking'
 
 // 1. تعديل الاسم
 export async function updateProfileAction(formData: FormData) {
@@ -16,17 +15,9 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   try {
-    // تحديث السجل المحلي
+    // تحديث السجل
     await setStudentSessionCookie(fullName, email)
-    registerOrUpdateStudent(email, fullName)
-
-    // تحديث Supabase إن كان متاحاً
-    try {
-      const supabase = await createClient()
-      await supabase.auth.updateUser({ data: { full_name: fullName } })
-    } catch {
-      // استمرار حتى لو تعذر تحديث Supabase
-    }
+    await registerOrUpdateStudentAsync(email, fullName)
   } catch (err) {
     console.error('Settings update error:', err)
   }
@@ -54,16 +45,8 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   try {
-    // تحديث كلمة المرور في السجل المحلي
+    // تحديث كلمة المرور في السجل
     saveStudentLocalPassword(email, newPassword)
-
-    // تحديث Supabase إن كان متاحاً
-    try {
-      const supabase = await createClient()
-      await supabase.auth.updateUser({ password: newPassword })
-    } catch {
-      // استمرار
-    }
   } catch (err) {
     console.error('Password change error:', err)
     return redirect(`/settings?error=${encodeURIComponent('تعذر تغيير كلمة المرور.')}`)
@@ -90,11 +73,11 @@ export async function updatePhoneAction(formData: FormData) {
     return redirect(`/settings?error=${encodeURIComponent('رقم الهاتف المدخل غير صالح.')}`)
   }
 
-  const { getStudentProfileData } = await import('@/lib/student-tracking')
+  const { getStudentProfileData, registerOrUpdateStudentAsync } = await import('@/lib/student-tracking')
   const student = getStudentProfileData(email)
   const fullName = student?.name || email.split('@')[0]
 
-  registerOrUpdateStudent(email, fullName, { phone: formattedPhone })
+  await registerOrUpdateStudentAsync(email, fullName, { phone: formattedPhone })
   await setStudentSessionCookie(fullName, email, {
     phone: formattedPhone,
     authProvider: student?.authProvider || 'email',
@@ -109,4 +92,28 @@ export async function updatePhoneAction(formData: FormData) {
 
   revalidatePath('/', 'layout')
   redirect(`/settings?message=${encodeURIComponent('تم ربط وتوثيق رقم الهاتف بنجاح.')}`)
+}
+
+// 4. تحديث الصورة الرمزية (Avatar)
+export async function updateAvatarAction(formData: FormData) {
+  const email = (formData.get('email') as string)?.trim()
+  const avatarUrl = (formData.get('avatarUrl') as string)?.trim()
+
+  if (!email || !avatarUrl) {
+    return redirect(`/settings?error=${encodeURIComponent('يرجى اختيار صورة رمزية أو رابط صورة صالح.')}`)
+  }
+
+  const { getStudentProfileData, registerOrUpdateStudentAsync } = await import('@/lib/student-tracking')
+  const student = getStudentProfileData(email)
+  const fullName = student?.name || email.split('@')[0]
+
+  await registerOrUpdateStudentAsync(email, fullName, { avatarUrl })
+  await setStudentSessionCookie(fullName, email, {
+    phone: student?.phone,
+    authProvider: student?.authProvider || 'email',
+    avatarUrl,
+  })
+
+  revalidatePath('/', 'layout')
+  redirect(`/settings?message=${encodeURIComponent('تم حفظ الصورة الرمزية لحسابك بنجاح.')}`)
 }

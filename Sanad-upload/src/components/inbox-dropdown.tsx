@@ -52,7 +52,9 @@ export default function InboxDropdown() {
   }
 
   useEffect(() => {
-    fetchMessages()
+    const timer = setTimeout(() => {
+      fetchMessages()
+    }, 0)
 
     const handleMessagesUpdated = () => {
       fetchMessages()
@@ -61,6 +63,7 @@ export default function InboxDropdown() {
     window.addEventListener('sanad_messages_updated', handleMessagesUpdated)
     const interval = setInterval(fetchMessages, 25000)
     return () => {
+      clearTimeout(timer)
       window.removeEventListener('sanad_messages_updated', handleMessagesUpdated)
       clearInterval(interval)
     }
@@ -145,13 +148,13 @@ export default function InboxDropdown() {
 
   const formatMessageTime = (isoString: string) => {
     try {
-      const diffMs = Date.now() - new Date(isoString).getTime()
-      const diffMinutes = Math.floor(diffMs / 60000)
-      if (diffMinutes < 1) return 'الآن'
-      if (diffMinutes < 60) return `منذ ${diffMinutes} د`
-      const diffHours = Math.floor(diffMinutes / 60)
-      if (diffHours < 24) return `منذ ${diffHours} س`
-      return new Date(isoString).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
+      const d = new Date(isoString)
+      return d.toLocaleDateString('ar-EG', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     } catch {
       return ''
     }

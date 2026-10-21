@@ -226,9 +226,9 @@
     "authProvider": "email",
     "phone": "+201012728516",
     "registeredAt": "2026-09-27T01:00:21.796Z",
-    "lastActive": "2026-10-20T19:46:48.884Z",
-    "totalStudyMinutes": 913,
-    "streak": 1,
+    "lastActive": "2026-10-21T00:52:12.911Z",
+    "totalStudyMinutes": 1129,
+    "streak": 2,
     "completedCourses": [],
     "completedEpisodesMap": {
       "40-hadith-nawawi-1": [],
@@ -248,7 +248,8 @@
       "2026-10-12": 2,
       "2026-10-13": 108,
       "2026-10-18": 8,
-      "2026-10-20": 38
+      "2026-10-20": 202,
+      "2026-10-21": 52
     },
     "listenedSessions": [
       {
@@ -295,7 +296,7 @@
       }
     ],
     "notesCount": 0,
-    "lastStudiedDate": "2026-10-20",
+    "lastStudiedDate": "2026-10-21",
     "passwordHash": "9f00281e6f8ea02ae9eba5393bb24899ad6140f9c18dc75817828befab6d2412e632ec492d0f5e44bbb7a7d4dfb8b60fbc0ed5b695f582a2a6aff986d0d0c1af",
     "passwordSalt": "0936ba752134526d993d54c7ff17741d",
     "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A8%D9%87%D8%A7%D8%A1&background=047857&color=fff&size=128",

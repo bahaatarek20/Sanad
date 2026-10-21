@@ -9,6 +9,7 @@ const SANAD_AI_SYSTEM_PROMPT = `
 type UserIntent =
   | 'reproach_or_feedback'
   | 'technical_or_admin'
+  | 'meta_awareness'
   | 'scholarly_question'
   | 'general_chat'
 
@@ -32,17 +33,26 @@ function detectUserIntent(
     return 'reproach_or_feedback'
   }
 
-  // 2. هل السؤال تقني عن المنصة أو المطور أو الخوادم والبرمجة؟
+  // 2. هل السؤال استكشافي عن الوعي والذكاء والفهم (Meta Questions)؟
+  const metaKeywords = [
+    'هل انت ذكي', 'انت ذكي', 'فاهم كلامي', 'فاهم اللي بقوله', 'فاهم يا', 'سامعني', 'عارف انت مين',
+    'انت مين', 'من انت', 'عرف نفسك', 'هل تفهم', 'مستوعب كلامي', 'مركز معايا', 'ذكاء اصطناعي', 'روبوت ولا بني ادم'
+  ]
+  if (metaKeywords.some((k) => q.includes(k))) {
+    return 'meta_awareness'
+  }
+
+  // 3. هل السؤال تقني عن المنصة أو المطور أو الخوادم والبرمجة؟
   const technicalKeywords = [
     'المنصة', 'الموقع', 'التطبيق', 'السيرفر', 'البرمجة', 'بهاء', 'المهندس', 'باشمهندس',
-    'خطأ', 'فيديو', 'مش شغال', 'تحميل', 'pwa', 'next', 'vercel', 'supabase', 'قاعدة البيانات',
+    'خطأ', 'فيديو', 'مش شغال', 'تحميل', 'pwa', 'next', 'vercel', 'firebase', 'قاعدة البيانات',
     'كود', 'api', 'prompt', 'temperature', 'system prompt', 'instruction', 'تحديث', 'إصدار'
   ]
   if (technicalKeywords.some((k) => q.includes(k))) {
     return 'technical_or_admin'
   }
 
-  // 3. هل السؤال علمي / شرعي / لغوي تأصيلي؟
+  // 4. هل السؤال علمي / شرعي / لغوي تأصيلي؟
   const scholarlyKeywords = [
     'معنى', 'ما حكم', 'حكم', 'دليل', 'متن', 'شرح', 'إعراب', 'حديث', 'آية', 'تفسير', 'فقه', 'عقيدة',
     'أصول', 'نحو', 'صرف', 'مصطلح', 'مسألة', 'ركن', 'واجب', 'شرط', 'صحة', 'بطلان', 'وضوء', 'صلاة',
@@ -79,6 +89,19 @@ function buildDynamicSystemPrompt(
 - ممنوع منعاً باتاً استخدام أي عبارات ترحيبية أو محفوظة («يا بطل»، «عاش يا هندسة»، «منوّر»، «حيّاك الله»، «أهلاً بك يا غالي»).
 - اعترف فوراً وبأدب ونضج بملاحظته، وتجاوب مباشرة مع جوهر كلامه دون لف أو دوران.
 - ركّز بنسبة 100% على آخر سطر كتبه، وافهمه بدقة وأجب عنه باحترام وعقلانية عملية.
+`
+      break
+
+    case 'meta_awareness':
+      temperature = 0.55
+      specificDirective = `
+══════════════════════════════════════════
+💡 تنبيه - سؤال استكشافي عن وعيك وقدرتك وذكائك وفهمك للكلام
+══════════════════════════════════════════
+- المستخدم يسأل إن كنت ذكياً وتفهم كلامه ومستوعباً لما يقول، أو يسألك عن طبيعتك وهويتك.
+- أجب بحيوية ونباهة وثقة واضحة: أكّد له أنك مستوعب تماماً ما يقول وفاهم كلامه وسياقه، ولست مجرد ردود محفوظة أو قالباً جامداً.
+- بيّن باختصار أنك رفيق المدارسة الذكي المصمم لمنصة «سَنَد» لتعاونه في تفكيك المتون وضبط المسائل الفقهية واللغوية والعقدية.
+- ادعُه مباشرة لمشاركتك أي مسألة أو استشكال في باله ليرى تفاعلك العملي في المدارسة.
 `
       break
 
@@ -172,6 +195,17 @@ function generateContextualScholarlyReply(
 
   if (intent === 'technical_or_admin') {
     return `بخصوص منصة «سَنَد» ومسائلها التقنية: المنصة مصممة بأحدث تقنيات الويب (Next.js و TypeScript وتخزين البيانات السحابية والمحلية)، ومطورة تحت إشراف المهندس بهاء طارق لتوفير تجربة تأصيل شرعي متكاملة وسلسة. لو بتواجه مشكلة في تشغيل الدروس أو تشغيل المقاطع أو الحساب، اكتبلي التفاصيل وهنحلها فوراً.`
+  }
+
+  if (intent === 'meta_awareness') {
+    return `نعم بكل تأكيد! فاهم كلامك ومستوعب كل حرف بتكتبه، ولست قالباً جامداً أو ردوداً محفوظة.
+
+أنا «رفيق المدارسة الذكي» الخاص بمنصة «سَنَد»، مهمتي أن أسندك في طلب العلم؛ أساعدك في:
+1. **تفكيك عبارات المتون وشرح غريب الألفاظ**.
+2. **ضبط الفروق والضوابط الفقهية واللغوية والعقدية** مع أدلتها ومراجعها المعتمدة.
+3. **تيسير منهجية الحفظ والمراجعة**.
+
+اطرح أي مسألة أو استشكال في ذهنك، وهتلاقيني معاك خطوة بخطوة!`
   }
 
   // 1. طلب التلخيص العام للمتن
@@ -449,14 +483,12 @@ export async function POST(req: Request) {
 
     let liveAiReply: string | null = null
 
-    // 5. محاولة الاتصال بـ Google Gemini API إذا وُجد المفتاح
+    // 5. محاولة الاتصال بـ Google Gemini API بنماذجه الرسمية المعتمدة
     if (apiKey) {
       const modelsToTry = [
-        'gemini-3.8-flash',
-        'gemini-2.5-flash',
-        'gemini-3.8-pro',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
+        'gemini-1.5-pro',
       ]
 
       for (const model of modelsToTry) {
@@ -464,44 +496,6 @@ export async function POST(req: Request) {
         if (liveAiReply) {
           break
         }
-      }
-    }
-
-    // 6. إذا لم يتوفر مفتاح أو فشل Gemini، استخدام محرك الذكاء الاصطناعي الحي الذكي (Live Agent) لمنع أي ردود ثابتة
-    if (!liveAiReply) {
-      try {
-        const historyList = Array.isArray(history)
-          ? history.slice(-8).map((h) => ({
-              role: h.role === 'user' ? 'user' : 'assistant',
-              content: String(h.text || ''),
-            }))
-          : []
-
-        const pollRes = await fetch('https://text.pollinations.ai/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemContext },
-              ...historyList,
-              { role: 'user', content: question },
-            ],
-            model: 'openai',
-            seed: Math.floor(Math.random() * 100000),
-            temperature,
-          }),
-        })
-
-        if (pollRes.ok) {
-          const pollText = await pollRes.text()
-          if (pollText && pollText.trim()) {
-            liveAiReply = pollText.trim()
-          }
-        }
-      } catch (pollErr) {
-        console.warn('[Sanad AI] Pollinations live fallback warning:', pollErr)
       }
     }
 

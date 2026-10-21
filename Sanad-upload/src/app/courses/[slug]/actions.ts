@@ -1,11 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import {
   recordStudentCourseCompleted,
-  recordStudentNoteAdded,
   saveStudentLocalNote,
   deleteStudentLocalNote,
   recordStudentListeningSession,
@@ -25,40 +23,8 @@ export async function toggleCourseCompletion(courseSlug: string, isCompleted: bo
       recordStudentCourseCompleted(studentUser.email, courseSlug, courseTitle, isCompleted)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { success: true, isGuest: true, isCompleted }
-    }
-
-    const { error } = await supabase
-      .from('student_progress')
-      .upsert(
-        {
-          user_id: user.id,
-          course_slug: courseSlug,
-          is_completed: isCompleted,
-          completed_at: isCompleted ? new Date().toISOString() : null,
-        },
-        { onConflict: 'user_id,course_slug' }
-      )
-
-    if (error) {
-      console.error('Error saving progress:', error)
-      return { success: false, error: 'تعذر حفظ حالة الإنجاز في السحابة' }
-    }
-
-    if (isCompleted) {
-      try {
-        await supabase.rpc('update_student_streak', { p_user_id: user.id })
-      } catch {
-        // Fallback if rpc is not created yet
-      }
-    }
-
     revalidatePath('/', 'layout')
-    return { success: true, isGuest: false, isCompleted }
+    return { success: true, isGuest: !studentUser, isCompleted }
   } catch (err) {
     console.error('Progress exception:', err)
     return { success: false, error: 'حدث خطأ في النظام' }
@@ -74,55 +40,23 @@ export async function addCourseNote(
 ) {
   try {
     const studentUser = await getCurrentStudentUser()
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user && !studentUser) {
-      return { success: false, isGuest: true, error: 'سجل دخولك لحفظ فوائدك في سحابة كشكولك' }
+    if (!studentUser?.email) {
+      return { success: false, isGuest: true, error: 'سجل دخولك لحفظ فوائدك في كشكولك' }
     }
 
     const noteTitle = title?.trim() || `${tag}: فائدة في المتن`
-    let savedLocalNote = null
 
-    // 1. حفظ الفائدة دائماً في سجل الطالب المحلي لضمان عدم ضياعها
-    if (studentUser?.email) {
-      savedLocalNote = saveStudentLocalNote(studentUser.email, {
-        courseSlug,
-        title: noteTitle,
-        content: content.trim(),
-        tag,
-      })
-    }
-
-    // 2. المزامنة مع سحابة Supabase إن كان الطالب مسجلاً فيها
-    const userId = user?.id
-    if (userId) {
-      try {
-        const { data, error } = await supabase
-          .from('student_notes')
-          .insert({
-            user_id: userId,
-            course_slug: courseSlug,
-            title: noteTitle,
-            content: content.trim(),
-            tags: [tag],
-          })
-          .select()
-          .single()
-
-        if (!error && data) {
-          revalidatePath(`/courses/${courseSlug}`)
-          revalidatePath('/dashboard')
-          return { success: true, data }
-        }
-      } catch {
-        // Fallback to local note
-      }
-    }
+    // حفظ الفائدة في سجل الطالب المعتمد
+    const savedNote = saveStudentLocalNote(studentUser.email, {
+      courseSlug,
+      title: noteTitle,
+      content: content.trim(),
+      tag,
+    })
 
     revalidatePath(`/courses/${courseSlug}`)
     revalidatePath('/dashboard')
-    return { success: true, data: savedLocalNote }
+    return { success: true, data: savedNote }
   } catch (err) {
     console.error('Note exception:', err)
     return { success: false, error: 'حدث خطأ أثناء حفظ الفائدة' }
@@ -133,23 +67,8 @@ export async function addCourseNote(
 export async function deleteCourseNote(noteId: string, courseSlug: string) {
   try {
     const studentUser = await getCurrentStudentUser()
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    // 1. حذفها من السجل المحلي
     if (studentUser?.email) {
       deleteStudentLocalNote(studentUser.email, noteId)
-    }
-
-    // 2. حذفها من Supabase إن وجدت جلسة سحابية
-    if (user?.id) {
-      try {
-        await supabase
-          .from('student_notes')
-          .delete()
-          .eq('id', noteId)
-          .eq('user_id', user.id)
-      } catch {}
     }
 
     revalidatePath(`/courses/${courseSlug}`)
@@ -208,34 +127,6 @@ export async function recordStudyHeartbeatAction(
       addedMinutes
     )
 
-    // مزامنة الدقائق مع قاعدة بيانات Supabase إن وُجدت جلسة سحابية
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { error: rpcErr } = await supabase.rpc('add_study_minutes', {
-          p_user_id: user.id,
-          p_minutes: addedMinutes,
-        })
-        if (rpcErr) {
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('total_study_minutes')
-            .eq('id', user.id)
-            .maybeSingle()
-          if (prof) {
-            const current = (Number(prof.total_study_minutes) || 0) + addedMinutes
-            await supabase
-              .from('profiles')
-              .update({ total_study_minutes: current })
-              .eq('id', user.id)
-          }
-        }
-      }
-    } catch {
-      // استمرار
-    }
-
     return { success: true, ...result }
   } catch {
     return { success: false }
@@ -278,4 +169,3 @@ export async function toggleEpisodeCompletionAction(
     return { success: false, completedEpisodes: [] }
   }
 }
-

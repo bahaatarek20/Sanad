@@ -1,81 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
-
-/**
- * مولد كود QR أصيل بصيغة SVG فائقة الدقة يعمل بالكامل دون الحاجة لأي مكتبات خارجية أو اتصال إنترنت
- * (Pure Self-Contained SVG QR Code Generator)
- */
-
-// خوارزمية تشفير QR القياسية المدمجة المبسطة بدقة Type-1 / Type-2
-function generateQRMatrix(text: string): boolean[][] {
-  const length = text.length
-  const size = length > 80 ? 29 : length > 30 ? 25 : 21
-
-  const matrix: boolean[][] = Array.from({ length: size }, () =>
-    Array(size).fill(false)
-  )
-
-  // وظيفة رسم مربعات التوجيه الثلاثة (Finder Patterns)
-  const drawFinderPattern = (row: number, col: number) => {
-    for (let r = -1; r <= 7; r++) {
-      for (let c = -1; c <= 7; c++) {
-        const curR = row + r
-        const curC = col + c
-        if (curR >= 0 && curR < size && curC >= 0 && curC < size) {
-          if (
-            (r >= 0 && r <= 6 && (c === 0 || c === 6)) ||
-            (c >= 0 && c <= 6 && (r === 0 || r === 6)) ||
-            (r >= 2 && r <= 4 && c >= 2 && c <= 4)
-          ) {
-            matrix[curR][curC] = true
-          } else {
-            matrix[curR][curC] = false
-          }
-        }
-      }
-    }
-  }
-
-  drawFinderPattern(0, 0)
-  drawFinderPattern(0, size - 7)
-  drawFinderPattern(size - 7, 0)
-
-  // مسار التوقيت (Timing patterns)
-  for (let i = 8; i < size - 8; i++) {
-    matrix[6][i] = i % 2 === 0
-    matrix[i][6] = i % 2 === 0
-  }
-
-  // ملء البيانات بطريقة تشفير التجزئة الحتمية (Deterministic Bit Packing)
-  let charIdx = 0
-  let bitIdx = 0
-  for (let col = size - 1; col > 0; col -= 2) {
-    if (col === 6) col--
-    for (let row = 0; row < size; row++) {
-      for (let c = 0; c < 2; c++) {
-        const targetCol = col - c
-        // تفادي مربعات التوجيه والتوقيت
-        const isFinder =
-          (row < 9 && (targetCol < 9 || targetCol >= size - 8)) ||
-          (row >= size - 8 && targetCol < 9)
-        const isTiming = row === 6 || targetCol === 6
-
-        if (!isFinder && !isTiming) {
-          const charCode = text.charCodeAt(charIdx % text.length)
-          const bit = ((charCode >> (bitIdx % 8)) & 1) === 1
-          const mask = (row + targetCol) % 2 === 0
-          matrix[row][targetCol] = bit ? !mask : mask
-
-          bitIdx++
-          if (bitIdx % 8 === 0) charIdx++
-        }
-      }
-    }
-  }
-
-  return matrix
-}
+import QRCode from 'qrcode'
 
 interface QRCodeProps {
   value: string
@@ -85,6 +11,10 @@ interface QRCodeProps {
   className?: string
 }
 
+/**
+ * مولد كود QR أصيل ومعتمد دولياً بمواصفات ISO/IEC 18004
+ * قابل للمسح المباشر والفوري بكافة كاميرات الهواتف الذكية (iOS و Android)
+ */
 export default function QRCodeSvg({
   value,
   size = 120,
@@ -92,11 +22,37 @@ export default function QRCodeSvg({
   bgColor = '#ffffff',
   className = '',
 }: QRCodeProps) {
-  const matrix = useMemo(() => {
-    return generateQRMatrix(value || 'https://sanad.edu')
+  const { matrix, matrixSize } = useMemo(() => {
+    try {
+      const qr = QRCode.create(value || 'https://sanad-edu1.vercel.app', {
+        errorCorrectionLevel: 'M',
+      })
+      const dim = qr.modules.size
+      const cells: boolean[][] = []
+      for (let r = 0; r < dim; r++) {
+        const row: boolean[] = []
+        for (let c = 0; c < dim; c++) {
+          row.push(Boolean(qr.modules.get(r, c)))
+        }
+        cells.push(row)
+      }
+      return { matrix: cells, matrixSize: dim }
+    } catch (e) {
+      console.warn('Error generating QR code:', e)
+      return { matrix: [], matrixSize: 0 }
+    }
   }, [value])
 
-  const matrixSize = matrix.length
+  if (matrixSize === 0) {
+    return (
+      <div
+        className={`inline-flex items-center justify-center p-2 rounded-xl border border-stone-200 bg-stone-100 text-stone-400 text-xs ${className}`}
+        style={{ width: size, height: size }}
+      >
+        QR
+      </div>
+    )
+  }
 
   return (
     <div
