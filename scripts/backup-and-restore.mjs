@@ -53,14 +53,24 @@ async function runBackupAndVerify() {
   }
   fs.mkdirSync(snapshotDir, { recursive: true })
 
-  // قائمة الملفات الحيوية المستهدفة بالنسخ
-  const targetFiles = [
+  // قائمة الملفات الحيوية المستهدفة بالنسخ (جميع سجلات JSON في مجلد data/)
+  const explicitTargetFiles = [
+    'sanad_students_registry.json',
     'sanad_custom_courses.json',
     'sanad_custom_categories.json',
     'sanad_broadcast.json',
+    'sanad_community_posts.json',
     'community_posts.json',
+    'sanad_messages.json',
+    'sanad_platform_stats.json',
+    'sanad_recent_events.json',
+    'sanad_audit_log.json',
     'student_activity_registry.json',
   ]
+  const discoveredJsonFiles = fs.existsSync(DATA_DIR)
+    ? fs.readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'))
+    : []
+  const targetFiles = Array.from(new Set([...explicitTargetFiles, ...discoveredJsonFiles]))
 
   const manifest = {
     platform: 'Sanad Platform (منصة سَنَد)',

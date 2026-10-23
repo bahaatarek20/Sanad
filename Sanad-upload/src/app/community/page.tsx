@@ -5,7 +5,11 @@ import CommunityHub, { CommunityPost } from '@/components/community-hub'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { redirect } from 'next/navigation'
 
-import { getLocalCommunityPosts } from '@/lib/community-store'
+import {
+  getLocalCommunityPosts,
+  resolveAuthorCommunityIdentity,
+  enrichCommunityPostsForPublic,
+} from '@/lib/community-store'
 import { getCommunityPostsFromCloud } from '@/lib/cloud-db'
 
 export const dynamic = 'force-dynamic'
@@ -52,6 +56,8 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
     content: 'قاعدة مفيدة قيّدتها من شرح الشيخ ابن عثيمين في الأصول: «الأصل في الأمر الوجوب إلا لصارف، والأصل في النهي التحريم إلا لدليل».. الفرق الجوهري بين الصارف والدليل المخصص يحتاج عناية أثناء مدارسة مباحث دلالات الألفاظ.',
     upvotes_count: 14,
     created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+    author_role: 'student',
+    author_avatar_url: 'preset:emerald-scholar',
     replies: [
       {
         id: 'rep-1',
@@ -59,6 +65,8 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
         anonymous_alias: 'باحث في الفقه #89',
         content: 'أحسنت القيد! ومن أمثلة الصارف في السنة الأمر بالسواك عند كل صلاة؛ صُرف من الوجوب إلى الاستحباب بحديث: «لولا أن أشق على أمتي».',
         created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+        author_role: 'student',
+        author_avatar_url: 'preset:amber-scribe',
       },
     ],
   },
@@ -70,6 +78,8 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
     content: 'استشكل عليّ الفرق بين "المرسل" و"المنقطع" عند الإمام البيقوني رحمه الله في قوله: (ومرسل منه الصحابي سقط.. وكل ما لم يتصل به انقطاع). هل كل مرسل منقطع اصطلاحاً؟',
     upvotes_count: 9,
     created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+    author_role: 'student',
+    author_avatar_url: 'preset:indigo-seeker',
     replies: [
       {
         id: 'rep-2',
@@ -77,6 +87,8 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
         anonymous_alias: 'محرر للحديث #74',
         content: 'نعم يا أخي الكريم؛ المنقطع عند المتقدمين أعم، والمرسل نوع خاص منه بسقوط من فوق التابعي أو سقوط الصحابي عند البيقوني. فبينهما عموم وخصوص وجهي.',
         created_at: new Date(Date.now() - 3600000 * 10).toISOString(),
+        author_role: 'student',
+        author_avatar_url: 'preset:cyan-hikmah',
       },
     ],
   },
@@ -88,6 +100,8 @@ const DEFAULT_SAMPLE_POSTS: CommunityPost[] = [
     content: 'تلخيص سريع لعلامات الإعراب الأربعة في الآجرومية:\n1. الرفع وعلامته الأصلية الضمة (وينوب عنها: الواو، الألف، النون).\n2. النصب وعلامته الفتحة (وينوب عنها: الألف، الكسرة، الياء، حذف النون).\n3. الخفض وعلامته الكسرة (وينوب عنها: الياء، الفتحة).\n4. الجزم وعلامته السكون (وينوب عنه: الحذف).',
     upvotes_count: 22,
     created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    author_role: 'student',
+    author_avatar_url: 'preset:rose-hafiz',
     replies: [],
   },
 ]
@@ -98,6 +112,15 @@ export default async function CommunityPage() {
     redirect('/login?redirect=/community')
   }
   const isLoggedIn = true
+  const rawIdentity = resolveAuthorCommunityIdentity(
+    currentUser.email,
+    currentUser.user_metadata?.full_name
+  )
+  const currentUserDisplay = {
+    name: rawIdentity.displayName,
+    avatarUrl: rawIdentity.avatarUrl,
+    role: rawIdentity.role,
+  }
 
   // 1. نبدأ بالسجل المحلي كقاعدة مبدئية
   const localPosts = getLocalCommunityPosts()
@@ -110,7 +133,7 @@ export default async function CommunityPage() {
   try {
     const cloudPosts = await getCommunityPostsFromCloud()
     if (cloudPosts && cloudPosts.length > 0) {
-      for (const cp of cloudPosts) {
+      for (const cp of enrichCommunityPostsForPublic(cloudPosts)) {
         const existing = postMap.get(cp.id)
         if (existing) {
           const mergedReplies = [...(existing.replies || [])]
@@ -124,6 +147,8 @@ export default async function CommunityPage() {
           postMap.set(cp.id, {
             ...existing,
             ...cp,
+            author_avatar_url: existing.author_avatar_url || cp.author_avatar_url,
+            author_role: existing.author_role || cp.author_role,
             upvotes_count: Math.max(existing.upvotes_count || 0, cp.upvotes_count || 0),
             replies: mergedReplies,
           })
@@ -170,6 +195,7 @@ export default async function CommunityPage() {
         initialPosts={posts}
         courses={getActiveCourses()}
         isLoggedIn={isLoggedIn}
+        currentUserDisplay={currentUserDisplay}
       />
     </div>
   )

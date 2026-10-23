@@ -4,11 +4,17 @@ import {
   getStudentProfileData,
   registerOrUpdateStudentAsync,
   isStudentBanned,
+  SUPER_ADMIN_EMAIL,
+  type PlatformRole,
 } from '@/lib/student-tracking'
-import { setStudentSessionCookie } from '@/lib/auth-helper'
+import {
+  setStudentSessionCookie,
+  checkStudentAuthRateLimit,
+  recordStudentAuthFailure,
+  clearStudentAuthFailures,
+} from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 import { syncStudentToFirebaseAuth } from '@/lib/firebase-auth-sync'
-import { SUPER_ADMIN_EMAIL } from '@/lib/user-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +30,22 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanEmail = rawEmail.trim().toLowerCase()
+    const telemetry = extractClientTelemetry(request.headers)
+    const rateKey = `${cleanEmail}:${telemetry.ip || 'local'}`
 
-    // فحص حظر الحساب
+    // 1. فحص الحماية ضد التخمين المتكرر (Brute-Force Protection)
+    const rateCheck = checkStudentAuthRateLimit(rateKey)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `تم إيقاف المحاولات مؤقتاً لحماية الحساب بسبب تكرار المحاولات الخاطئة. يرجى المحاولة بعد ${rateCheck.remainingMinutes || 10} دقائق.`,
+        },
+        { status: 429 }
+      )
+    }
+
+    // 2. فحص حظر الحساب
     const banCheck = isStudentBanned(cleanEmail)
     if (banCheck.isBanned) {
       return NextResponse.json(
@@ -37,9 +57,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // التحقق من كلمة المرور المسجلة محلياً في سَنَد
+    // 3. التحقق من كلمة المرور المسجلة محلياً في سَنَد
     const isVerified = verifyStudentLocalPassword(cleanEmail, password)
     if (!isVerified) {
+      recordStudentAuthFailure(rateKey)
       return NextResponse.json(
         {
           success: false,
@@ -49,26 +70,40 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // المستخدم موثق وكلمة المرور صحيحة
-    const student = getStudentProfileData(cleanEmail)
-    const fullName = student?.name || cleanEmail.split('@')[0]
-    const isSuperAdmin = cleanEmail === SUPER_ADMIN_EMAIL
-    const role: 'student' | 'admin' = isSuperAdmin || student?.role === 'admin' ? 'admin' : 'student'
+    clearStudentAuthFailures(rateKey)
 
-    const telemetry = extractClientTelemetry(request.headers)
-    await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...telemetry, authProvider: 'email' })
-    await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
+    // المستخدم موثق وكلمة المرور صحيحة
+    const existingStudent = getStudentProfileData(cleanEmail)
+    const fullName = existingStudent?.name || cleanEmail.split('@')[0]
+    const isOwner = cleanEmail === SUPER_ADMIN_EMAIL
+    const role: PlatformRole = isOwner
+      ? 'owner'
+      : existingStudent?.role === 'admin'
+      ? 'admin'
+      : 'student'
+
+    const updatedStudent = await registerOrUpdateStudentAsync(cleanEmail, fullName, {
+      ...telemetry,
+      authProvider: 'email',
+    })
+    await setStudentSessionCookie(fullName, cleanEmail, {
+      authProvider: 'email',
+      role,
+      avatarUrl: updatedStudent.avatarUrl,
+      sessionVersion: updatedStudent.sessionVersion,
+    })
     syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
 
     return NextResponse.json({
       success: true,
       user: {
-        id: student?.id || cleanEmail,
+        id: updatedStudent?.id || cleanEmail,
         email: cleanEmail,
         name: fullName,
         role,
+        avatarUrl: updatedStudent?.avatarUrl,
       },
-      redirect: role === 'admin' ? '/admin' : '/courses',
+      redirect: role === 'owner' || role === 'admin' ? '/admin' : '/courses',
     })
   } catch (error: unknown) {
     console.error('❌ [API /api/auth/login-local Error]:', error)

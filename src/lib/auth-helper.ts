@@ -1,7 +1,12 @@
 import crypto from 'crypto'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
-import { isStudentBanned } from '@/lib/student-tracking'
+import {
+  isStudentBanned,
+  getStudentProfileData,
+  SUPER_ADMIN_EMAIL,
+  type PlatformRole,
+} from '@/lib/student-tracking'
 
 const SESSION_SECRET =
   process.env.SANAD_SESSION_SECRET ||
@@ -11,16 +16,70 @@ const SESSION_SECRET =
 export interface StudentUser {
   id: string
   email: string
-  role?: 'student' | 'admin'
+  role?: PlatformRole
+  username?: string
   phone?: string
   authProvider?: 'email' | 'google' | 'phone'
   avatarUrl?: string
+  sessionVersion?: number
   user_metadata: {
     full_name: string
+    username?: string
     phone?: string
     authProvider?: string
     avatar_url?: string
   }
+}
+
+// حماية ضد هجمات التخمين المتكرر (Brute-Force Rate Limiting) لتسجيل الدخول ورموز التحقق
+const authAttemptTracker = new Map<string, { count: number; firstAttemptAt: number; lockedUntil: number }>()
+const MAX_AUTH_ATTEMPTS = 7
+const AUTH_WINDOW_MS = 10 * 60 * 1000 // 10 دقائق
+const AUTH_LOCKOUT_MS = 10 * 60 * 1000 // 10 دقائق
+
+export function checkStudentAuthRateLimit(identifier: string): {
+  allowed: boolean
+  remainingMinutes?: number
+} {
+  const key = identifier.toLowerCase().trim()
+  if (!key) return { allowed: true }
+  const now = Date.now()
+  const record = authAttemptTracker.get(key)
+  if (!record) return { allowed: true }
+
+  if (record.lockedUntil > now) {
+    const remainingMinutes = Math.max(1, Math.ceil((record.lockedUntil - now) / 60000))
+    return { allowed: false, remainingMinutes }
+  }
+
+  if (now - record.firstAttemptAt > AUTH_WINDOW_MS) {
+    authAttemptTracker.delete(key)
+    return { allowed: true }
+  }
+
+  return { allowed: true }
+}
+
+export function recordStudentAuthFailure(identifier: string): void {
+  const key = identifier.toLowerCase().trim()
+  if (!key) return
+  const now = Date.now()
+  const record = authAttemptTracker.get(key)
+  if (!record || now - record.firstAttemptAt > AUTH_WINDOW_MS) {
+    authAttemptTracker.set(key, { count: 1, firstAttemptAt: now, lockedUntil: 0 })
+    return
+  }
+  record.count += 1
+  if (record.count >= MAX_AUTH_ATTEMPTS) {
+    record.lockedUntil = now + AUTH_LOCKOUT_MS
+  }
+  authAttemptTracker.set(key, record)
+}
+
+export function clearStudentAuthFailures(identifier: string): void {
+  const key = identifier.toLowerCase().trim()
+  if (!key) return
+  authAttemptTracker.delete(key)
 }
 
 /**
@@ -70,7 +129,7 @@ export function verifySessionToken(rawToken?: string): Record<string, unknown> |
 }
 
 /**
- * جلب المستخدم الحالي: فحص محلي فوري (0ms) مع تدقيق التوقيع الرقمي لمنع أي انتحال
+ * جلب المستخدم الحالي: فحص محلي فوري مع تدقيق التوقيع الرقمي ومطابقة الصلاحية الحية وحالة الجلسة من قاعدة البيانات
  */
 export const getCurrentStudentUser = cache(async function getCurrentStudentUser(): Promise<StudentUser | null> {
   const cookieStore = await cookies()
@@ -83,37 +142,80 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
         const email = String(parsed.email).toLowerCase().trim()
         const banCheck = isStudentBanned(email)
         if (banCheck.isBanned) {
-          cookieStore.delete('sanad_student_user')
-          cookieStore.delete('sanad_student_display')
+          try {
+            cookieStore.delete('sanad_student_user')
+            cookieStore.delete('sanad_student_display')
+          } catch {}
           return null
         }
 
-        const isAdmin =
-          email === 'bhaaljml480@gmail.com' ||
-          cookieStore.has('sanad_admin_gate_token') ||
-          parsed.role === 'admin'
+        const liveProfile = getStudentProfileData(email)
+
+        // التحقق من عدم تعطيل الحساب (Deactivated Account)
+        if (liveProfile?.isDeactivated && email !== SUPER_ADMIN_EMAIL) {
+          try {
+            cookieStore.delete('sanad_student_user')
+            cookieStore.delete('sanad_student_display')
+          } catch {}
+          return null
+        }
+
+        // التحقق من نسخة الجلسة (Session Version) لإبطال الجلسات القديمة عند تغيير كلمة المرور أو إنهاء الجلسات الأخرى
+        if (
+          parsed.sessionVersion !== undefined &&
+          liveProfile?.sessionVersion !== undefined &&
+          Number(parsed.sessionVersion) < Number(liveProfile.sessionVersion)
+        ) {
+          try {
+            cookieStore.delete('sanad_student_user')
+            cookieStore.delete('sanad_student_display')
+          } catch {}
+          return null
+        }
+
+        // تحديد الصلاحية الحية بدقة (3-Tier Role Resolution: owner | admin | student)
+        let resolvedRole: PlatformRole = 'student'
+        if (email === SUPER_ADMIN_EMAIL) {
+          resolvedRole = 'owner'
+        } else if (liveProfile) {
+          resolvedRole = liveProfile.role === 'owner' ? 'owner' : liveProfile.role === 'admin' ? 'admin' : 'student'
+        } else if (cookieStore.has('sanad_admin_gate_token') || parsed.role === 'admin' || parsed.role === 'owner') {
+          resolvedRole = parsed.role === 'owner' ? 'owner' : 'admin'
+        }
+
+        const resolvedName = String(
+          liveProfile?.name || parsed.full_name || parsed.fullName || 'طالب العلم'
+        )
+        const resolvedAvatar = liveProfile?.avatarUrl || (parsed.avatarUrl ? String(parsed.avatarUrl) : undefined)
+        const resolvedPhone = liveProfile?.phone || (parsed.phone ? String(parsed.phone) : undefined)
+        const resolvedUsername = liveProfile?.username || (parsed.username ? String(parsed.username) : undefined)
 
         return {
-          id: String(parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
+          id: String(liveProfile?.id || parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
           email,
-          role: isAdmin ? 'admin' : 'student',
-          phone: parsed.phone ? String(parsed.phone) : undefined,
+          role: resolvedRole,
+          username: resolvedUsername,
+          phone: resolvedPhone,
+          sessionVersion: liveProfile?.sessionVersion || Number(parsed.sessionVersion || 1),
           authProvider:
             parsed.authProvider === 'google' || parsed.authProvider === 'phone'
               ? (parsed.authProvider as 'google' | 'phone')
               : 'email',
-          avatarUrl: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
+          avatarUrl: resolvedAvatar,
           user_metadata: {
-            full_name: String(parsed.full_name || parsed.fullName || 'طالب العلم'),
-            phone: parsed.phone ? String(parsed.phone) : undefined,
+            full_name: resolvedName,
+            username: resolvedUsername,
+            phone: resolvedPhone,
             authProvider: typeof parsed.authProvider === 'string' ? parsed.authProvider : 'email',
-            avatar_url: parsed.avatarUrl ? String(parsed.avatarUrl) : undefined,
+            avatar_url: resolvedAvatar,
           },
         }
       } else {
         // توقيع غير صالح أو تم التلاعب به
-        cookieStore.delete('sanad_student_user')
-        cookieStore.delete('sanad_student_display')
+        try {
+          cookieStore.delete('sanad_student_user')
+          cookieStore.delete('sanad_student_display')
+        } catch {}
       }
     }
   } catch {
@@ -132,8 +234,9 @@ export async function setStudentSessionCookie(
   options?: {
     phone?: string
     authProvider?: 'email' | 'google' | 'phone'
-    avatarUrl?: string
-    role?: 'student' | 'admin'
+    avatarUrl?: string | null
+    role?: PlatformRole
+    sessionVersion?: number
   }
 ) {
   const cookieStore = await cookies()
@@ -143,20 +246,38 @@ export async function setStudentSessionCookie(
     ? rawIdentifier.toLowerCase()
     : `${rawIdentifier.replace(/[^0-9]/g, '') || 'user'}@phone.sanad.edu`
   const phone = options?.phone || (!isEmail ? rawIdentifier : undefined)
-  const cleanName = fullName.trim() || 'طالب العلم'
 
-  const isAdmin =
-    email === 'bhaaljml480@gmail.com' ||
-    options?.role === 'admin'
+  const liveProfile = getStudentProfileData(email)
+  const cleanName = fullName.trim() || liveProfile?.name || 'طالب العلم'
+
+  let resolvedRole: PlatformRole = 'student'
+  if (email === SUPER_ADMIN_EMAIL) {
+    resolvedRole = 'owner'
+  } else if (options?.role) {
+    resolvedRole = options.role
+  } else if (liveProfile?.role) {
+    resolvedRole = liveProfile.role
+  }
+
+  const effectiveAvatar =
+    options?.avatarUrl === null
+      ? undefined
+      : options?.avatarUrl !== undefined
+      ? options.avatarUrl
+      : liveProfile?.avatarUrl
+
+  const sessionVersion = options?.sessionVersion ?? liveProfile?.sessionVersion ?? 1
 
   const studentData: Record<string, unknown> = {
-    id: `student-${Buffer.from(rawIdentifier.toLowerCase()).toString('hex').slice(0, 16)}`,
+    id: liveProfile?.id || `student-${Buffer.from(rawIdentifier.toLowerCase()).toString('hex').slice(0, 16)}`,
     email,
-    role: isAdmin ? 'admin' : 'student',
+    role: resolvedRole,
     full_name: cleanName,
-    phone,
-    authProvider: options?.authProvider || (phone ? 'phone' : 'email'),
-    avatarUrl: options?.avatarUrl,
+    username: liveProfile?.username,
+    phone: phone || liveProfile?.phone,
+    authProvider: options?.authProvider || liveProfile?.authProvider || (phone ? 'phone' : 'email'),
+    avatarUrl: effectiveAvatar,
+    sessionVersion,
     created_at: new Date().toISOString(),
   }
 
@@ -177,7 +298,7 @@ export async function setStudentSessionCookie(
     JSON.stringify({
       name: cleanName,
       email,
-      avatarUrl: options?.avatarUrl,
+      avatarUrl: effectiveAvatar,
     }),
     {
       path: '/',

@@ -48,43 +48,52 @@ export async function updateSession(request: NextRequest) {
     const gateKey = request.nextUrl.searchParams.get('gate_key') || request.nextUrl.searchParams.get('key')
     const validEntryKey = process.env.SANAD_ADMIN_ENTRY_KEY || 'bahaa-sanad-owner'
 
-    const host = request.headers.get('host') || ''
-    const isLocalDev =
-      process.env.NODE_ENV !== 'production' &&
-      (host.includes('localhost') || host.includes('127.0.0.1'))
-
-    let isOwnerVerified =
-      isLocalDev ||
+    let isAdminOrOwnerVerified =
       (adminToken ? adminToken.includes('.') : false) ||
       (Boolean(gateKey) && gateKey === validEntryKey)
 
-    if (!isOwnerVerified && studentCookie?.value) {
+    let isRegularStudentSession = false
+
+    if (studentCookie?.value) {
       try {
         let studentEmail = ''
+        let studentRole = ''
         if (studentCookie.value.startsWith('v1.')) {
           const parts = studentCookie.value.split('.')
           if (parts.length === 3) {
             const rawPayload = Buffer.from(parts[1], 'base64url').toString('utf8')
             const parsed = JSON.parse(rawPayload)
             studentEmail = String(parsed.email || '').toLowerCase().trim()
+            studentRole = String(parsed.role || '').toLowerCase().trim()
           }
         } else {
           const parsed = JSON.parse(studentCookie.value)
           studentEmail = String(parsed.email || '').toLowerCase().trim()
+          studentRole = String(parsed.role || '').toLowerCase().trim()
         }
 
         const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
         if (
           AUTHORIZED_ADMIN_EMAILS.includes(studentEmail) ||
-          (envAdminEmail && studentEmail === envAdminEmail)
+          (envAdminEmail && studentEmail === envAdminEmail) ||
+          studentRole === 'owner' ||
+          studentRole === 'admin'
         ) {
-          isOwnerVerified = true
+          isAdminOrOwnerVerified = true
+        } else if (studentEmail) {
+          isRegularStudentSession = true
         }
       } catch {}
     }
 
-    // إذا لم يكن المشرف المعتمد، يُحظر الوصول تماماً ويُحوّل للدخول دون كشف البوابة
-    if (!isOwnerVerified) {
+    // إذا كان المستخدم طالب علم عادي، يُمنع منعاً باتاً من دخول مسارات الإدارة ويُوجّه لفهرس المتون
+    if (isRegularStudentSession && !isAdminOrOwnerVerified) {
+      const coursesUrl = new URL('/courses', request.url)
+      return attachSecurityHeaders(NextResponse.redirect(coursesUrl))
+    }
+
+    // إذا لم يكن المشرف أو مالك المنصة المعتمد، يُحظر الوصول تماماً ويُحوّل للدخول
+    if (!isAdminOrOwnerVerified) {
       const loginUrl = new URL('/login', request.url)
       return attachSecurityHeaders(NextResponse.redirect(loginUrl))
     }

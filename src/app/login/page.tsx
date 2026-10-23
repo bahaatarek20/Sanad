@@ -136,7 +136,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       const res = await signInWithPopup(auth, googleProvider)
       const fbUser = res.user
       const cleanEmail = (fbUser.email || '').toLowerCase().trim()
-      let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+      let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
 
       // 1. مزامنة فورية في Firestore (users/{uid}) مرنة غير حاجبة
       try {
@@ -190,7 +190,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       } catch {}
 
       // 5. التوجيه المباشر
-      const dest = userRole === 'admin' ? '/admin' : targetRedirect
+      const dest = (userRole === 'admin' || userRole === 'owner') ? '/admin' : targetRedirect
       completeLoginAndRedirect(dest)
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string }
@@ -273,7 +273,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         await updateProfile(fbUser, { displayName: cleanName }).catch(() => {})
 
         // 3. إنشاء مستند Firestore في users/{uid} (مرن غير حاجب)
-        let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+        let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
         try {
           const synced = await syncUserToFirestore(fbUser.uid, {
             fullName: cleanName,
@@ -308,7 +308,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         } catch {}
 
         // 6. التوجيه الفوري
-        const dest = userRole === 'admin' ? '/admin' : targetRedirect
+        const dest = (userRole === 'admin' || userRole === 'owner') ? '/admin' : targetRedirect
         completeLoginAndRedirect(dest)
       } else {
         // تسجيل الدخول بالبريد وكلمة المرور
@@ -317,7 +317,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           const cred = await signInWithEmailAndPassword(auth, cleanEmail, password)
           const fbUser = cred.user
 
-          let userRole: 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'admin' : 'student'
+          let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
           try {
             const check = await verifyUserAccount(fbUser.uid)
             if (!check.allowed) {

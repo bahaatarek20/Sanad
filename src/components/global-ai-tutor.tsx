@@ -25,58 +25,97 @@ interface Message {
 
 // بدون حد أقصى لعدد الحروف — طالب العلم حر في كتابة ما يشاء
 
-/** Renders AI message text with basic markdown-like formatting */
-function AiMessageContent({ text }: { text: string }) {
+/** Renders AI message text with rich scholarly markdown formatting and source citation badge */
+export function AiMessageContent({ text }: { text: string }) {
   const lines = text.split('\n')
+
+  const renderInlineBold = (str: string) => {
+    const parts = str.split(/(\*\*[^*]+\*\*)/)
+    return parts.map((part, j) => {
+      const inlineBold = part.match(/^\*\*(.+)\*\*$/)
+      return inlineBold ? (
+        <strong key={j} className="font-black text-emerald-950 dark:text-amber-200">
+          {inlineBold[1]}
+        </strong>
+      ) : (
+        <span key={j}>{part}</span>
+      )
+    })
+  }
+
   return (
-    <div className="whitespace-pre-wrap text-xs leading-relaxed">
+    <div className="whitespace-pre-wrap text-xs leading-relaxed space-y-1">
       {lines.map((line, i) => {
-        // Bold lines wrapped in **...**
-        const boldMatch = line.match(/^\*\*(.+)\*\*$/)
-        if (boldMatch) {
+        const trimmed = line.trim()
+        if (!trimmed) {
+          return <div key={i} className="h-1" />
+        }
+
+        // Source citation line (📖 المصدر المعتمد: ... or 📖 المرجع: ...)
+        if (
+          trimmed.startsWith('📖') ||
+          trimmed.startsWith('**📖') ||
+          trimmed.startsWith('المصدر المعتمد:') ||
+          trimmed.startsWith('**المصدر المعتمد') ||
+          trimmed.startsWith('المرجع المعتمد:')
+        ) {
+          const cleanSource = trimmed.replace(/^\*\*|\*\*$/g, '')
           return (
-            <p key={i} className="font-bold">
+            <div
+              key={i}
+              className="mt-2.5 rounded-xl border border-emerald-700/25 bg-emerald-950/5 px-3 py-2 text-[11px] font-bold text-emerald-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+            >
+              {renderInlineBold(cleanSource)}
+            </div>
+          )
+        }
+
+        // Markdown Headings (### or ## or #)
+        const headingMatch = trimmed.match(/^#{1,4}\s+(.+)$/)
+        if (headingMatch) {
+          return (
+            <p key={i} className="font-black text-emerald-900 dark:text-amber-300 pt-1">
+              {renderInlineBold(headingMatch[1])}
+            </p>
+          )
+        }
+
+        // Full-line Bold wrapped in **...**
+        const boldMatch = trimmed.match(/^\*\*(.+)\*\*$/)
+        if (boldMatch && !boldMatch[1].includes('**')) {
+          return (
+            <p key={i} className="font-black text-stone-900 dark:text-white pt-0.5">
               {boldMatch[1]}
             </p>
           )
         }
 
-        // Bullet items starting with "- " or "• "
-        if (line.startsWith('- ') || line.startsWith('• ')) {
-          const content = line.replace(/^[-•]\s+/, '')
-          // Handle inline **bold** within bullet content
-          const parts = content.split(/(\*\*[^*]+\*\*)/)
+        // Bullet items starting with "- " or "• " or "* "
+        if (/^[-•*]\s+/.test(trimmed)) {
+          const content = trimmed.replace(/^[-•*]\s+/, '')
           return (
-            <div key={i} className="flex items-start gap-1.5 mt-0.5">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-              <span>
-                {parts.map((part, j) => {
-                  const inlineBold = part.match(/^\*\*(.+)\*\*$/)
-                  return inlineBold ? (
-                    <strong key={j}>{inlineBold[1]}</strong>
-                  ) : (
-                    <span key={j}>{part}</span>
-                  )
-                })}
+            <div key={i} className="flex items-start gap-1.5 pr-1">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+              <span className="flex-1">{renderInlineBold(content)}</span>
+            </div>
+          )
+        }
+
+        // Numbered items starting with "1. " or "١. " or "1- "
+        const numMatch = trimmed.match(/^([0-9٠-٩]+[.-])\s+(.+)$/)
+        if (numMatch) {
+          return (
+            <div key={i} className="flex items-start gap-1.5 pr-1">
+              <span className="font-black text-emerald-800 dark:text-amber-400 shrink-0">
+                {numMatch[1]}
               </span>
+              <span className="flex-1">{renderInlineBold(numMatch[2])}</span>
             </div>
           )
         }
 
         // Regular line — handle inline **bold**
-        const parts = line.split(/(\*\*[^*]+\*\*)/)
-        return (
-          <p key={i} className={line === '' ? 'mt-1' : ''}>
-            {parts.map((part, j) => {
-              const inlineBold = part.match(/^\*\*(.+)\*\*$/)
-              return inlineBold ? (
-                <strong key={j}>{inlineBold[1]}</strong>
-              ) : (
-                <span key={j}>{part}</span>
-              )
-            })}
-          </p>
-        )
+        return <p key={i}>{renderInlineBold(line)}</p>
       })}
     </div>
   )
@@ -283,13 +322,15 @@ export default function GlobalAiTutor() {
     setIsLoading(true)
 
     try {
+      const matchedCourse = coursesList.find((c) => c.title === selectedCourse)
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: q,
           courseTitle: selectedCourse,
-          categoryTitle: 'العلوم الشرعية والتأصيل المنهجي',
+          categoryTitle: matchedCourse?.category || 'العلوم الشرعية والتأصيل المنهجي',
+          instructor: matchedCourse?.instructor || undefined,
           history: messages.slice(-8),
           userApiKey: userApiKey || undefined,
         }),

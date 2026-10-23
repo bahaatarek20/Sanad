@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { cookies, headers } from 'next/headers'
 import { verifySessionToken } from '@/lib/auth-helper'
+import { getStudentProfileData, isStudentBanned, SUPER_ADMIN_EMAIL } from '@/lib/student-tracking'
 
 // إعدادات أمان بوابة الإدارة
 const ADMIN_SECRET_KEY = process.env.SANAD_ADMIN_SECRET || 'Sanad-Secure-Master-Key-2025-Eng-Bahaa'
@@ -136,71 +137,122 @@ export function validateAdminTokenString(token?: string | null): boolean {
   }
 }
 
-/**
- * التحقق الخادمي الصارم من صحة توقيع جلسة المشرف مع دعم الترويسات ومقاومة الانقطاع
- */
-export async function verifyAdminSession(): Promise<boolean> {
-  // 1. في بيئة التطوير والتشغيل المحلي (localhost)، تمكين المشرف فوراً من كامل الصلاحيات
-  if (process.env.NODE_ENV !== 'production') {
-    return true
-  }
+export interface AdminActorInfo {
+  authorized: boolean
+  email: string
+  role: 'owner' | 'admin' | null
+  isOwner: boolean
+}
 
+/**
+ * تحديد هوية المشرف أو مالك المنصة الحالي بدقة خادمية صارمة دون أي تجاوزات
+ */
+export async function getAdminActor(): Promise<AdminActorInfo> {
+  // 1. فحص ترويسات الإدارة الصريحة المرسلة مع طلبات الرفع أو البرمجيات الموثقة
   try {
     const headerList = await headers()
-    const host = headerList.get('host') || ''
-    if (
-      host.includes('localhost') ||
-      host.includes('127.0.0.1') ||
-      host.startsWith('192.168.') ||
-      host.startsWith('10.') ||
-      host.startsWith('172.')
-    ) {
-      return true
-    }
-
-    // فحص ترويسات الإدارة الصريحة المرسلة مع طلبات الرفع (Header-based authentication)
     const adminKeyHeader = headerList.get('x-sanad-admin-key')
     const adminTokenHeader = headerList.get('x-sanad-admin-token')
     if (
-      adminKeyHeader === SANAD_ADMIN_ENTRY_KEY ||
-      VALID_PASSCODES.includes(adminKeyHeader || '') ||
+      (adminKeyHeader && (adminKeyHeader === SANAD_ADMIN_ENTRY_KEY || VALID_PASSCODES.includes(adminKeyHeader))) ||
       (adminTokenHeader && validateAdminTokenString(adminTokenHeader))
     ) {
-      return true
+      return {
+        authorized: true,
+        email: SUPER_ADMIN_EMAIL,
+        role: 'owner',
+        isOwner: true,
+      }
     }
   } catch {}
 
   try {
     const cookieStore = await cookies()
 
-    // 2. التحقق من كوكي جلسة المشرف المشفرة بـ HMAC
-    const token = cookieStore.get('sanad_admin_gate_token')?.value
-    if (validateAdminTokenString(token)) {
-      return true
-    }
-
-    // 3. التحقق المشفر من حساب المشرف المعتمد (المهندس بهاء طارق)
+    // 2. التحقق المشفر من جلسة المستخدم الحالية ومطابقتها الحية مع قاعدة البيانات
     const studentCookie = cookieStore.get('sanad_student_user')?.value
+    let sessionEmail = ''
     if (studentCookie) {
       try {
         const verified = verifySessionToken(studentCookie)
         if (verified && verified.email) {
           const email = String(verified.email).toLowerCase().trim()
-          const authorizedAdminEmails = [
-            'bhaaljml480@gmail.com',
-            (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim(),
-          ].filter(Boolean)
-          if (authorizedAdminEmails.includes(email)) {
-            return true
+          sessionEmail = email
+
+          if (email === SUPER_ADMIN_EMAIL) {
+            return {
+              authorized: true,
+              email: SUPER_ADMIN_EMAIL,
+              role: 'owner',
+              isOwner: true,
+            }
+          }
+
+          const banCheck = isStudentBanned(email)
+          const liveProfile = getStudentProfileData(email)
+
+          // التحقق من عدم إبطال الجلسة (Session Version) وعدم الحظر أو التعطيل
+          const sessionVersionValid =
+            verified.sessionVersion === undefined ||
+            liveProfile?.sessionVersion === undefined ||
+            Number(verified.sessionVersion) >= Number(liveProfile.sessionVersion)
+
+          if (!banCheck.isBanned && !liveProfile?.isDeactivated && sessionVersionValid) {
+            const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
+            if (liveProfile?.role === 'admin' || (envAdminEmail && email === envAdminEmail)) {
+              return {
+                authorized: true,
+                email,
+                role: 'admin',
+                isOwner: false,
+              }
+            }
           }
         }
       } catch {}
     }
 
-    return false
+    // 3. التحقق من كوكي بوابة المشرف المشفرة بـ HMAC (الرمز السري لبوابة المالك)
+    const token = cookieStore.get('sanad_admin_gate_token')?.value
+    if (validateAdminTokenString(token)) {
+      return {
+        authorized: true,
+        email: SUPER_ADMIN_EMAIL,
+        role: 'owner',
+        isOwner: true,
+      }
+    }
+
+    return {
+      authorized: false,
+      email: sessionEmail,
+      role: null,
+      isOwner: false,
+    }
   } catch {
-    return false
+    return {
+      authorized: false,
+      email: '',
+      role: null,
+      isOwner: false,
+    }
   }
+}
+
+/**
+ * التحقق الخادمي الصارم من صحة توقيع جلسة المشرف أو مالك المنصة
+ */
+export async function verifyAdminSession(): Promise<boolean> {
+  const actor = await getAdminActor()
+  return actor.authorized
+}
+
+/**
+ * التحقق الخادمي الصارم من أن المنفذ هو مالك المنصة حصراً (bhaaljml480@gmail.com)
+ */
+export async function verifyOwnerSession(): Promise<boolean> {
+  const actor = await getAdminActor()
+  return actor.authorized && actor.isOwner
 }
 
 /**

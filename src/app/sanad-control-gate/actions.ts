@@ -6,6 +6,7 @@ import {
   authenticateAdmin,
   verifyAdminSession,
   revokeAdminSession,
+  getAdminActor,
 } from '@/lib/admin-security'
 import {
   getAdminDashboardData,
@@ -13,6 +14,8 @@ import {
   toggleStudentBan,
   updateStudentRole,
   resetVisitorCount,
+  getAuditLogs,
+  recordAuditLog,
 } from '@/lib/student-tracking'
 import {
   getActiveCourses,
@@ -62,8 +65,8 @@ export async function logoutAdminAction() {
  * 3. جلب بيانات لوحة التحكم وسجل الطلاب المشفر (محمي بجلسة المشرف الخادمية)
  */
 export async function getAdminDashboardAction() {
-  const isValid = await verifyAdminSession()
-  if (!isValid) {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
     return { success: false, error: 'غير مصرح بالوصول إلى بيانات الطلاب' }
   }
 
@@ -71,12 +74,19 @@ export async function getAdminDashboardAction() {
   const courses = getActiveCourses()
   const categories = getActiveCategories()
   const broadcast = getBroadcastNotice()
+  const auditLogs = getAuditLogs(50)
 
   return {
     success: true,
     courses,
     categories,
     broadcast,
+    auditLogs,
+    currentActor: {
+      email: actor.email,
+      role: actor.role,
+      isOwner: actor.isOwner,
+    },
     ...data,
   }
 }
@@ -324,21 +334,29 @@ export async function deleteCategoryAdminAction(slug: string) {
 }
 
 /**
- * 11. حظر أو فك حظر حساب طالب إدارياً (مشرف فقط)
+ * 11. حظر أو فك حظر حساب طالب إدارياً (مشرف أو مالك المنصة فقط)
  */
 export async function toggleBanStudentAdminAction(
   studentEmailOrId: string,
   isBanned: boolean,
   banReason?: string
 ) {
-  const isValid = await verifyAdminSession()
-  if (!isValid) {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
+    recordAuditLog({
+      actorEmail: actor.email || 'anonymous',
+      actorRole: actor.role || 'anonymous',
+      targetEmail: studentEmailOrId,
+      action: 'UNAUTHORIZED_ATTEMPT',
+      details: `رفض محاولة ${isBanned ? 'حظر' : 'فك حظر'} بدون صلاحية إدارية`,
+    })
     return { success: false, error: 'غير مصرح بالقيام بهذا الإجراء الإداري' }
   }
 
-  const result = toggleStudentBan(studentEmailOrId, isBanned, banReason)
+  const result = toggleStudentBan(studentEmailOrId, isBanned, banReason, actor.email)
 
   revalidatePath('/sanad-control-gate')
+  revalidatePath('/admin')
   revalidatePath('/community')
   revalidatePath('/dashboard')
   revalidatePath('/courses')
@@ -350,8 +368,8 @@ export async function toggleBanStudentAdminAction(
  * 12. تصفير أو تصحيح عداد زوار المنصة واستثناء زيارات الإدارة
  */
 export async function resetVisitorCountAdminAction(targetCount: number = 0) {
-  const isValid = await verifyAdminSession()
-  if (!isValid) {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
     return { success: false, error: 'غير مصرح بتعديل عداد الزوار' }
   }
 
@@ -362,18 +380,39 @@ export async function resetVisitorCountAdminAction(targetCount: number = 0) {
 }
 
 /**
- * 13. تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) وحفظها فورياً
+ * 13. تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) — حصرياً لمالك المنصة (bhaaljml480@gmail.com)
  */
 export async function updateStudentRoleAdminAction(
   studentEmailOrId: string,
   role: 'student' | 'admin'
 ) {
-  const isValid = await verifyAdminSession()
-  if (!isValid) {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
+    recordAuditLog({
+      actorEmail: actor.email || 'anonymous',
+      actorRole: actor.role || 'anonymous',
+      targetEmail: studentEmailOrId,
+      action: 'UNAUTHORIZED_ATTEMPT',
+      details: `رفض محاولة تعديل رتبة العضو (${studentEmailOrId}) إلى (${role}) بدون جلسة إدارية`,
+    })
     return { success: false, error: 'غير مصرح بتعديل رتب وصلاحيات الأعضاء' }
   }
 
-  const result = await updateStudentRole(studentEmailOrId, role)
+  if (!actor.isOwner) {
+    recordAuditLog({
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      targetEmail: studentEmailOrId,
+      action: 'UNAUTHORIZED_ATTEMPT',
+      details: `رفض محاولة تعديل رتبة العضو (${studentEmailOrId}) إلى (${role}) لأن الفاعل ليس مالك المنصة (owner)`,
+    })
+    return {
+      success: false,
+      error: 'ترقية المشرفين أو تخفيض صلاحياتهم حق سيادي حصري لمالك المنصة فقط (bhaaljml480@gmail.com).',
+    }
+  }
+
+  const result = await updateStudentRole(studentEmailOrId, role, actor.email)
 
   revalidatePath('/sanad-control-gate')
   revalidatePath('/admin')

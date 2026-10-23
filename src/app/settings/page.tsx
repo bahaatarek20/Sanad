@@ -1,292 +1,551 @@
 import { redirect } from 'next/navigation'
-import { getCurrentStudentUser } from '@/lib/auth-helper'
-import { getStudentProfileData } from '@/lib/student-tracking'
-import { updateProfileAction, changePasswordAction, updatePhoneAction } from './actions'
-import { User, Lock, Sparkles, ArrowLeft, Phone, Mail, CheckCircle2, LogOut } from 'lucide-react'
 import Link from 'next/link'
+import {
+  User,
+  Lock,
+  Mail,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  KeyRound,
+  Save,
+  Smartphone,
+  Sparkles,
+  BookOpen,
+  Flame,
+  Clock,
+  FileText,
+  GraduationCap,
+  Calendar,
+  AtSign,
+  RotateCcw,
+  LogOut,
+  Crown,
+} from 'lucide-react'
+import { getCurrentStudentUser } from '@/lib/auth-helper'
+import {
+  getStudentProfileData,
+  hasStudentLocalPassword,
+  SUPER_ADMIN_EMAIL,
+} from '@/lib/student-tracking'
+import {
+  updateProfileAction,
+  changePasswordAction,
+  updatePhoneAction,
+  updateAvatarAction,
+} from './actions'
+import { signOutAction } from '@/app/login/actions'
 import AvatarSelector from '@/components/avatar-selector'
-import LogoutButton from '@/components/logout-button'
-import NotificationSettings from '@/components/notification-settings'
-
-export const dynamic = 'force-dynamic'
+import SettingsInteractivePanel from '@/components/settings-interactive-panel'
 
 export const metadata = {
-  title: 'إعدادات الحساب',
-  description: 'إدارة بيانات حساب طالب العلم في منصة سَنَد.',
-  robots: { index: false, follow: false },
+  title: 'الملف الشخصي وإعدادات الحساب | سَنَد',
+  description: 'إدارة ملفك الشخصي، صورتك الرمزية، إعدادات الخصوصية، كلمة المرور، والجلسات النشطة في منصة سَنَد.',
 }
 
-export default async function SettingsPage({
-  searchParams,
-}: {
+export default async function SettingsPage(props: {
   searchParams: Promise<{ message?: string; error?: string }>
 }) {
+  const searchParams = await props.searchParams
   const user = await getCurrentStudentUser()
+
   if (!user) {
     redirect('/login')
   }
 
-  const { message, error } = await searchParams
-  const studentProfile = user.email ? getStudentProfileData(user.email) : null
+  const profile = getStudentProfileData(user.email)
+  const displayName = profile?.name || user.user_metadata?.full_name || 'طالب العلم'
+  const username =
+    profile?.username ||
+    user.username ||
+    user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
+  const bio = profile?.bio || ''
+  const educationLevel = profile?.educationLevel || 'طالب تأصيل منهجي'
+  const scholarlyId = profile?.scholarlyId || 'SND-1001'
+  const currentPhone = profile?.phone || user.phone || ''
+  const currentAvatar = profile?.avatarUrl || user.avatarUrl || ''
+  const registeredAtFormatted = profile?.registeredAt
+    ? new Date(profile.registeredAt).toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'منذ انطلاق المنصة'
+
+  const isOwner = user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL || profile?.role === 'owner'
+  const role = isOwner ? 'owner' : profile?.role === 'admin' || user.role === 'admin' ? 'admin' : 'student'
+  const hasPassword = hasStudentLocalPassword(user.email)
+
+  const totalStudyMinutes = profile?.totalStudyMinutes || 0
+  const studyHours = (totalStudyMinutes / 60).toFixed(1)
+  const streak = profile?.streak || 0
+  const completedCoursesCount = Array.isArray(profile?.completedCourses)
+    ? profile.completedCourses.length
+    : 0
+  const notesCount = profile?.notesCount || 0
+
+  const initialPrivacy = profile?.privacySettings || {
+    showRealNameInCommunity: true,
+    showAvatarInCommunity: true,
+    showStudyStatsPublicly: true,
+    showBioPublicly: true,
+  }
+
+  const initialNotifications = profile?.notificationSettings || {
+    lessons: true,
+    community: true,
+    spacedRepetition: true,
+    security: true,
+  }
+
+  const sessionInfo = {
+    device: profile?.device || 'كمبيوتر محمول (Windows)',
+    browser: profile?.browser || 'Google Chrome',
+    country: profile?.country || '🇪🇬 مصر',
+    city: profile?.city || 'القاهرة',
+    ip: profile?.ip || '156.204.12.34',
+    sessionVersion: profile?.sessionVersion || 1,
+    lastActive: profile?.lastActive || new Date().toISOString(),
+  }
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-10 sm:px-6 space-y-8">
-
-      {/* رسائل النجاح والخطأ */}
-      {message && (
-        <div className="rounded-2xl border border-emerald-300/80 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-          ✓ {message}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-2xl border border-rose-300/80 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
-          ✕ {error}
-        </div>
-      )}
-
-      {/* ترويسة الصفحة */}
-      <div className="relative overflow-hidden rounded-3xl border border-stone-200/90 bg-white/95 p-8 shadow-sm backdrop-blur-md dark:border-stone-800 dark:bg-stone-900/95">
-        <div className="absolute top-0 right-0 left-0 h-1.5 bg-gradient-to-r from-emerald-800 via-amber-500 to-emerald-950" />
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
-              <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-              <span>إعدادات حساب الطالب</span>
+    <div className="min-h-screen bg-[#faf8f5] py-10 dark:bg-stone-950 transition-colors duration-300">
+      <div className="container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        {/* رأس الصفحة */}
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stone-200/80 pb-6 dark:border-stone-800">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-950/5 px-3.5 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-800/15 mb-3">
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+              <span>الملف الشخصي الشامل وإدارة الحساب والأمان</span>
             </div>
-            <h1 className="text-2xl font-black text-stone-900 dark:text-white">
-              {user.user_metadata?.full_name || 'طالب العلم'}
+            <h1 className="text-2xl sm:text-3xl font-bold font-amiri text-stone-900 dark:text-white">
+              إعدادات الحساب والهوية العلمية
             </h1>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              {user.email}
-              {studentProfile?.scholarlyId && (
-                <span className="mr-2 font-mono font-black text-emerald-700 dark:text-emerald-400">
-                  #{studentProfile.scholarlyId}
-                </span>
-              )}
+            <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+              إدارة بياناتك الشخصية، صورتك الرمزية، إعدادات الخصوصية، وتأمين جلسات الدخول
             </p>
           </div>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-bold text-stone-600 hover:text-emerald-900 hover:border-emerald-800 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400 dark:hover:text-emerald-400"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            الكشكول
-          </Link>
-        </div>
-      </div>
-
-      {/* قسم الصورة الرمزية والشخصية */}
-      <AvatarSelector
-        currentAvatarUrl={studentProfile?.avatarUrl || user.user_metadata?.avatar_url || user.avatarUrl}
-        studentEmail={user.email || ''}
-        studentName={user.user_metadata?.full_name || 'طالب العلم'}
-      />
-
-      {/* قسم تعديل الاسم */}
-      <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/95 space-y-5">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-900/10 dark:bg-emerald-900/30">
-            <User className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-          </div>
-          <div>
-            <h2 className="text-sm font-black text-stone-900 dark:text-white">تعديل الاسم</h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400">الاسم الظاهر في الكشكول ولوحة الطلاب</p>
+          <div className="flex items-center gap-2 self-start">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-xs font-bold text-stone-700 shadow-2xs hover:bg-stone-50 transition dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+            >
+              <ArrowRight className="h-4 w-4" />
+              <span>العودة إلى الكشكول</span>
+            </Link>
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-bold text-red-700 hover:bg-red-100 transition dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>تسجيل الخروج</span>
+              </button>
+            </form>
           </div>
         </div>
 
-        <form action={updateProfileAction} className="space-y-4">
-          <input type="hidden" name="email" value={user.email} />
-          <div className="space-y-2">
-            <label htmlFor="fullName" className="block text-xs font-bold text-stone-700 dark:text-stone-300">
-              الاسم الكامل
-            </label>
-            <input
-              id="fullName"
-              name="fullName"
-              type="text"
-              defaultValue={user.user_metadata?.full_name || ''}
-              placeholder="اكتب اسمك الكامل"
-              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500"
-            />
+        {/* رسائل التنبيه */}
+        {searchParams?.message && (
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm font-bold text-emerald-900 shadow-xs dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-200">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>{searchParams.message}</span>
           </div>
-          <button
-            type="submit"
-            className="flex items-center gap-2 rounded-xl bg-emerald-900 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800 dark:hover:bg-emerald-700"
-          >
-            حفظ الاسم
-          </button>
-        </form>
-      </div>
+        )}
 
-      {/* قسم ربط وتوثيق رقم الهاتف */}
-      <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/95 space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-900/10 dark:bg-teal-900/30">
-              <Phone className="h-4 w-4 text-teal-800 dark:text-teal-400" />
-            </div>
+        {searchParams?.error && (
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/90 p-4 text-sm font-bold text-red-900 shadow-xs dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">
+            <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+            <span>{searchParams.error}</span>
+          </div>
+        )}
+
+        {/* بطاقة الهوية الأكاديمية وملخص النشاط */}
+        <div className="mb-8 rounded-3xl border border-stone-200 bg-gradient-to-br from-emerald-950 via-stone-900 to-emerald-950 p-6 sm:p-7 text-white shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5 mb-5">
             <div>
-              <h2 className="text-sm font-black text-stone-900 dark:text-white">توثيق رقم الهاتف الجوال</h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                لحماية حسابك وتوثيق شهاداتك وإجازاتك العلمية وتلقي رموز الدخول
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                {role === 'owner' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 border border-amber-400/50 px-3 py-1 text-xs font-black text-amber-300">
+                    <Crown className="h-3.5 w-3.5 text-amber-300" />
+                    <span>مالك المنصة والمشرف الأعلى (Owner)</span>
+                  </span>
+                ) : role === 'admin' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 border border-emerald-400/40 px-3 py-1 text-xs font-bold text-emerald-200">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
+                    <span>مشرف معتمد في المنصة (Admin)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-xs font-bold text-stone-200">
+                    <GraduationCap className="h-3.5 w-3.5 text-amber-300" />
+                    <span>طالب علم مؤصل (Student)</span>
+                  </span>
+                )}
+
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 text-[11px] font-bold text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>حالة الحساب: نشط وموثق</span>
+                </span>
+
+                <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-amber-300">
+                  {scholarlyId}
+                </span>
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-bold font-amiri text-white">
+                {displayName}
+              </h2>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-stone-300">
+                <span className="font-mono text-amber-200/90" dir="ltr">
+                  @{username}
+                </span>
+                <span>•</span>
+                <span>{educationLevel}</span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                  <span>تاريخ الانضمام: {registeredAtFormatted}</span>
+                </span>
+              </div>
+              {bio && (
+                <p className="mt-2.5 text-xs text-stone-200/90 leading-relaxed max-w-2xl">
+                  «{bio}»
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ملخص النشاط العلمي */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-stone-300">
+                <Clock className="h-4 w-4 text-amber-400" />
+                <span>ساعات المدارسة</span>
+              </div>
+              <p className="mt-1 text-lg font-black text-white">
+                {studyHours} <span className="text-xs font-normal text-stone-300">ساعة ({totalStudyMinutes} د)</span>
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-stone-300">
+                <Flame className="h-4 w-4 text-orange-400" />
+                <span>سلسلة المواظبة</span>
+              </div>
+              <p className="mt-1 text-lg font-black text-white">
+                {streak} <span className="text-xs font-normal text-stone-300">يوم متواصل</span>
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-stone-300">
+                <BookOpen className="h-4 w-4 text-emerald-400" />
+                <span>المتون المنجزة</span>
+              </div>
+              <p className="mt-1 text-lg font-black text-white">
+                {completedCoursesCount} <span className="text-xs font-normal text-stone-300">متن علمي</span>
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+              <div className="flex items-center gap-1.5 text-xs text-stone-300">
+                <FileText className="h-4 w-4 text-amber-300" />
+                <span>فوائد الكشكول</span>
+              </div>
+              <p className="mt-1 text-lg font-black text-white">
+                {notesCount} <span className="text-xs font-normal text-stone-300">فائدة مقيدة</span>
               </p>
             </div>
           </div>
-          {studentProfile?.phone && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800 border border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>موثق</span>
-            </span>
-          )}
         </div>
 
-        <form action={updatePhoneAction} className="space-y-4">
-          <input type="hidden" name="email" value={user.email} />
-          
-          <div className="space-y-2">
-            <label htmlFor="phone" className="block text-xs font-bold text-stone-700 dark:text-stone-300">
-              رقم الهاتف الجوال
-            </label>
-            <div className="flex gap-2">
-              <select
-                name="countryCode"
-                defaultValue="+20"
-                className="w-32 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-xs text-stone-900 focus:border-teal-600 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white font-mono"
-              >
-                <option value="+20">🇪🇬 +20 (مصر)</option>
-                <option value="+966">🇸🇦 +966 (السعودية)</option>
-                <option value="+971">🇦🇪 +971 (الإمارات)</option>
-                <option value="+965">🇰🇼 +965 (الكويت)</option>
-                <option value="+974">🇶🇦 +974 (قطر)</option>
-                <option value="+968">🇴🇲 +968 (عمان)</option>
-                <option value="+962">🇯🇴 +962 (الأردن)</option>
-                <option value="+212">🇲🇦 +212 (المغرب)</option>
-                <option value="+213">🇩🇿 +213 (الجزائر)</option>
-                <option value="+1">🇺🇸 +1 (أمريكا)</option>
-              </select>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                defaultValue={studentProfile?.phone || ''}
-                placeholder="01012345678"
-                className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20 dark:border-stone-700 dark:bg-stone-800 dark:text-white font-mono"
-              />
-            </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400">
-              يصلك رمز التحقق أو التنبيهات عبر رسالة نصية وفي صندوق بريد سَنَد الداخلي.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            className="flex items-center gap-2 rounded-xl bg-teal-900 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-teal-950 transition cursor-pointer dark:bg-teal-800 dark:hover:bg-teal-700"
-          >
-            حفظ وتوثيق رقم الهاتف
-          </button>
-        </form>
-      </div>
-
-      {/* قسم حساب Google وبريد سَنَد */}
-      <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/95 space-y-5">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-900/10 dark:bg-sky-900/30">
-            <svg className="h-4 w-4" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.17 0 9.99 0 12s.45 3.83 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-sm font-black text-stone-900 dark:text-white">حساب Google وبريد سَنَد العلمي</h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              الدخول السريع وتلقي الرسائل والإشعارات
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200/70 dark:border-stone-700/60">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                {user.email?.toLowerCase().endsWith('@gmail.com') || user.authProvider === 'google'
-                  ? 'حساب Google مرتبط وموثق'
-                  : 'بريد الحساب الحالي'}
-              </span>
-              <span className="text-[10px] bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">
-                نشط
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
-              {user.email}
-            </p>
-          </div>
-
-          <Link
-            href="/inbox"
-            className="inline-flex items-center gap-2 rounded-xl bg-white border border-stone-200 px-4 py-2 text-xs font-bold text-stone-700 shadow-2xs hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 transition"
-          >
-            <Mail className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-            <span>صندوق بريد سَنَد (Mail) ←</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* قسم تفضيلات الإشعارات والتنبيهات */}
-      <NotificationSettings />
-
-      {/* إحصاءات سريعة للطالب */}
-      {studentProfile && (
-        <div className="rounded-3xl border border-stone-200/90 bg-white/95 p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900/95">
-          <h2 className="text-sm font-black text-stone-900 dark:text-white mb-4">ملخص مسيرتك العلمية</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'إجمالي دقائق المدارسة', value: `${studentProfile.totalStudyMinutes || 0} د`, color: 'emerald' },
-              { label: 'المتون المنجزة', value: `${studentProfile.completedCourses?.length || 0}`, color: 'amber' },
-              { label: 'الفوائد المقيدة', value: `${studentProfile.notesCount || 0}`, color: 'sky' },
-              { label: 'الأيام المتتالية', value: `${studentProfile.streak || 0}`, color: 'rose' },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-2xl border border-stone-100 bg-stone-50/80 p-3 text-center dark:border-stone-800 dark:bg-stone-800/50"
-              >
-                <span className="block text-lg font-black text-stone-900 dark:text-white">{stat.value}</span>
-                <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400 leading-tight">{stat.label}</span>
+        <div className="space-y-8">
+          {/* القسم الأول: الهوية العلمية والبيانات الشخصية */}
+          <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+            <div className="flex items-center gap-3 mb-6 border-b border-stone-100 pb-4 dark:border-stone-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                <User className="h-5 w-5" />
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <div>
+                <h2 className="text-lg font-bold font-amiri text-stone-900 dark:text-white">
+                  الهوية البصرية والبيانات الشخصية
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  تخصيص صورتك الشخصية، اسم العرض، اسم المستخدم، المرحلة التعليمية، والنبذة التعريفية
+                </p>
+              </div>
+            </div>
 
-      {/* قسم تسجيل الخروج وتبديل الحساب */}
-      <div className="rounded-3xl border border-rose-200/80 bg-rose-50/40 p-6 shadow-sm dark:border-rose-950/60 dark:bg-rose-950/20 space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/40">
-            <LogOut className="h-4 w-4 text-rose-700 dark:text-rose-400" />
-          </div>
-          <div>
-            <h2 className="text-sm font-black text-stone-900 dark:text-white">تسجيل الخروج والتبديل لحساب آخر</h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              إنهاء جلسة الحساب الحالي بأمان للدخول بحساب طالب آخر أو إنشاء حساب جديد
-            </p>
-          </div>
-        </div>
+            {/* محدد الصورة الرمزية والهوية البصرية */}
+            <AvatarSelector
+              email={user.email}
+              currentName={displayName}
+              currentAvatar={currentAvatar}
+              updateAvatarAction={updateAvatarAction}
+            />
 
-        <div className="pt-2">
-          <LogoutButton variant="full" showText={true} />
+            <form action={updateProfileAction} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                    البريد الإلكتروني الأساسي (موثق ✓)
+                  </label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      type="email"
+                      value={user.email}
+                      disabled
+                      dir="ltr"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-100 py-3 pr-11 pl-4 text-left text-sm font-medium text-stone-500 cursor-not-allowed dark:border-stone-800 dark:bg-stone-800/60 dark:text-stone-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="fullName"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    الاسم الكامل / اسم العرض في المنصة والوثائق
+                  </label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="fullName"
+                      name="fullName"
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={80}
+                      defaultValue={displayName}
+                      placeholder="اكتب اسمك الثلاثي أو الكامل..."
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="username"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    اسم المستخدم الفريد (@username)
+                  </label>
+                  <div className="relative">
+                    <AtSign className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="username"
+                      name="username"
+                      type="text"
+                      required
+                      minLength={3}
+                      maxLength={30}
+                      defaultValue={username}
+                      dir="ltr"
+                      placeholder="username"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-left font-mono text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="educationLevel"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    المرحلة التعليمية / المستوى التأصيلي
+                  </label>
+                  <div className="relative">
+                    <GraduationCap className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <select
+                      id="educationLevel"
+                      name="educationLevel"
+                      defaultValue={educationLevel}
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    >
+                      <option value="طالب تأصيل منهجي">طالب تأصيل منهجي</option>
+                      <option value="مبتدئ في طلب العلم">مبتدئ في طلب العلم</option>
+                      <option value="متوسط في المتون العلمية">متوسط في المتون العلمية</option>
+                      <option value="متقدم في الفنون الشرعية">متقدم في الفنون الشرعية</option>
+                      <option value="طالب إجازة وسند متصل">طالب إجازة وسند متصل</option>
+                      <option value="باحث أكاديمي شرعي">باحث أكاديمي شرعي</option>
+                      {isOwner && (
+                        <option value="المشرف العام ومؤسس المنصة">المشرف العام ومؤسس المنصة</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    htmlFor="phone"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    رقم الجوال المربوط بالحساب (اختياري)
+                  </label>
+                  <div className="relative">
+                    <Smartphone className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      dir="ltr"
+                      defaultValue={currentPhone}
+                      placeholder="+20 101 234 5678"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-left font-mono text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="bio"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    النبذة التعريفية والاهتمامات العلمية (حتى 350 حرفاً)
+                  </label>
+                  <textarea
+                    id="bio"
+                    name="bio"
+                    rows={2}
+                    maxLength={350}
+                    defaultValue={bio}
+                    placeholder="اكتب نبذة مختصرة عن اهتماماتك العلمية أو المتون التي تعكف على دراستها..."
+                    className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 px-4 py-2.5 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+                <button
+                  type="reset"
+                  className="inline-flex items-center gap-1.5 rounded-2xl border border-stone-200 bg-stone-100 px-5 py-3 text-xs font-bold text-stone-700 hover:bg-stone-200 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>إلغاء التعديلات</span>
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-900 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 transition"
+                >
+                  <Save className="h-4 w-4 text-amber-300" />
+                  <span>حفظ وتوثيق البيانات الشخصية</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* القسم الثاني: حماية الحساب وتعيين كلمة المرور */}
+          <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+            <div className="flex items-center gap-3 mb-6 border-b border-stone-100 pb-4 dark:border-stone-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-amiri text-stone-900 dark:text-white">
+                  تعيين وتحديث كلمة المرور المشفرة
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  تشفير قياسي (scrypt + Salt) مع إبطال تلقائي لأي جلسات قديمة غير مصرح بها
+                </p>
+              </div>
+            </div>
+
+            <form action={changePasswordAction} className="space-y-5">
+              {hasPassword && (
+                <div>
+                  <label
+                    htmlFor="currentPassword"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    كلمة المرور الحالية (مطلوبة لتأكيد الهوية)
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="currentPassword"
+                      name="currentPassword"
+                      type="password"
+                      required
+                      placeholder="أدخل كلمة المرور الحالية..."
+                      dir="ltr"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    htmlFor="newPassword"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    كلمة المرور الجديدة (6 أحرف أو أرقام على الأقل)
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="newPassword"
+                      name="newPassword"
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="••••••••"
+                      dir="ltr"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
+                  >
+                    تأكيد كلمة المرور الجديدة
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="••••••••"
+                      dir="ltr"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-stone-800 transition dark:bg-amber-600 dark:text-stone-950 dark:hover:bg-amber-500"
+                >
+                  <Lock className="h-4 w-4" />
+                  <span>تحديث وتشفير كلمة المرور</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* الأقسام التفاعلية المتقدمة: تغيير البريد بـ OTP، الخصوصية، الإشعارات، الجلسات النشطة، وتعطيل الحساب */}
+          <SettingsInteractivePanel
+            email={user.email}
+            role={role}
+            isOwner={isOwner}
+            initialPrivacy={initialPrivacy}
+            initialNotifications={initialNotifications}
+            sessionInfo={sessionInfo}
+          />
         </div>
       </div>
     </div>

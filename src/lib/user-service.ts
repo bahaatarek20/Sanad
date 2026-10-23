@@ -19,7 +19,7 @@ export interface SanadUser {
   fullName: string
   email: string
   phoneNumber?: string | null
-  role: 'student' | 'admin'
+  role: 'owner' | 'admin' | 'student'
   status: 'active' | 'banned'
   avatarUrl?: string | null
   createdAt?: string | Timestamp | null
@@ -59,7 +59,7 @@ export async function syncUserToFirestore(
       fullName: data.fullName || cleanEmail.split('@')[0],
       email: cleanEmail,
       phoneNumber: data.phoneNumber || null,
-      role: isDefaultAdmin ? 'admin' : 'student',
+      role: isDefaultAdmin ? 'owner' : 'student',
       status: 'active',
       avatarUrl: data.avatarUrl || null,
       createdAt: serverTimestamp(),
@@ -109,6 +109,7 @@ export async function syncUserToFirestore(
           completedCourses: [],
           notesCount: 0,
           isBanned: false,
+          role: isDefaultAdmin ? 'owner' : 'student',
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -122,7 +123,7 @@ export async function syncUserToFirestore(
       fullName: data.fullName,
       email: cleanEmail,
       phoneNumber: data.phoneNumber || null,
-      role: isDefaultAdmin ? 'admin' : 'student',
+      role: isDefaultAdmin ? 'owner' : 'student',
       status: 'active',
       avatarUrl: data.avatarUrl || null,
     }
@@ -145,7 +146,7 @@ export async function syncUserToFirestore(
       fullName: data.fullName || cleanEmail.split('@')[0],
       email: cleanEmail,
       phoneNumber: data.phoneNumber || null,
-      role: isDefaultAdmin ? 'admin' : 'student',
+      role: isDefaultAdmin ? 'owner' : 'student',
       status: 'active',
       avatarUrl: data.avatarUrl || null,
       lastLoginAt: serverTimestamp(),
@@ -162,7 +163,7 @@ export async function syncUserToFirestore(
       fullName: data.fullName,
       email: cleanEmail,
       phoneNumber: data.phoneNumber || null,
-      role: isDefaultAdmin ? 'admin' : 'student',
+      role: isDefaultAdmin ? 'owner' : 'student',
       status: 'active',
       avatarUrl: data.avatarUrl || null,
     }
@@ -182,8 +183,8 @@ export async function syncUserToFirestore(
     if (data.phoneNumber && !existingData.phoneNumber) {
       updates.phoneNumber = data.phoneNumber
     }
-    if (isDefaultAdmin && existingData.role !== 'admin') {
-      updates.role = 'admin'
+    if (isDefaultAdmin && existingData.role !== 'owner') {
+      updates.role = 'owner'
     }
 
     try {
@@ -194,7 +195,7 @@ export async function syncUserToFirestore(
 
     return {
       ...existingData,
-      role: isDefaultAdmin ? 'admin' : existingData.role,
+      role: isDefaultAdmin ? 'owner' : existingData.role,
       fullName: (updates.fullName as string) || existingData.fullName,
     }
   }
@@ -205,7 +206,7 @@ export async function syncUserToFirestore(
  */
 export async function verifyUserAccount(uid: string): Promise<{
   allowed: boolean
-  role: 'student' | 'admin'
+  role: 'owner' | 'admin' | 'student'
   status: 'active' | 'banned'
   message?: string
   user: SanadUser | null

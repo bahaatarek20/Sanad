@@ -21,8 +21,23 @@ export default async function Navbar() {
 
   const cleanUserEmail = (user?.email || '').toLowerCase().trim()
   const isAdmin =
+    user?.role === 'owner' ||
     user?.role === 'admin' ||
     cleanUserEmail === 'bhaaljml480@gmail.com'
+  const avatarUrl = user?.avatarUrl || ''
+  const isImageAvatar =
+    avatarUrl.startsWith('data:image/') ||
+    avatarUrl.startsWith('/uploads/') ||
+    avatarUrl.startsWith('http')
+  const presetEmojiMap: Record<string, string> = {
+    'preset:emerald-scholar': '📖',
+    'preset:amber-scribe': '🪶',
+    'preset:indigo-seeker': '🧭',
+    'preset:rose-hafiz': '👑',
+    'preset:cyan-hikmah': '✨',
+    'preset:stone-murabit': '🛡️',
+  }
+  const presetEmoji = presetEmojiMap[avatarUrl]
 
   return (
     <header className="no-print sticky top-0 z-50 w-full border-b border-stone-200/80 bg-[#fdfbf7]/95 backdrop-blur-md transition-colors duration-300 dark:border-stone-800 dark:bg-[#1c1917]/95">
@@ -106,13 +121,23 @@ export default async function Navbar() {
                     <span>الكشكول</span>
                   </Link>
 
-                  {/* رابط إعدادات الحساب */}
+                  {/* رابط إعدادات الحساب والملف الشخصي مع عرض الصورة الرمزية */}
                   <Link
                     href="/settings"
-                    title="إعدادات الحساب والملف الشخصي"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200/90 bg-white/90 text-stone-400 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
+                    title={`الملف الشخصي وإعدادات الحساب (${user.user_metadata?.full_name || 'طالب العلم'})`}
+                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-stone-200/90 bg-white/90 text-stone-500 hover:text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
                   >
-                    <User className="h-3.5 w-3.5" />
+                    {isImageAvatar ? (
+                      <img
+                        src={avatarUrl}
+                        alt={user.user_metadata?.full_name || 'الصورة الشخصية'}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : presetEmoji ? (
+                      <span className="text-sm leading-none">{presetEmoji}</span>
+                    ) : (
+                      <User className="h-3.5 w-3.5" />
+                    )}
                   </Link>
 
                   {/* زر الخروج الشامل والتبديل لحساب آخر */}

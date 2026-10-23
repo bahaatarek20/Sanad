@@ -6,228 +6,122 @@ import {
   saveLocalCommunityPost,
   addLocalCommunityReply,
   upvoteLocalCommunityPost,
-  getLocalCommunityPosts,
+  resolveAuthorCommunityIdentity,
+  sanitizeCommunityContent,
+  checkCommunityRateLimit,
 } from '@/lib/community-store'
 import {
   saveCommunityPostToCloud,
-  getCommunityPostsFromCloud,
-  addCommunityReplyToCloud,
-  upvoteCommunityPostInCloud,
+  addReplyToCloudPost,
+  upvoteCloudPost,
 } from '@/lib/cloud-db'
-import type { CommunityPost } from '@/components/community-hub'
 
-function generateAuthorIdentity(profile?: {
-  scholarlyId?: string
-  role?: 'student' | 'admin'
-  name?: string
-  email?: string
-} | null): {
-  alias: string
-  role: 'student' | 'admin'
-  scholarlyId?: string
-} {
-  if (profile) {
-    const adminEmails = [
-      'bhaaljml480@gmail.com',
-    ]
-    const isAdmin =
-      profile.role === 'admin' ||
-      Boolean(profile.email && adminEmails.includes(profile.email.toLowerCase().trim()))
-
-    if (isAdmin) {
-      return {
-        alias: '🛡️ مشرف عام المنصة',
-        role: 'admin',
-        scholarlyId: profile.scholarlyId,
-      }
-    }
-
-    if (profile.scholarlyId) {
-      const displayId = profile.scholarlyId.replace(/^SND-/, '')
-      return {
-        alias: `طالب علم #${displayId}`,
-        role: 'student',
-        scholarlyId: profile.scholarlyId,
-      }
-    }
-  }
-
-  const randomNumber = Math.floor(100 + Math.random() * 900)
-  return {
-    alias: `طالب علم #${randomNumber}`,
-    role: 'student',
-  }
-}
-
-// إنشاء منشور جديد في مجلس المذاكرة (الرسايل التشاركية)
 export async function createCommunityPost(formData: FormData) {
-  try {
-    const studentUser = await getCurrentStudentUser()
-    const content = formData.get('content') as string
-    const courseSlug = formData.get('courseSlug') as string
-    const postType = (formData.get('postType') as string) || 'benefit'
-
-    if (!content?.trim()) {
-      return { success: false, error: 'محتوى المسألة أو الفائدة مطلوب' }
-    }
-
-    let authorIdentity = generateAuthorIdentity()
-    if (studentUser && studentUser.email) {
-      const { getStudentProfileData } = await import('@/lib/student-tracking')
-      const studentProfile = getStudentProfileData(studentUser.email)
-      authorIdentity = generateAuthorIdentity(
-        studentProfile
-          ? {
-              scholarlyId: studentProfile.scholarlyId,
-              role: studentProfile.role,
-              name: studentProfile.name,
-              email: studentProfile.email,
-            }
-          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
-      )
-    }
-
-    // 1. الحفظ في السجل المحلي والمشترك
-    const localPost = saveLocalCommunityPost({
-      anonymous_alias: authorIdentity.alias,
-      author_role: authorIdentity.role,
-      author_scholarly_id: authorIdentity.scholarlyId,
-      course_slug: courseSlug || null,
-      post_type: postType as 'question' | 'summary' | 'benefit',
-      content: content.trim(),
-    })
-
-    // 2. الحفظ السحابي في Cloud Firestore ليظهر فوراً لجميع أعضاء المنصة
-    try {
-      await saveCommunityPostToCloud(localPost)
-    } catch (cErr) {
-      console.warn('Could not save post to cloud DB:', cErr)
-    }
-
-    revalidatePath('/community')
-    return {
-      success: true,
-      post: localPost,
-    }
-  } catch (err) {
-    console.error('Community post exception:', err)
-    return { success: false, error: 'تعذر نشر المسألة' }
+  const user = await getCurrentStudentUser()
+  if (!user || !user.email) {
+    throw new Error('غير مصرح بالوصول. يجب تسجيل الدخول للمشاركة في مجلس المذاكرة.')
   }
+
+  const rawContent = (formData.get('content') as string) || ''
+  const content = sanitizeCommunityContent(rawContent, 2000)
+  const postType = ((formData.get('postType') as string) || 'benefit') as
+    | 'benefit'
+    | 'question'
+    | 'summary'
+  const courseSlug = (formData.get('courseSlug') as string) || undefined
+
+  if (!content || content.length < 3) {
+    throw new Error('لا يمكن نشر مشاركة فارغة أو قصيرة جداً.')
+  }
+
+  const rateCheck = checkCommunityRateLimit(user.email, content)
+  if (!rateCheck.allowed) {
+    throw new Error(rateCheck.error || 'يرجى التمهل قبل إرسال مشاركة جديدة.')
+  }
+
+  const identity = resolveAuthorCommunityIdentity(
+    user.email,
+    user.user_metadata?.full_name
+  )
+
+  const newPost = {
+    id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    anonymous_alias: identity.displayName,
+    author_email: user.email,
+    author_avatar_url: identity.avatarUrl,
+    author_role: identity.role,
+    author_education_level: identity.educationLevel,
+    course_slug: courseSlug && courseSlug !== 'all' ? courseSlug : undefined,
+    post_type: ['benefit', 'question', 'summary'].includes(postType) ? postType : 'benefit',
+    content,
+    upvotes_count: 0,
+    created_at: new Date().toISOString(),
+    replies: [],
+  }
+
+  saveLocalCommunityPost(newPost)
+  await saveCommunityPostToCloud(newPost).catch(() => {})
+
+  revalidatePath('/community')
+  revalidatePath('/sanad-control-gate')
+
+  const publicPost = { ...newPost }
+  delete (publicPost as Record<string, unknown>).author_email
+  return publicPost
 }
 
-// تسجيل إعجاب أو اعتماد فائدة
-export async function upvotePost(postId: string) {
-  try {
-    // 1. تحديث الإعجاب محلياً
-    upvoteLocalCommunityPost(postId)
-
-    // 2. تحديث الإعجاب في Cloud Firestore
-    try {
-      await upvoteCommunityPostInCloud(postId)
-    } catch {}
-
-    revalidatePath('/community')
-    return { success: true }
-  } catch {
-    return { success: true }
+export async function createCommunityReply(formData: FormData) {
+  const user = await getCurrentStudentUser()
+  if (!user || !user.email) {
+    throw new Error('غير مصرح بالوصول. يجب تسجيل الدخول للرد في مجلس المذاكرة.')
   }
+
+  const postId = formData.get('postId') as string
+  const rawContent = (formData.get('content') as string) || ''
+  const content = sanitizeCommunityContent(rawContent, 1000)
+
+  if (!postId || !content || content.length < 2) {
+    throw new Error('بيانات الرد غير مكتملة.')
+  }
+
+  const rateCheck = checkCommunityRateLimit(user.email, content)
+  if (!rateCheck.allowed) {
+    throw new Error(rateCheck.error || 'يرجى التمهل قبل إرسال رد جديد.')
+  }
+
+  const identity = resolveAuthorCommunityIdentity(
+    user.email,
+    user.user_metadata?.full_name
+  )
+
+  const newReply = {
+    id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    post_id: postId,
+    anonymous_alias: identity.displayName,
+    author_email: user.email,
+    author_avatar_url: identity.avatarUrl,
+    author_role: identity.role,
+    content,
+    created_at: new Date().toISOString(),
+  }
+
+  addLocalCommunityReply(postId, newReply)
+  await addReplyToCloudPost(postId, newReply).catch(() => {})
+
+  revalidatePath('/community')
+  revalidatePath('/sanad-control-gate')
+
+  const publicReply = { ...newReply }
+  delete (publicReply as Record<string, unknown>).author_email
+  return publicReply
 }
 
-// إضافة رد أو تعليق علمي مجهول
-export async function addCommunityReply(postId: string, content: string) {
-  try {
-    const studentUser = await getCurrentStudentUser()
-    if (!content.trim()) return { success: false, error: 'محتوى الرد مطلوب' }
-
-    let authorIdentity = generateAuthorIdentity()
-    if (studentUser && studentUser.email) {
-      const { getStudentProfileData } = await import('@/lib/student-tracking')
-      const studentProfile = getStudentProfileData(studentUser.email)
-      authorIdentity = generateAuthorIdentity(
-        studentProfile
-          ? {
-              scholarlyId: studentProfile.scholarlyId,
-              role: studentProfile.role,
-              name: studentProfile.name,
-              email: studentProfile.email,
-            }
-          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
-      )
-    }
-
-    // 1. حفظ الرد محلياً
-    const localReply = addLocalCommunityReply(postId, {
-      anonymous_alias: authorIdentity.alias,
-      author_role: authorIdentity.role,
-      author_scholarly_id: authorIdentity.scholarlyId,
-      content: content.trim(),
-    })
-
-    const replyData = localReply || {
-      id: String(Date.now()),
-      post_id: postId,
-      anonymous_alias: authorIdentity.alias,
-      author_role: authorIdentity.role,
-      author_scholarly_id: authorIdentity.scholarlyId,
-      content: content.trim(),
-      created_at: new Date().toISOString(),
-    }
-
-    // 2. حفظ الرد في Cloud Firestore ليظهر فوراً لجميع أعضاء المنصة
-    try {
-      await addCommunityReplyToCloud(postId, replyData)
-    } catch (cErr) {
-      console.warn('Could not save reply to cloud DB:', cErr)
-    }
-
-    revalidatePath('/community')
-    return {
-      success: true,
-      reply: replyData,
-    }
-  } catch {
-    return { success: false, error: 'تعذر إضافة الرد' }
+export async function upvoteCommunityPost(postId: string) {
+  const user = await getCurrentStudentUser()
+  if (!user || !user.email) {
+    throw new Error('غير مصرح بالوصول.')
   }
+  upvoteLocalCommunityPost(postId)
+  await upvoteCloudPost(postId).catch(() => {})
+  revalidatePath('/community')
 }
-
-// 4. جلب وتحديث المنشورات التشاركية الحية من السحابة والسجل المحلي
-export async function getLatestCommunityPostsAction(): Promise<CommunityPost[]> {
-  const localPosts = getLocalCommunityPosts()
-  const postMap = new Map<string, CommunityPost>()
-
-  for (const lp of localPosts) {
-    postMap.set(lp.id, lp)
-  }
-
-  try {
-    const cloudPosts = await getCommunityPostsFromCloud()
-    for (const cp of cloudPosts) {
-      const existing = postMap.get(cp.id)
-      if (existing) {
-        const mergedReplies = [...(existing.replies || [])]
-        const existingReplyIds = new Set(mergedReplies.map((r) => r.id))
-        for (const cr of cp.replies || []) {
-          if (!existingReplyIds.has(cr.id)) {
-            mergedReplies.push(cr)
-            existingReplyIds.add(cr.id)
-          }
-        }
-        postMap.set(cp.id, {
-          ...existing,
-          ...cp,
-          upvotes_count: Math.max(existing.upvotes_count || 0, cp.upvotes_count || 0),
-          replies: mergedReplies,
-        })
-      } else {
-        postMap.set(cp.id, cp)
-      }
-    }
-  } catch (cErr) {
-    console.warn('Could not fetch cloud community posts:', cErr)
-  }
-
-  const posts = Array.from(postMap.values())
-  posts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  return posts
-}
-

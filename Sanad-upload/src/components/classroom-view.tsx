@@ -58,6 +58,7 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
+import { AiMessageContent } from './global-ai-tutor'
 import { resolveCourseProgression } from '@/lib/curriculum-intelligence'
 import ScholarlyStationsModal from '@/components/scholarly-stations-modal'
 import VerifiedDigitalIjaza from '@/components/verified-digital-ijaza'
@@ -687,6 +688,8 @@ export default function ClassroomView({
     setIsAskingAI(true)
 
     try {
+      const storedKey =
+        typeof window !== 'undefined' ? localStorage.getItem('sanad_gemini_key') || undefined : undefined
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -697,6 +700,7 @@ export default function ClassroomView({
           instructor: currentCourse.instructor,
           episodeTitle: currentEpisodeData?.title || `المجلس ${currentEpisodeIndex + 1}`,
           history: messages.slice(-6),
+          userApiKey: storedKey,
         }),
       })
 
@@ -1832,10 +1836,10 @@ export default function ClassroomView({
                         className={`max-w-[88%] rounded-2xl p-3 text-xs leading-relaxed ${
                           m.role === 'user'
                             ? 'bg-emerald-900 text-white rounded-bl-xs dark:bg-emerald-800'
-                            : 'bg-stone-100 text-stone-800 border border-stone-200/80 rounded-br-xs dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700'
+                            : 'bg-[#f8f6f0] text-stone-800 border border-stone-200/80 rounded-br-xs dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700'
                         }`}
                       >
-                        {m.text}
+                        {m.role === 'ai' ? <AiMessageContent text={m.text} /> : m.text}
                       </div>
                     </div>
                   ))}

@@ -1,69 +1,35 @@
 import { NextResponse } from 'next/server'
 import {
+  getRawLocalCommunityPosts,
   saveLocalCommunityPost,
-  getLocalCommunityPosts,
+  addLocalCommunityReply,
+  upvoteLocalCommunityPost,
+  resolveAuthorCommunityIdentity,
+  sanitizeCommunityContent,
+  checkCommunityRateLimit,
+  enrichCommunityPostsForPublic,
 } from '@/lib/community-store'
 import {
-  saveCommunityPostToCloud,
   getCommunityPostsFromCloud,
+  saveCommunityPostToCloud,
+  addReplyToCloudPost,
+  upvoteCloudPost,
 } from '@/lib/cloud-db'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
-import { getStudentProfileData } from '@/lib/student-tracking'
 import type { CommunityPost } from '@/components/community-hub'
 
-function generateAuthorIdentity(profile?: {
-  scholarlyId?: string
-  role?: 'student' | 'admin'
-  name?: string
-  email?: string
-} | null): {
-  alias: string
-  role: 'student' | 'admin'
-  scholarlyId?: string
-} {
-  if (profile) {
-    const adminEmails = [
-      'bhaaljml480@gmail.com',
-    ]
-    const isAdmin =
-      profile.role === 'admin' ||
-      Boolean(profile.email && adminEmails.includes(profile.email.toLowerCase().trim()))
-
-    if (isAdmin) {
-      return {
-        alias: '🛡️ مشرف عام المنصة',
-        role: 'admin',
-        scholarlyId: profile.scholarlyId,
-      }
-    }
-
-    if (profile.scholarlyId) {
-      const displayId = profile.scholarlyId.replace(/^SND-/, '')
-      return {
-        alias: `طالب علم #${displayId}`,
-        role: 'student',
-        scholarlyId: profile.scholarlyId,
-      }
-    }
-  }
-
-  const randomNumber = Math.floor(100 + Math.random() * 900)
-  return {
-    alias: `طالب علم #${randomNumber}`,
-    role: 'student',
-  }
-}
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const localPosts = getLocalCommunityPosts()
+    const localPosts = getRawLocalCommunityPosts()
     const postMap = new Map<string, CommunityPost>()
 
     for (const lp of localPosts) {
       postMap.set(lp.id, lp)
     }
 
-    // مزامنة مع السحابة إن كانت مفعلة
+    // جلب أحدث المنشورات السحابية ودمجها لحظياً مع منع التكرار
     try {
       const cloudPosts = await getCommunityPostsFromCloud()
       if (cloudPosts && cloudPosts.length > 0) {
@@ -91,74 +57,150 @@ export async function GET() {
       }
     } catch {}
 
-    const posts = Array.from(postMap.values())
-    posts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const rawMerged = Array.from(postMap.values())
+    rawMerged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const posts = enrichCommunityPostsForPublic(rawMerged)
 
     return NextResponse.json(
-      { success: true, posts },
+      { success: true, posts, serverTime: new Date().toISOString() },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         },
       }
     )
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching posts'
-    return NextResponse.json({ success: false, error: msg, posts: [] }, { status: 500 })
+  } catch {
+    return NextResponse.json({ success: false, posts: [] }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { content, postType = 'benefit', courseSlug = null, guestAlias } = body
-
-    if (!content || !content.trim()) {
+    // 1. تحقق خادمي صارم من هوية المرسل — لا يُسمح بأي تفاعل لغير المسجلين أو انتحال الهوية
+    const user = await getCurrentStudentUser()
+    if (!user || !user.email) {
       return NextResponse.json(
-        { success: false, error: 'محتوى المسألة أو الفائدة مطلوب' },
-        { status: 400 }
+        {
+          success: false,
+          error: 'غير مصرح بالوصول. يرجى تسجيل الدخول للمشاركة في مجلس المذاكرة.',
+        },
+        { status: 401 }
       )
     }
 
-    // تحديد الهوية العلمية: إما الحساب الموثق أو معرف رمزي تلقائي
-    let authorIdentity = generateAuthorIdentity()
-    const studentUser = await getCurrentStudentUser()
-    if (studentUser && studentUser.email) {
-      const profile = getStudentProfileData(studentUser.email)
-      authorIdentity = generateAuthorIdentity(
-        profile
-          ? {
-              scholarlyId: profile.scholarlyId,
-              role: profile.role,
-              name: profile.name,
-              email: profile.email,
-            }
-          : { email: studentUser.email, role: studentUser.role as 'student' | 'admin' }
-      )
-    } else if (guestAlias) {
-      authorIdentity = {
-        alias: guestAlias,
-        role: 'student',
+    const body = await request.json()
+    const action = body.action || 'create-post'
+
+    if (action === 'create-post') {
+      const rawContent = typeof body.content === 'string' ? body.content : ''
+      const content = sanitizeCommunityContent(rawContent, 2000)
+      const postType = (['benefit', 'question', 'summary'].includes(body.postType)
+        ? body.postType
+        : 'benefit') as 'benefit' | 'question' | 'summary'
+      const courseSlug = body.courseSlug && body.courseSlug !== 'all' ? String(body.courseSlug) : undefined
+
+      if (!content || content.length < 3) {
+        return NextResponse.json(
+          { success: false, error: 'يرجى كتابة محتوى علمي واضح لا يقل عن 3 أحرف.' },
+          { status: 400 }
+        )
       }
+
+      const rateCheck = checkCommunityRateLimit(user.email, content)
+      if (!rateCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: rateCheck.error || 'يرجى التمهل قبل إرسال مشاركة جديدة.' },
+          { status: 429 }
+        )
+      }
+
+      const identity = resolveAuthorCommunityIdentity(
+        user.email,
+        user.user_metadata?.full_name
+      )
+
+      const newPost: CommunityPost = {
+        id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        anonymous_alias: identity.displayName,
+        author_email: user.email,
+        author_avatar_url: identity.avatarUrl,
+        author_role: identity.role,
+        author_education_level: identity.educationLevel,
+        course_slug: courseSlug,
+        post_type: postType,
+        content,
+        upvotes_count: 0,
+        created_at: new Date().toISOString(),
+        replies: [],
+      }
+
+      saveLocalCommunityPost(newPost)
+      await saveCommunityPostToCloud(newPost).catch(() => {})
+
+      const publicPost = { ...newPost }
+      delete publicPost.author_email
+
+      return NextResponse.json({ success: true, post: publicPost })
     }
 
-    const newPost = saveLocalCommunityPost({
-      anonymous_alias: authorIdentity.alias,
-      author_role: authorIdentity.role,
-      author_scholarly_id: authorIdentity.scholarlyId,
-      course_slug: courseSlug || null,
-      post_type: postType,
-      content: content.trim(),
-    })
+    if (action === 'create-reply') {
+      const postId = typeof body.postId === 'string' ? body.postId.trim() : ''
+      const rawContent = typeof body.content === 'string' ? body.content : ''
+      const content = sanitizeCommunityContent(rawContent, 1000)
 
-    // الحفظ في السحابة فوراً
-    try {
-      await saveCommunityPostToCloud(newPost)
-    } catch {}
+      if (!postId || !content || content.length < 2) {
+        return NextResponse.json(
+          { success: false, error: 'يرجى كتابة رد واضح ومفيد.' },
+          { status: 400 }
+        )
+      }
 
-    return NextResponse.json({ success: true, post: newPost })
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error creating post'
-    return NextResponse.json({ success: false, error: msg }, { status: 500 })
+      const rateCheck = checkCommunityRateLimit(user.email, content)
+      if (!rateCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: rateCheck.error || 'يرجى التمهل قبل إرسال رد جديد.' },
+          { status: 429 }
+        )
+      }
+
+      const identity = resolveAuthorCommunityIdentity(
+        user.email,
+        user.user_metadata?.full_name
+      )
+
+      const newReply = {
+        id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        post_id: postId,
+        anonymous_alias: identity.displayName,
+        author_email: user.email,
+        author_avatar_url: identity.avatarUrl,
+        author_role: identity.role,
+        content,
+        created_at: new Date().toISOString(),
+      }
+
+      addLocalCommunityReply(postId, newReply)
+      await addReplyToCloudPost(postId, newReply).catch(() => {})
+
+      const publicReply = { ...newReply }
+      delete (publicReply as Record<string, unknown>).author_email
+
+      return NextResponse.json({ success: true, reply: publicReply })
+    }
+
+    if (action === 'upvote') {
+      const postId = typeof body.postId === 'string' ? body.postId.trim() : ''
+      if (postId) {
+        upvoteLocalCommunityPost(postId)
+        await upvoteCloudPost(postId).catch(() => {})
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    return NextResponse.json({ success: false, error: 'إجراء غير معروف' }, { status: 400 })
+  } catch (err) {
+    console.error('Error in POST /api/community/posts:', err)
+    return NextResponse.json({ success: false, error: 'حدث خطأ في الخادم' }, { status: 500 })
   }
 }

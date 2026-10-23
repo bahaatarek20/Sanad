@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { verifyAdminSession, validateAdminTokenString } from '@/lib/admin-security'
-import { getAdminDashboardDataAsync, getLatestRegisteredStudent } from '@/lib/student-tracking'
+import { verifyAdminSession, validateAdminTokenString, getAdminActor } from '@/lib/admin-security'
+import { getAdminDashboardDataAsync, getLatestRegisteredStudent, getAuditLogs } from '@/lib/student-tracking'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -11,12 +11,11 @@ export const revalidate = 0
  */
 export async function GET(request: NextRequest) {
   try {
-    const adminKey = request.headers.get('x-sanad-admin-key')
     const cookieToken = request.cookies.get('sanad_admin_gate_token')?.value
     const isTokenValid = validateAdminTokenString(cookieToken)
     const isSessionValid = await verifyAdminSession()
 
-    if (!isSessionValid && !isTokenValid && adminKey !== 'bahaa-sanad-owner') {
+    if (!isSessionValid && !isTokenValid) {
       return NextResponse.json(
         { success: false, error: 'غير مصرح بالوصول إلى بيانات البث الحي' },
         { status: 401 }
@@ -26,6 +25,8 @@ export async function GET(request: NextRequest) {
     // جلب أحدث وأشمل قائمة طلاب مع تحديث إجباري للسجلات
     const data = await getAdminDashboardDataAsync(true)
     const latestStudent = getLatestRegisteredStudent() || data.students[0] || null
+    const auditLogs = getAuditLogs(40)
+    const actor = await getAdminActor()
 
     return NextResponse.json(
       {
@@ -35,6 +36,12 @@ export async function GET(request: NextRequest) {
         latestStudent,
         stats: data.stats,
         recentEvents: data.recentEvents?.slice(0, 20) || [],
+        auditLogs,
+        currentActor: {
+          email: actor.email,
+          role: actor.role,
+          isOwner: actor.isOwner,
+        },
         timestamp: Date.now(),
       },
       {

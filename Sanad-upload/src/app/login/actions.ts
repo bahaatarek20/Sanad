@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { setStudentSessionCookie, clearStudentSession } from '@/lib/auth-helper'
+import {
+  setStudentSessionCookie,
+  clearStudentSession,
+  checkStudentAuthRateLimit,
+  recordStudentAuthFailure,
+  clearStudentAuthFailures,
+} from '@/lib/auth-helper'
 import { sendOtpToEmail, verifyOtpCode } from '@/lib/otp-service'
 import { sendOtpToPhone, verifyPhoneOtp } from '@/lib/phone-auth-service'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
@@ -16,6 +22,7 @@ import {
   verifyStudentLocalPassword,
   getStudentProfileData,
   isStudentBanned,
+  SUPER_ADMIN_EMAIL,
 } from '@/lib/student-tracking'
 
 function isRedirectError(error: unknown): boolean {
@@ -69,6 +76,15 @@ export async function verifyOtpAction(formData: FormData) {
   }
 
   const email = rawEmail.toLowerCase()
+  const rateCheck = checkStudentAuthRateLimit(`otp:${email}`)
+  if (!rateCheck.allowed) {
+    return redirect(
+      `/login?mode=verify-otp&email=${encodeURIComponent(email)}&error=${encodeURIComponent(
+        `تم إيقاف المحاولات مؤقتاً بسبب تكرار المحاولات الخاطئة. يرجى الانتظار ${rateCheck.remainingMinutes || 10} دقائق.`
+      )}`
+    )
+  }
+
   const banCheck = isStudentBanned(email)
   if (banCheck.isBanned) {
     return redirect(
@@ -81,17 +97,25 @@ export async function verifyOtpAction(formData: FormData) {
   const result = await verifyOtpCode(email, code)
 
   if (!result.success) {
+    recordStudentAuthFailure(`otp:${email}`)
     return redirect(
       `/login?mode=verify-otp&email=${encodeURIComponent(email)}&error=${encodeURIComponent(result.message)}`
     )
   }
 
+  clearStudentAuthFailures(`otp:${email}`)
   const student = getStudentProfileData(email)
   const fullName = student?.name || email.split('@')[0]
   const clientTelemetry = extractClientTelemetry(await headers())
 
-  await registerOrUpdateStudentAsync(email, fullName, { ...clientTelemetry, authProvider: 'email' })
-  await setStudentSessionCookie(fullName, email, { authProvider: 'email' })
+  const updated = await registerOrUpdateStudentAsync(email, fullName, {
+    ...clientTelemetry,
+    authProvider: 'email',
+  })
+  await setStudentSessionCookie(fullName, email, {
+    authProvider: 'email',
+    sessionVersion: updated.sessionVersion,
+  })
   syncStudentToFirebaseAuth(email, undefined, fullName).catch(() => {})
 
   try {
@@ -113,6 +137,15 @@ export async function loginWithPassword(formData: FormData) {
   }
 
   const cleanEmail = rawEmail.toLowerCase()
+  const rateCheck = checkStudentAuthRateLimit(`pwd:${cleanEmail}`)
+  if (!rateCheck.allowed) {
+    return redirect(
+      `/login?mode=password&error=${encodeURIComponent(
+        `تم إيقاف المحاولات مؤقتاً لحماية الحساب. يرجى المحاولة بعد ${rateCheck.remainingMinutes || 10} دقائق.`
+      )}&email=${encodeURIComponent(cleanEmail)}`
+    )
+  }
+
   const banCheck = isStudentBanned(cleanEmail)
   if (banCheck.isBanned) {
     return redirect(
@@ -131,13 +164,25 @@ export async function loginWithPassword(formData: FormData) {
 
     const isVerified = verifyStudentLocalPassword(cleanEmail, password)
     if (isVerified) {
+      clearStudentAuthFailures(`pwd:${cleanEmail}`)
       const student = getStudentProfileData(cleanEmail)
       const fullName = student?.name || cleanEmail.split('@')[0]
-      await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
-      await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+      const updated = await registerOrUpdateStudentAsync(cleanEmail, fullName, {
+        ...clientTelemetry,
+        authProvider: 'email',
+      })
+      await setStudentSessionCookie(fullName, cleanEmail, {
+        authProvider: 'email',
+        sessionVersion: updated.sessionVersion,
+      })
       syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
-      redirectTo = '/courses'
+      const isUserAdmin =
+        cleanEmail === SUPER_ADMIN_EMAIL ||
+        updated.role === 'owner' ||
+        updated.role === 'admin'
+      redirectTo = isUserAdmin ? '/admin' : '/courses'
     } else {
+      recordStudentAuthFailure(`pwd:${cleanEmail}`)
       errorMessage = 'بيانات الدخول غير صحيحة، يرجى التأكد من البريد وكلمة المرور أو إنشاء حساب جديد.'
     }
   } catch (err: unknown) {
@@ -184,9 +229,16 @@ export async function signupWithPassword(formData: FormData) {
     const headerList = await headers()
     const clientTelemetry = extractClientTelemetry(headerList)
 
+    await registerOrUpdateStudentAsync(cleanEmail, fullName, {
+      ...clientTelemetry,
+      authProvider: 'email',
+    })
     saveStudentLocalPassword(cleanEmail, password, fullName)
-    await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
-    await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    const freshProfile = getStudentProfileData(cleanEmail)
+    await setStudentSessionCookie(fullName, cleanEmail, {
+      authProvider: 'email',
+      sessionVersion: freshProfile?.sessionVersion || 1,
+    })
     syncStudentToFirebaseAuth(cleanEmail, password, fullName).catch(() => {})
 
     try {
@@ -309,10 +361,13 @@ export async function resetPasswordAction(formData: FormData) {
     const student = getStudentProfileData(cleanEmail)
     const fullName = student?.name || cleanEmail.split('@')[0]
 
-    // تحديث كلمة المرور وتعيين جلسة آمنة
-    saveStudentLocalPassword(cleanEmail, newPassword, fullName)
-    await setStudentSessionCookie(fullName, cleanEmail, { authProvider: 'email' })
     await registerOrUpdateStudentAsync(cleanEmail, fullName, { ...clientTelemetry, authProvider: 'email' })
+    saveStudentLocalPassword(cleanEmail, newPassword, fullName)
+    const freshProfile = getStudentProfileData(cleanEmail)
+    await setStudentSessionCookie(fullName, cleanEmail, {
+      authProvider: 'email',
+      sessionVersion: freshProfile?.sessionVersion || 1,
+    })
     syncStudentToFirebaseAuth(cleanEmail, newPassword, fullName).catch(() => {})
 
     try {
@@ -323,7 +378,10 @@ export async function resetPasswordAction(formData: FormData) {
       )
     } catch {}
 
-    const isUserAdmin = cleanEmail === 'bhaaljml480@gmail.com' || student?.role === 'admin'
+    const isUserAdmin =
+      cleanEmail === SUPER_ADMIN_EMAIL ||
+      freshProfile?.role === 'owner' ||
+      freshProfile?.role === 'admin'
     redirectTo = isUserAdmin ? '/admin' : '/courses'
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err

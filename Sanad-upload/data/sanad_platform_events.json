@@ -2,6 +2,54 @@
   {
     "type": "listen",
     "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "استمع إلى المجلس (2) من متن «حلية طالب العلم»",
+    "id": "ev_1792524815890_iizn",
+    "timestamp": "2026-10-20T19:33:35.890Z"
+  },
+  {
+    "type": "unban",
+    "studentEmail": "bhaaljml3@gmail.com",
+    "studentName": "test 1",
+    "description": "ترقية العضو [test 1] [SND-1006] إلى رتبة مشرف عام للمنصة",
+    "id": "ev_1792204319171_x1ww",
+    "timestamp": "2026-10-17T02:31:59.171Z"
+  },
+  {
+    "type": "ban",
+    "studentEmail": "bhaaljml3@gmail.com",
+    "studentName": "test 1",
+    "description": "تعديل رتبة العضو [test 1] [SND-1006] إلى رتبة طالب علم",
+    "id": "ev_1792204319094_m1l9",
+    "timestamp": "2026-10-17T02:31:59.094Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "استمع إلى المجلس (5) من متن «حلية طالب العلم»",
+    "id": "ev_1791921670895_s0gk",
+    "timestamp": "2026-10-13T20:01:10.896Z"
+  },
+  {
+    "type": "register",
+    "studentEmail": "bhaaljml3@gmail.com",
+    "studentName": "test 1",
+    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-1005] من 🇪🇬 مصر (IP: 156.204.12.34)",
+    "id": "ev_1791906352784_43e4",
+    "timestamp": "2026-10-13T15:45:52.784Z"
+  },
+  {
+    "type": "register",
+    "studentEmail": "bhaaljml66@gmail.com",
+    "studentName": "مي طارق",
+    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-1003] من 🇪🇬 مصر (IP: 156.204.12.34)",
+    "id": "ev_1791330362876_c2cd",
+    "timestamp": "2026-10-06T23:46:02.876Z"
+  },
+  {
+    "type": "listen",
+    "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "bhaaljml480",
     "description": "استمع إلى المجلس (1) من متن «نخبة الفكر في مصطلح أهل الأثر»",
     "id": "ev_1790684262309_7ei6",

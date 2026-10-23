@@ -398,7 +398,7 @@ export async function getPlatformStatsFromCloud(): Promise<Record<string, unknow
 export async function updateCloudStudentRole(
   email: string,
   id: string | undefined,
-  role: 'student' | 'admin'
+  role: 'owner' | 'student' | 'admin'
 ): Promise<boolean> {
   try {
     const studentDocId = email.replace(/[.#$[\]]/g, '_')
@@ -417,4 +417,8 @@ export async function updateCloudStudentRole(
     return false
   }
 }
+
+export const addReplyToCloudPost = addCommunityReplyToCloud
+export const upvoteCloudPost = upvoteCommunityPostInCloud
+
 

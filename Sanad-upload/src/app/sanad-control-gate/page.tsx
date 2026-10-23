@@ -94,7 +94,7 @@ import {
   updateStudentRoleAdminAction,
 } from './actions'
 import type { CategoryItem } from '@/lib/courses-store'
-import type { StudentActivityRecord, PlatformStats, PlatformEvent } from '@/lib/student-tracking'
+import type { StudentActivityRecord, PlatformStats, PlatformEvent, AuditLogEntry } from '@/lib/student-tracking'
 import {
   analyzeMatnStage,
   analyzeScienceDiscipline,
@@ -272,6 +272,16 @@ export default function SanadControlGatePage() {
     lastUpdated: new Date().toISOString(),
   })
   const [recentEvents, setRecentEvents] = useState<PlatformEvent[]>([])
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
+  const [currentActor, setCurrentActor] = useState<{
+    email: string
+    role: string
+    isOwner: boolean
+  }>({
+    email: SUPER_ADMIN_EMAIL,
+    role: 'owner',
+    isOwner: true,
+  })
   const [studentSearch, setStudentSearch] = useState('')
   const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
   const [studentRoleFilter, setStudentRoleFilter] = useState<'all' | 'student' | 'admin'>('all')
@@ -701,6 +711,16 @@ export default function SanadControlGatePage() {
         if (res.recentEvents) {
           setRecentEvents(res.recentEvents)
         }
+        if ('auditLogs' in res && Array.isArray(res.auditLogs)) {
+          setAuditLogs(res.auditLogs)
+        }
+        if ('currentActor' in res && res.currentActor) {
+          setCurrentActor({
+            email: res.currentActor.email,
+            role: res.currentActor.role || 'admin',
+            isOwner: res.currentActor.isOwner,
+          })
+        }
         if (res.courses && res.courses.length > 0) {
           setCourses(res.courses)
         }
@@ -714,15 +734,20 @@ export default function SanadControlGatePage() {
           localStorage.setItem('sanad_is_platform_owner', 'true')
         }
       } else {
-        // حماية المشرف: إذا كان المستخدم يرفع ملفات حالياً أو كان مسجلاً بالفعل، لا تلغِ تسجيل دخوله
-        if (typeof window !== 'undefined' && localStorage.getItem('sanad_is_platform_owner') === 'true') {
+        // حماية المشرف فقط إذا كان هناك رفع فيديو جارٍ، وإلا رفض الوصول فوراً
+        const isBusyUploading = isUploadingVideo || Boolean(batchProgress?.isUploading) || uploadingEpisodeIndex !== null
+        if (isBusyUploading) {
           setIsAuthenticated(true)
         } else {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('sanad_is_platform_owner')
+          }
           setIsAuthenticated(false)
         }
       }
     } catch {
-      if (typeof window !== 'undefined' && localStorage.getItem('sanad_is_platform_owner') === 'true') {
+      const isBusyUploading = isUploadingVideo || Boolean(batchProgress?.isUploading) || uploadingEpisodeIndex !== null
+      if (isBusyUploading) {
         setIsAuthenticated(true)
       } else {
         setIsAuthenticated(false)
@@ -755,9 +780,6 @@ export default function SanadControlGatePage() {
       try {
         await fetch('/api/admin-heartbeat', {
           method: 'POST',
-          headers: {
-            'x-sanad-admin-key': 'bahaa-sanad-owner',
-          },
           credentials: 'include',
         })
       } catch {}
@@ -806,9 +828,6 @@ export default function SanadControlGatePage() {
     try {
       const res = await fetch('/api/admin/live-students', {
         cache: 'no-store',
-        headers: {
-          'x-sanad-admin-key': 'bahaa-sanad-owner',
-        },
         credentials: 'include',
       })
       if (res.ok) {
@@ -874,6 +893,12 @@ export default function SanadControlGatePage() {
           if (json.recentEvents && json.recentEvents.length > 0) {
             setRecentEvents(json.recentEvents)
           }
+          if (Array.isArray(json.auditLogs)) {
+            setAuditLogs(json.auditLogs)
+          }
+          if (json.currentActor) {
+            setCurrentActor(json.currentActor)
+          }
         }
       }
     } catch (err) {
@@ -899,7 +924,7 @@ export default function SanadControlGatePage() {
               const data = docSnap.data() as StudentActivityRecord
               if (data && data.email) {
                 if (data.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
-                  data.role = 'admin'
+                  data.role = 'owner'
                 }
                 firestoreStudents.push(data)
               }
@@ -1759,11 +1784,17 @@ export default function SanadControlGatePage() {
     return cat.title.toLowerCase().includes(q) || cat.slug.toLowerCase().includes(q)
   })
 
+  const isStudentOwner = (st: StudentActivityRecord | null | undefined) => {
+    if (!st) return false
+    const clean = (st.email || '').toLowerCase().trim()
+    return clean === SUPER_ADMIN_EMAIL || st.role === 'owner'
+  }
+
   const isStudentAdmin = (st: StudentActivityRecord | null | undefined) => {
     if (!st) return false
     const clean = (st.email || '').toLowerCase().trim()
     if (clean === SUPER_ADMIN_EMAIL) return true
-    return st.role === 'admin'
+    return st.role === 'owner' || st.role === 'admin'
   }
 
   const activeStudentsCount = students.filter((s) => !s.isBanned).length
@@ -1813,6 +1844,10 @@ export default function SanadControlGatePage() {
   // فتح نافذة حظر الحساب الإداري
   const handleOpenBanModal = (st: StudentActivityRecord, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    if (isStudentOwner(st)) {
+      showRoleToast('حساب مالك المنصة (bhaaljml480@gmail.com) محمي سيادياً ولا يمكن حظره مطلقاً.', 'error')
+      return
+    }
     setBanModalStudent(st)
     setBanReasonInput('حظر إداري بقرار من المشرف العام')
   }
@@ -1922,14 +1957,19 @@ export default function SanadControlGatePage() {
     return `${hours} س و ${mins} د`
   }
 
-  // تبديل وترقية صلاحية الطالب / المشرف بسلاسة وسرعة فائقة مع حفظ دائم
+  // تبديل وترقية صلاحية الطالب / المشرف بسلاسة وسرعة فائقة مع حفظ دائم (حصرياً لمالك المنصة)
   const handleToggleRole = async (st: StudentActivityRecord, e?: React.MouseEvent) => {
     e?.stopPropagation()
     const cleanEmail = (st.email || '').toLowerCase().trim()
 
     // حماية مطلقة لصاحب المنصة والمشرف العام المهندس بهاء طارق
-    if (cleanEmail === SUPER_ADMIN_EMAIL) {
+    if (isStudentOwner(st)) {
       showRoleToast('صاحب المنصة والمشرف العام (المهندس بهاء طارق) يتمتع بصلاحيات مطلقة دائمة ولا يمكن تخفيض رتبته.', 'error')
+      return
+    }
+
+    if (!currentActor.isOwner) {
+      showRoleToast('ترقية المشرفين أو تخفيض صلاحياتهم حق سيادي حصري لمالك المنصة فقط (bhaaljml480@gmail.com).', 'error')
       return
     }
 
@@ -1967,23 +2007,24 @@ export default function SanadControlGatePage() {
       // 2. تحديث السجل الخادمي الموثق لضمان البقاء الدائم
       const res = await updateStudentRoleAdminAction(cleanEmail || st.id, newRole)
 
-      // 3. مزامنة فورية مباشرة مع Cloud Firestore من المتصفح (Dual-write) لضمان عدم فقدان الصلاحية نهائياً
-      try {
-        const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
-        await setDoc(doc(db, 'students', studentDocId), { role: newRole, updatedAt: new Date().toISOString() }, { merge: true })
-        if (st.id) {
-          const { updateUserRole } = await import('@/lib/user-service')
-          await updateUserRole(st.id, newRole)
-        }
-      } catch (clientErr) {
-        console.warn('Client dual-write notice:', clientErr)
-      }
-
       if (res && res.success) {
+        // 3. مزامنة فورية مباشرة مع Cloud Firestore من المتصفح بعد نجاح الخادم
+        try {
+          const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+          await setDoc(doc(db, 'students', studentDocId), { role: newRole, updatedAt: new Date().toISOString() }, { merge: true })
+          if (st.id) {
+            const { updateUserRole } = await import('@/lib/user-service')
+            await updateUserRole(st.id, newRole)
+          }
+        } catch (clientErr) {
+          console.warn('Client dual-write notice:', clientErr)
+        }
+
         showRoleToast(
           `تم تغيير رتبة [${st.name}] إلى (${newRole === 'admin' ? '🛡️ مشرف عام' : '🎓 طالب علم'}) بنجاح`,
           'success'
         )
+        await refreshDashboardData()
       } else {
         // التراجع في حال حدوث خطأ خادمي
         setStudents((prev) =>
@@ -2012,9 +2053,12 @@ export default function SanadControlGatePage() {
 
   // تعيين رتبة وصلاحية محددة مباشرة (من نافذة تفاصيل العضو)
   const handleSetExactRole = async (st: StudentActivityRecord, targetRole: 'student' | 'admin') => {
-    const cleanEmail = (st.email || '').toLowerCase().trim()
-    if (cleanEmail === SUPER_ADMIN_EMAIL && targetRole !== 'admin') {
+    if (isStudentOwner(st)) {
       showRoleToast('صاحب المنصة والمشرف العام (المهندس بهاء طارق) يتمتع بصلاحيات مطلقة دائمة ولا يمكن تخفيض رتبته.', 'error')
+      return
+    }
+    if (!currentActor.isOwner) {
+      showRoleToast('ترقية المشرفين أو تخفيض صلاحياتهم حق سيادي حصري لمالك المنصة فقط (bhaaljml480@gmail.com).', 'error')
       return
     }
     if (isStudentAdmin(st) === (targetRole === 'admin')) return
@@ -2952,7 +2996,12 @@ export default function SanadControlGatePage() {
                           <span>تعيين المرور</span>
                         </button>
 
-                        {st.isBanned ? (
+                        {isStudentOwner(st) ? (
+                          <span className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 px-2.5 py-1.5 text-[11px] font-black text-amber-900 dark:text-amber-300">
+                            <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                            <span>محمي سيادياً</span>
+                          </span>
+                        ) : st.isBanned ? (
                           <button
                             type="button"
                             onClick={(e) => handleUnbanStudent(st, e)}
@@ -3094,7 +3143,7 @@ export default function SanadControlGatePage() {
                                     )}
                                   </button>
                                   {(st.email.includes('@gmail.com') || st.authProvider === 'google') && (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-extrabold text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-extrabold text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-border-900">
                                       Gmail
                                     </span>
                                   )}
@@ -3112,7 +3161,7 @@ export default function SanadControlGatePage() {
                           {/* 3. الصلاحية والرتبة (طالب / مشرف) مع إمكانية التبديل والترقية */}
                           <td className="p-4 whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
-                              {st.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL ? (
+                              {isStudentOwner(st) ? (
                                 <span
                                   title="المشرف الأعلى وصاحب المنصة (المهندس بهاء طارق) - صلاحية مطلقة دائمة"
                                   className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400 bg-linear-to-r from-amber-100 to-amber-200 px-3 py-1 text-[11px] font-black text-amber-950 shadow-xs dark:from-amber-950/70 dark:to-amber-900/60 dark:border-amber-600 dark:text-amber-200"
@@ -3284,7 +3333,12 @@ export default function SanadControlGatePage() {
                               <span>تعيين المرور</span>
                             </button>
 
-                            {st.isBanned ? (
+                            {isStudentOwner(st) ? (
+                              <span className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                                <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                                <span>محمي سيادياً</span>
+                              </span>
+                            ) : st.isBanned ? (
                               <button
                                 type="button"
                                 onClick={(e) => handleUnbanStudent(st, e)}
@@ -3361,6 +3415,83 @@ export default function SanadControlGatePage() {
                     </div>
                     <span className="text-[11px] font-mono text-stone-400 shrink-0 mr-2">
                       {new Date(ev.timestamp).toLocaleTimeString('ar-EG', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* سجل التدقيق الأمني والصلاحيات (Security & Role Audit Log) */}
+          <div className="rounded-3xl border border-stone-200/90 bg-white p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-stone-800">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-amber-600" />
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white">
+                    سجل التدقيق الأمني والصلاحيات (Security Audit Log)
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    توثيق خادمي غير قابل للتلاعب لكافة تغييرات الصلاحيات، الحظر، تعديل الملفات، ومحاولات الوصول غير المصرح بها
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3 py-1 text-[11px] font-black text-amber-900 dark:text-amber-300">
+                إجمالي العمليات المسجلة: {auditLogs.length}
+              </span>
+            </div>
+
+            {auditLogs.length === 0 ? (
+              <p className="text-xs text-stone-400 py-4 text-center">
+                لا توجد عمليات تدقيق أمنية مسجلة حتى الآن.
+              </p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                {auditLogs.slice(0, 25).map((log) => (
+                  <div
+                    key={log.id}
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl p-3 text-xs border ${
+                      log.action === 'UNAUTHORIZED_ATTEMPT' || log.action === 'BAN_USER'
+                        ? 'bg-rose-50/50 border-rose-200/80 dark:bg-rose-950/20 dark:border-rose-900/50'
+                        : log.action === 'ROLE_CHANGE'
+                        ? 'bg-amber-50/50 border-amber-200/80 dark:bg-amber-950/20 dark:border-amber-900/50'
+                        : 'bg-stone-50 border-stone-100 dark:bg-stone-800/60 dark:border-stone-700/50'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`rounded-lg px-2 py-0.5 text-[10px] font-black ${
+                            log.action === 'UNAUTHORIZED_ATTEMPT'
+                              ? 'bg-rose-700 text-white'
+                              : log.action === 'ROLE_CHANGE'
+                              ? 'bg-amber-600 text-white'
+                              : log.action === 'BAN_USER'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-emerald-800 text-white'
+                          }`}
+                        >
+                          {log.action}
+                        </span>
+                        <span className="font-mono text-[11px] font-bold text-stone-700 dark:text-stone-300">
+                          الفاعل: {log.actorEmail} ({log.actorRole})
+                        </span>
+                        <span className="text-stone-400">←</span>
+                        <span className="font-mono text-[11px] font-bold text-emerald-800 dark:text-emerald-400">
+                          الهدف: {log.targetEmail}
+                        </span>
+                      </div>
+                      <p className="text-stone-700 dark:text-stone-300 font-medium">
+                        {log.details}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-stone-400 shrink-0">
+                      {new Date(log.timestamp).toLocaleString('ar-EG', {
+                        month: 'short',
+                        day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit',
                       })}

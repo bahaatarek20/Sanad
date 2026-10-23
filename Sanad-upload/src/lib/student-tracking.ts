@@ -20,11 +20,59 @@ export interface LocalStudentNote {
   created_at: string
 }
 
+export type PlatformRole = 'owner' | 'admin' | 'student'
+
+export interface StudentPrivacySettings {
+  showRealNameInCommunity: boolean
+  showAvatarInCommunity: boolean
+  showStudyStatsPublicly: boolean
+  showBioPublicly: boolean
+}
+
+export interface StudentNotificationSettings {
+  lessons: boolean
+  community: boolean
+  spacedRepetition: boolean
+  security: boolean
+}
+
+export interface AuditLogEntry {
+  id: string
+  action:
+    | 'ROLE_PROMOTE'
+    | 'ROLE_DEMOTE'
+    | 'ROLE_CHANGE'
+    | 'ACCOUNT_BAN'
+    | 'ACCOUNT_UNBAN'
+    | 'BAN_USER'
+    | 'UNBAN_USER'
+    | 'ACCOUNT_DEACTIVATE'
+    | 'ACCOUNT_REACTIVATE'
+    | 'PASSWORD_CHANGE'
+    | 'EMAIL_CHANGE'
+    | 'PROFILE_UPDATE'
+    | 'AVATAR_UPDATE'
+    | 'AVATAR_UPLOAD'
+    | 'AVATAR_DELETE'
+    | 'SESSION_REVOKE'
+    | 'UNAUTHORIZED_ATTEMPT'
+  actorEmail: string
+  actorRole: 'owner' | 'admin' | 'student' | 'system' | 'anonymous' | null
+  targetEmail: string
+  details: string
+  ip?: string
+  timestamp: string
+}
+
 export interface StudentActivityRecord {
   id: string
   scholarlyId?: string // المعرف الأكاديمي الفريد لطالب العلم (مثال: SND-1001)
   email: string
   name: string
+  username?: string // اسم المستخدم الفريد (@handle)
+  bio?: string // النبذة التعريفية لطالب العلم
+  educationLevel?: string // المرحلة التعليمية / المستوى التأصيلي
+  emailVerified?: boolean // حالة توثيق البريد الإلكتروني
   registeredAt: string
   lastActive: string
   totalStudyMinutes: number
@@ -41,9 +89,15 @@ export interface StudentActivityRecord {
   isBanned?: boolean // هل الحساب محظور من قِبل إدارة المنصة
   bannedAt?: string // تاريخ وتوقيت الحظر
   banReason?: string // سبب الحظر الإداري
+  isDeactivated?: boolean // هل طلب الطالب تعطيل حسابه
+  deactivatedAt?: string
+  deactivationReason?: string
+  sessionVersion?: number // رقم نسخة الجلسة لإبطال الجلسات الأخرى فوراً عند التغيير
+  privacySettings?: StudentPrivacySettings // إعدادات الخصوصية والظهور
+  notificationSettings?: StudentNotificationSettings // إعدادات الإشعارات المحفوظة
   phone?: string // رقم هاتف الطالب الموثق
   authProvider?: 'email' | 'google' | 'phone' // طريقة تسجيل الدخول الأساسية
-  avatarUrl?: string // صورة حساب جوجل إن وجدت
+  avatarUrl?: string // الصورة الشخصية للطالب (مرفوعة أو مختارة أو من جوجل)
   ip?: string // عنوان بروتوكول الإنترنت (IP) الحقيقي
   country?: string // الدولة مع العلم (مثال: 🇪🇬 مصر)
   countryCode?: string // رمز الدولة (مثال: EG)
@@ -51,12 +105,12 @@ export interface StudentActivityRecord {
   device?: string // نوع الجهاز ونظام التشغيل (مثال: كمبيوتر محمول Windows)
   browser?: string // متصفح الويب (مثال: Google Chrome)
   userAgent?: string // معرف المتصفح الخام
-  role?: 'student' | 'admin' // رتبة الحساب في المنصة
+  role?: PlatformRole // رتبة الحساب في المنصة: مالك المنصة (owner) | مشرف (admin) | طالب (student)
 }
 
 export interface PlatformEvent {
   id: string
-  type: 'register' | 'listen' | 'complete' | 'note' | 'ban' | 'unban'
+  type: 'register' | 'listen' | 'complete' | 'note' | 'ban' | 'unban' | 'role' | 'security'
   studentEmail: string
   studentName: string
   description: string
@@ -79,6 +133,8 @@ const STATS_FILE = path.join(DATA_DIR, 'sanad_platform_stats.json')
 const UPLOAD_STATS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_stats.json')
 const EVENTS_FILE = path.join(DATA_DIR, 'sanad_platform_events.json')
 const UPLOAD_EVENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_events.json')
+const AUDIT_LOG_FILE = path.join(DATA_DIR, 'sanad_audit_log.json')
+const UPLOAD_AUDIT_LOG_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_audit_log.json')
 const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
 const UPLOAD_MESSAGES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_messages_registry.json')
 const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
@@ -92,10 +148,21 @@ export const ADMIN_EMAILS = [
   'bhaaljml480@gmail.com',
 ]
 
+export function isPlatformOwnerEmail(email?: string | null): boolean {
+  if (!email) return false
+  return email.toLowerCase().trim() === SUPER_ADMIN_EMAIL
+}
+
+export function hasAdminPrivileges(role?: string | null, email?: string | null): boolean {
+  if (isPlatformOwnerEmail(email)) return true
+  return role === 'owner' || role === 'admin'
+}
+
 const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
 const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json')
 const TMP_STATS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_stats.json')
 const TMP_EVENTS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_events.json')
+const TMP_AUDIT_LOG_FILE = path.join(TMP_DATA_DIR, 'sanad_audit_log.json')
 
 declare global {
   // eslint-disable-next-line no-var
@@ -235,13 +302,50 @@ export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
     else st.browser = 'Google Chrome'
   }
 
-  // 4. تعيين الرتبة وصلاحية المشرف الأعلى
+  // 4. تعيين الرتبة وصلاحية مالك المنصة الأعلى (Owner)
   const cleanEmail = (st.email || '').toLowerCase().trim()
   if (cleanEmail === SUPER_ADMIN_EMAIL) {
-    st.role = 'admin'
+    st.role = 'owner'
+    st.isBanned = false
+    st.isDeactivated = false
   } else if (!st.role) {
     const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
     st.role = (envAdminEmail && cleanEmail === envAdminEmail) ? 'admin' : 'student'
+  }
+
+  // 5. القيم الافتراضية للحقول الشخصية والخصوصية والإشعارات ونسخة الجلسة
+  if (!st.username && cleanEmail) {
+    const baseHandle = cleanEmail
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .toLowerCase()
+      .slice(0, 20)
+    st.username = baseHandle || `sanad_${(st.scholarlyId || '1001').replace('SND-', '')}`
+  }
+  if (!st.educationLevel) {
+    st.educationLevel = cleanEmail === SUPER_ADMIN_EMAIL ? 'المشرف العام ومؤسس المنصة' : 'طالب تأصيل منهجي'
+  }
+  if (st.emailVerified === undefined) {
+    st.emailVerified = true
+  }
+  if (!st.sessionVersion || st.sessionVersion < 1) {
+    st.sessionVersion = 1
+  }
+  if (!st.privacySettings) {
+    st.privacySettings = {
+      showRealNameInCommunity: true,
+      showAvatarInCommunity: true,
+      showStudyStatsPublicly: true,
+      showBioPublicly: true,
+    }
+  }
+  if (!st.notificationSettings) {
+    st.notificationSettings = {
+      lessons: true,
+      community: true,
+      spacedRepetition: true,
+      security: true,
+    }
   }
 }
 
@@ -266,6 +370,9 @@ function ensureDataFiles() {
     }
     if (!fs.existsSync(EVENTS_FILE)) {
       fs.writeFileSync(EVENTS_FILE, JSON.stringify([], null, 2), 'utf8')
+    }
+    if (!fs.existsSync(AUDIT_LOG_FILE)) {
+      fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify([], null, 2), 'utf8')
     }
   } catch {}
   try {
@@ -450,7 +557,9 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
       s.isBanned = false
     }
     if (s.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
-      s.role = 'admin'
+      s.role = 'owner'
+      s.isBanned = false
+      s.isDeactivated = false
     }
     ensureStudentTelemetryDefaults(s)
   }
@@ -480,6 +589,66 @@ export function saveAllLocalStudents(students: StudentActivityRecord[]) {
     }
     fs.writeFileSync(UPLOAD_REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
   } catch {}
+}
+
+export function recordAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): AuditLogEntry {
+  ensureDataFiles()
+  const newEntry: AuditLogEntry = {
+    ...entry,
+    id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: new Date().toISOString(),
+  }
+
+  try {
+    let logs: AuditLogEntry[] = []
+    if (fs.existsSync(AUDIT_LOG_FILE)) {
+      try {
+        logs = JSON.parse(fs.readFileSync(AUDIT_LOG_FILE, 'utf8'))
+      } catch {
+        logs = []
+      }
+    }
+    if (!Array.isArray(logs)) logs = []
+    logs.unshift(newEntry)
+    if (logs.length > 250) {
+      logs = logs.slice(0, 250)
+    }
+
+    try {
+      fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify(logs, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(TMP_AUDIT_LOG_FILE, JSON.stringify(logs, null, 2), 'utf8')
+    } catch {}
+    try {
+      const uploadDir = path.dirname(UPLOAD_AUDIT_LOG_FILE)
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true })
+      }
+      fs.writeFileSync(UPLOAD_AUDIT_LOG_FILE, JSON.stringify(logs, null, 2), 'utf8')
+    } catch {}
+  } catch (err) {
+    console.error('Error recording audit log:', err)
+  }
+
+  return newEntry
+}
+
+export function getAuditLogs(limit = 100): AuditLogEntry[] {
+  ensureDataFiles()
+  try {
+    const fileToRead = fs.existsSync(AUDIT_LOG_FILE)
+      ? AUDIT_LOG_FILE
+      : fs.existsSync(TMP_AUDIT_LOG_FILE)
+      ? TMP_AUDIT_LOG_FILE
+      : null
+    if (!fileToRead) return []
+    const parsed = JSON.parse(fs.readFileSync(fileToRead, 'utf8'))
+    if (Array.isArray(parsed)) {
+      return parsed.slice(0, limit)
+    }
+  } catch {}
+  return []
 }
 
 function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
@@ -625,18 +794,19 @@ export function isStudentBanned(emailOrId: string): { isBanned: boolean; banReas
   try {
     ensureDataFiles()
     const clean = emailOrId.toLowerCase().trim()
-    let students: StudentActivityRecord[] = []
-    try {
-      students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    } catch {
+    if (clean === SUPER_ADMIN_EMAIL) {
       return { isBanned: false }
     }
+    const students = readAllLocalStudents(false)
     const student = students.find(
       (s) =>
         s.email.toLowerCase() === clean ||
         s.scholarlyId?.toLowerCase() === clean ||
         s.id === clean
     )
+    if (student && student.email.toLowerCase() === SUPER_ADMIN_EMAIL) {
+      return { isBanned: false }
+    }
     if (student && student.isBanned) {
       return {
         isBanned: true,
@@ -648,21 +818,18 @@ export function isStudentBanned(emailOrId: string): { isBanned: boolean; banReas
   return { isBanned: false }
 }
 
-// 1.7 حظر أو فك حظر حساب طالب إدارياً (مشرف فقط)
+// 1.7 حظر أو فك حظر حساب طالب إدارياً (مشرف أو مالك المنصة)
 export function toggleStudentBan(
   emailOrId: string,
   isBanned: boolean,
-  banReason?: string
+  banReason?: string,
+  actorEmail: string = SUPER_ADMIN_EMAIL
 ): { success: boolean; student?: StudentActivityRecord; error?: string } {
   try {
     ensureDataFiles()
     const clean = emailOrId.toLowerCase().trim()
-    let students: StudentActivityRecord[] = []
-    try {
-      students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    } catch {
-      students = []
-    }
+    const cleanActor = (actorEmail || SUPER_ADMIN_EMAIL).toLowerCase().trim()
+    const students = readAllLocalStudents(true)
 
     const idx = students.findIndex(
       (s) =>
@@ -675,10 +842,43 @@ export function toggleStudentBan(
     }
 
     const student = students[idx]
+    const targetEmail = student.email.toLowerCase().trim()
+
+    // حماية سيادية مطلقة لمالك المنصة (Owner)
+    if (targetEmail === SUPER_ADMIN_EMAIL || student.role === 'owner') {
+      recordAuditLog({
+        action: 'UNAUTHORIZED_ATTEMPT',
+        actorEmail: cleanActor,
+        actorRole: cleanActor === SUPER_ADMIN_EMAIL ? 'owner' : 'admin',
+        targetEmail,
+        details: 'رفض محاولة حظر أو تعليق حساب مالك المنصة (Owner Protection)',
+      })
+      return {
+        success: false,
+        error: 'حماية سيادية: لا يمكن حظر أو تعليق حساب مالك المنصة (المهندس بهاء طارق) تحت أي ظرف.',
+      }
+    }
+
+    // لا يجوز لمشرف عادي حظر مشرف آخر — هذه الصلاحية لمالك المنصة فقط
+    if (student.role === 'admin' && cleanActor !== SUPER_ADMIN_EMAIL) {
+      recordAuditLog({
+        action: 'UNAUTHORIZED_ATTEMPT',
+        actorEmail: cleanActor,
+        actorRole: 'admin',
+        targetEmail,
+        details: 'رفض محاولة مشرف لحظر مشرف آخر دون صلاحية مالك المنصة',
+      })
+      return {
+        success: false,
+        error: 'لا يملك المشرف صلاحية حظر مشرف آخر؛ هذه الصلاحية محصورة بمالك المنصة حصراً.',
+      }
+    }
+
     student.isBanned = isBanned
     if (isBanned) {
       student.bannedAt = new Date().toISOString()
-      student.banReason = banReason?.trim() || 'حظر إداري بقرار من المشرف العام'
+      student.banReason = banReason?.trim() || 'حظر إداري بقرار من إدارة المنصة'
+      student.sessionVersion = (student.sessionVersion || 1) + 1
     } else {
       student.bannedAt = undefined
       student.banReason = undefined
@@ -687,6 +887,16 @@ export function toggleStudentBan(
     globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
     saveStudentToCloud(student).catch(() => {})
+
+    recordAuditLog({
+      action: isBanned ? 'ACCOUNT_BAN' : 'ACCOUNT_UNBAN',
+      actorEmail: cleanActor,
+      actorRole: cleanActor === SUPER_ADMIN_EMAIL ? 'owner' : 'admin',
+      targetEmail,
+      details: isBanned
+        ? `حظر الحساب إدارياً — السبب: ${student.banReason}`
+        : `فك الحظر الإداري واستعادة صلاحية الدخول للحساب`,
+    })
 
     logPlatformEvent({
       type: isBanned ? 'ban' : 'unban',
@@ -704,14 +914,32 @@ export function toggleStudentBan(
   }
 }
 
-// 1.8 تعديل رتبة وصلاحية العضو (طالب علم / مشرف عام) مع المزامنة الفورية الشاملة
+// 1.8 تعديل رتبة وصلاحية العضو (طالب علم / مشرف) — حصرياً لمالك المنصة (Owner)
 export async function updateStudentRole(
   emailOrId: string,
-  role: 'student' | 'admin'
+  role: 'student' | 'admin' | 'owner',
+  actorEmail: string = SUPER_ADMIN_EMAIL
 ): Promise<{ success: boolean; student?: StudentActivityRecord; error?: string }> {
   try {
     ensureDataFiles()
     const clean = emailOrId.toLowerCase().trim()
+    const cleanActor = (actorEmail || '').toLowerCase().trim()
+
+    // التحقق الصارم أن المنفذ هو مالك المنصة حصراً (bhaaljml480@gmail.com)
+    if (cleanActor !== SUPER_ADMIN_EMAIL) {
+      recordAuditLog({
+        action: 'UNAUTHORIZED_ATTEMPT',
+        actorEmail: cleanActor || 'unknown',
+        actorRole: 'admin',
+        targetEmail: clean,
+        details: `رفض محاولة تغيير صلاحيات العضو إلى (${role}) من غير مالك المنصة`,
+      })
+      return {
+        success: false,
+        error: 'صلاحية سيادية: ترقية المشرفين أو سحب صلاحياتهم محصورة بمالك المنصة (المهندس بهاء طارق) حصراً.',
+      }
+    }
+
     const students = readAllLocalStudents(true)
 
     const idx = students.findIndex(
@@ -725,16 +953,37 @@ export async function updateStudentRole(
     }
 
     const student = students[idx]
+    const targetEmail = student.email?.toLowerCase().trim()
 
     // حماية مطلقة لصاحب المنصة والمشرف الأعلى المهندس بهاء طارق
-    if (student.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL && role !== 'admin') {
-      return {
-        success: false,
-        error: 'عذراً، لا يمكن إلغاء صلاحيات المشرف العام وصاحب المنصة (المهندس بهاء طارق). صلاحيته مطلقة ودائمة.',
+    if (targetEmail === SUPER_ADMIN_EMAIL) {
+      student.role = 'owner'
+      if (role !== 'owner' && role !== 'admin') {
+        recordAuditLog({
+          action: 'UNAUTHORIZED_ATTEMPT',
+          actorEmail: cleanActor,
+          actorRole: 'owner',
+          targetEmail,
+          details: 'منع تخفيض أو إلغاء رتبة مالك المنصة (Owner Protection)',
+        })
+        return {
+          success: false,
+          error: 'عذراً، لا يمكن إلغاء أو تخفيض صلاحيات مالك المنصة (المهندس بهاء طارق). صلاحيته مطلقة ودائمة.',
+        }
       }
+      saveAllLocalStudents(students)
+      return { success: true, student }
     }
 
-    student.role = role
+    // لا يمكن منح رتبة owner لأي حساب آخر غير bhaaljml480@gmail.com
+    const effectiveRole: PlatformRole = role === 'owner' ? 'admin' : role
+    const previousRole = student.role || 'student'
+    student.role = effectiveRole
+
+    // عند سحب الإشراف أو تغييره، نحدث نسخة الجلسة لضمان المزامنة اللحظية
+    if (previousRole !== effectiveRole) {
+      student.sessionVersion = (student.sessionVersion || 1) + 1
+    }
 
     globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
@@ -746,15 +995,26 @@ export async function updateStudentRole(
 
     try {
       const { updateCloudStudentRole } = await import('@/lib/cloud-db')
-      await updateCloudStudentRole(student.email, student.id, role)
+      await updateCloudStudentRole(student.email, student.id, effectiveRole === 'admin' ? 'admin' : 'student')
     } catch {}
 
+    recordAuditLog({
+      action: effectiveRole === 'admin' ? 'ROLE_PROMOTE' : 'ROLE_DEMOTE',
+      actorEmail: cleanActor,
+      actorRole: 'owner',
+      targetEmail,
+      details:
+        effectiveRole === 'admin'
+          ? `ترقية العضو [${student.name}] من (${previousRole}) إلى رتبة مشرف (admin)`
+          : `تخفيض رتبة العضو [${student.name}] من (${previousRole}) إلى رتبة طالب علم (student)`,
+    })
+
     logPlatformEvent({
-      type: role === 'admin' ? 'unban' : 'ban',
+      type: 'role',
       studentEmail: student.email,
       studentName: student.name,
       description:
-        role === 'admin'
+        effectiveRole === 'admin'
           ? `ترقية العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة مشرف عام للمنصة`
           : `تعديل رتبة العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة طالب علم`,
     })
@@ -1632,41 +1892,42 @@ export function getLatestRegisteredStudent(): StudentActivityRecord | null {
   return null
 }
 
-// 7. حفظ كلمة مرور مشفرة للطالب محلياً
+// 7. حفظ كلمة مرور مشفرة للطالب محلياً وسحابياً مع تحديث ذاكرة التخزين المؤقت
 export function saveStudentLocalPassword(email: string, password: string, name?: string): boolean {
   try {
     ensureDataFiles()
     const cleanEmail = email.toLowerCase().trim()
-    let students: StudentActivityRecord[] = []
-    try {
-      students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    } catch {
-      students = []
-    }
+    let students = readAllLocalStudents(true)
 
     const salt = crypto.randomBytes(16).toString('hex')
     const hash = crypto.scryptSync(password, salt, 64).toString('hex')
 
-    let student = students.find((s) => s.email === cleanEmail)
+    let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student) {
       student = registerOrUpdateStudent(cleanEmail, name)
-      students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-      student = students.find((s) => s.email === cleanEmail) || student
+      students = readAllLocalStudents(true)
+      student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
     }
 
     student.passwordHash = hash
     student.passwordSalt = salt
+    student.sessionVersion = (student.sessionVersion || 1) + 1
     student.lastActive = new Date().toISOString()
     if (name && name.trim()) {
       student.name = name.trim()
     }
 
-    try {
-      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-    } catch {}
+    saveAllLocalStudents(students)
     if (student) {
       saveStudentToCloud(student).catch(() => {})
     }
+    recordAuditLog({
+      action: 'PASSWORD_CHANGE',
+      actorEmail: cleanEmail,
+      actorRole: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : student.role || 'student',
+      targetEmail: cleanEmail,
+      details: 'تحديث كلمة المرور المشفرة للحساب ورفع نسخة الجلسة الأمنية',
+    })
     return true
   } catch (err) {
     console.error('Error saving local student password:', err)
@@ -1679,14 +1940,9 @@ export function verifyStudentLocalPassword(email: string, password: string): boo
   try {
     ensureDataFiles()
     const cleanEmail = email.toLowerCase().trim()
-    let students: StudentActivityRecord[] = []
-    try {
-      students = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'))
-    } catch {
-      return false
-    }
+    const students = readAllLocalStudents(true)
 
-    const student = students.find((s) => s.email === cleanEmail)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
     if (!student || !student.passwordHash || !student.passwordSalt) {
       return false
     }
@@ -1695,6 +1951,329 @@ export function verifyStudentLocalPassword(email: string, password: string): boo
     return crypto.timingSafeEqual(Buffer.from(verifyHash, 'hex'), Buffer.from(student.passwordHash, 'hex'))
   } catch {
     return false
+  }
+}
+
+// 8.1 فحص هل الحساب لديه كلمة مرور محفوظة مسبقاً
+export function hasStudentLocalPassword(email: string): boolean {
+  try {
+    ensureDataFiles()
+    const cleanEmail = email.toLowerCase().trim()
+    const students = readAllLocalStudents(false)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    return Boolean(student && student.passwordHash && student.passwordSalt)
+  } catch {
+    return false
+  }
+}
+
+// 8.2 تحديث البيانات الشخصية الشاملة والخصوصية والإشعارات والهوية البصرية
+export function updateStudentExtendedProfile(
+  email: string,
+  updates: {
+    name?: string
+    username?: string
+    bio?: string
+    educationLevel?: string
+    phone?: string
+    avatarUrl?: string | null
+    privacySettings?: Partial<StudentPrivacySettings>
+    notificationSettings?: Partial<StudentNotificationSettings>
+  }
+): { success: boolean; student?: StudentActivityRecord; error?: string } {
+  try {
+    ensureDataFiles()
+    const cleanEmail = email.toLowerCase().trim()
+    let students = readAllLocalStudents(true)
+
+    let idx = students.findIndex((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    if (idx === -1) {
+      registerOrUpdateStudent(cleanEmail, updates.name)
+      students = readAllLocalStudents(true)
+      idx = students.findIndex((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    }
+    if (idx === -1) {
+      return { success: false, error: 'لم يتم العثور على الحساب المطلوب' }
+    }
+
+    const student = students[idx]
+
+    if (updates.username !== undefined) {
+      const cleanHandle = updates.username
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase()
+      if (cleanHandle.length < 3 || cleanHandle.length > 30 || !/^[a-z0-9_\u0600-\u06FF.]+$/.test(cleanHandle)) {
+        return {
+          success: false,
+          error: 'اسم المستخدم يجب أن يتكون من 3 إلى 30 حرفاً أو رقماً أو شرطة سفلية بدون مسافات.',
+        }
+      }
+      const handleTaken = students.some(
+        (s, i) => i !== idx && s.username?.toLowerCase().trim() === cleanHandle
+      )
+      if (handleTaken) {
+        return {
+          success: false,
+          error: 'اسم المستخدم هذا محجوز لطالب آخر، يرجى اختيار معرف مختلف.',
+        }
+      }
+      student.username = cleanHandle
+    }
+
+    if (updates.name !== undefined) {
+      const cleanName = updates.name.trim()
+      if (cleanName.length < 2 || cleanName.length > 80) {
+        return { success: false, error: 'الاسم الكامل يجب أن يكون بين حرفين و80 حرفاً.' }
+      }
+      student.name = cleanName
+    }
+
+    if (updates.bio !== undefined) {
+      const cleanBio = updates.bio.trim().slice(0, 350)
+      student.bio = cleanBio
+    }
+
+    if (updates.educationLevel !== undefined) {
+      student.educationLevel = updates.educationLevel.trim().slice(0, 80)
+    }
+
+    if (updates.phone !== undefined) {
+      student.phone = updates.phone.trim()
+    }
+
+    if (updates.avatarUrl !== undefined) {
+      if (updates.avatarUrl === null || updates.avatarUrl === '') {
+        student.avatarUrl = undefined
+        recordAuditLog({
+          action: 'AVATAR_DELETE',
+          actorEmail: cleanEmail,
+          actorRole: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : student.role || 'student',
+          targetEmail: cleanEmail,
+          details: 'حذف الصورة الشخصية والعودة للصورة الافتراضية',
+        })
+      } else {
+        student.avatarUrl = updates.avatarUrl
+        recordAuditLog({
+          action: 'AVATAR_UPDATE',
+          actorEmail: cleanEmail,
+          actorRole: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : student.role || 'student',
+          targetEmail: cleanEmail,
+          details: 'تحديث الصورة الشخصية للحساب',
+        })
+      }
+    }
+
+    if (updates.privacySettings) {
+      student.privacySettings = {
+        showRealNameInCommunity:
+          updates.privacySettings.showRealNameInCommunity ??
+          student.privacySettings?.showRealNameInCommunity ??
+          true,
+        showAvatarInCommunity:
+          updates.privacySettings.showAvatarInCommunity ??
+          student.privacySettings?.showAvatarInCommunity ??
+          true,
+        showStudyStatsPublicly:
+          updates.privacySettings.showStudyStatsPublicly ??
+          student.privacySettings?.showStudyStatsPublicly ??
+          true,
+        showBioPublicly:
+          updates.privacySettings.showBioPublicly ??
+          student.privacySettings?.showBioPublicly ??
+          true,
+      }
+    }
+
+    if (updates.notificationSettings) {
+      student.notificationSettings = {
+        lessons:
+          updates.notificationSettings.lessons ??
+          student.notificationSettings?.lessons ??
+          true,
+        community:
+          updates.notificationSettings.community ??
+          student.notificationSettings?.community ??
+          true,
+        spacedRepetition:
+          updates.notificationSettings.spacedRepetition ??
+          student.notificationSettings?.spacedRepetition ??
+          true,
+        security:
+          updates.notificationSettings.security ??
+          student.notificationSettings?.security ??
+          true,
+      }
+    }
+
+    student.lastActive = new Date().toISOString()
+    ensureStudentTelemetryDefaults(student)
+    saveAllLocalStudents(students)
+    saveStudentToCloud(student).catch(() => {})
+
+    recordAuditLog({
+      action: 'PROFILE_UPDATE',
+      actorEmail: cleanEmail,
+      actorRole: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : student.role || 'student',
+      targetEmail: cleanEmail,
+      details: `تحديث بيانات الملف الشخصي وإعدادات الحساب (${student.name})`,
+    })
+
+    return { success: true, student }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'تعذر تحديث الملف الشخصي',
+    }
+  }
+}
+
+// 8.3 تغيير البريد الإلكتروني للحساب بعد التحقق من الملكية
+export async function changeStudentEmailAddress(
+  currentEmail: string,
+  newEmail: string
+): Promise<{ success: boolean; student?: StudentActivityRecord; error?: string }> {
+  try {
+    ensureDataFiles()
+    const cleanCurrent = currentEmail.toLowerCase().trim()
+    const cleanNew = newEmail.toLowerCase().trim()
+
+    if (!cleanNew || !cleanNew.includes('@')) {
+      return { success: false, error: 'يرجى إدخال عنوان بريد إلكتروني جديد صحيح.' }
+    }
+    if (cleanCurrent === cleanNew) {
+      return { success: false, error: 'البريد الإلكتروني الجديد مطابق للبريد الحالي.' }
+    }
+    if (cleanCurrent === SUPER_ADMIN_EMAIL || cleanNew === SUPER_ADMIN_EMAIL) {
+      return {
+        success: false,
+        error: 'حماية سيادية: لا يمكن تغيير البريد المخصص لمالك المنصة أو استخدامه لحساب آخر.',
+      }
+    }
+
+    const students = readAllLocalStudents(true)
+    const idx = students.findIndex((s) => s.email?.toLowerCase().trim() === cleanCurrent)
+    if (idx === -1) {
+      return { success: false, error: 'لم يتم العثور على الحساب الحالي.' }
+    }
+
+    const emailExists = students.some(
+      (s, i) => i !== idx && s.email?.toLowerCase().trim() === cleanNew
+    )
+    if (emailExists) {
+      return { success: false, error: 'البريد الإلكتروني الجديد مسجل بالفعل لحساب آخر في المنصة.' }
+    }
+
+    const student = students[idx]
+    student.email = cleanNew
+    student.emailVerified = true
+    student.sessionVersion = (student.sessionVersion || 1) + 1
+    student.lastActive = new Date().toISOString()
+
+    invalidateStudentProfileCache(cleanCurrent)
+    invalidateStudentProfileCache(cleanNew)
+    saveAllLocalStudents(students)
+    await saveStudentToCloud(student).catch(() => {})
+
+    recordAuditLog({
+      action: 'EMAIL_CHANGE',
+      actorEmail: cleanCurrent,
+      actorRole: student.role || 'student',
+      targetEmail: cleanNew,
+      details: `تغيير البريد الإلكتروني الموثق من (${cleanCurrent}) إلى (${cleanNew})`,
+    })
+
+    return { success: true, student }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'تعذر تغيير البريد الإلكتروني',
+    }
+  }
+}
+
+// 8.4 إبطال وإنهاء كافة الجلسات الأخرى للطالب عبر رفع رقم نسخة الجلسة (Session Version)
+export function revokeOtherStudentSessions(email: string): {
+  success: boolean
+  newSessionVersion: number
+  error?: string
+} {
+  try {
+    ensureDataFiles()
+    const cleanEmail = email.toLowerCase().trim()
+    const students = readAllLocalStudents(true)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    if (!student) {
+      return { success: false, newSessionVersion: 1, error: 'لم يتم العثور على الحساب' }
+    }
+
+    student.sessionVersion = (student.sessionVersion || 1) + 1
+    student.lastActive = new Date().toISOString()
+
+    saveAllLocalStudents(students)
+    saveStudentToCloud(student).catch(() => {})
+
+    recordAuditLog({
+      action: 'SESSION_REVOKE',
+      actorEmail: cleanEmail,
+      actorRole: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : student.role || 'student',
+      targetEmail: cleanEmail,
+      details: `إنهاء وإبطال كافة الجلسات الأخرى النشطة (Session Version -> ${student.sessionVersion})`,
+    })
+
+    return { success: true, newSessionVersion: student.sessionVersion }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      newSessionVersion: 1,
+      error: err instanceof Error ? err.message : 'تعذر إنهاء الجلسات الأخرى',
+    }
+  }
+}
+
+// 8.5 تعطيل الحساب بناءً على طلب الطالب مع حفظ سجل التدقيق
+export function deactivateStudentAccount(
+  email: string,
+  reason?: string
+): { success: boolean; error?: string } {
+  try {
+    ensureDataFiles()
+    const cleanEmail = email.toLowerCase().trim()
+    if (cleanEmail === SUPER_ADMIN_EMAIL) {
+      return {
+        success: false,
+        error: 'حماية سيادية: لا يمكن تعطيل أو حذف حساب مالك المنصة (المهندس بهاء طارق).',
+      }
+    }
+
+    const students = readAllLocalStudents(true)
+    const student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    if (!student) {
+      return { success: false, error: 'لم يتم العثور على الحساب.' }
+    }
+
+    student.isDeactivated = true
+    student.deactivatedAt = new Date().toISOString()
+    student.deactivationReason = reason?.trim() || 'تعطيل الحساب بناءً على طلب صاحب الحساب'
+    student.sessionVersion = (student.sessionVersion || 1) + 1
+
+    saveAllLocalStudents(students)
+    saveStudentToCloud(student).catch(() => {})
+
+    recordAuditLog({
+      action: 'ACCOUNT_DEACTIVATE',
+      actorEmail: cleanEmail,
+      actorRole: student.role || 'student',
+      targetEmail: cleanEmail,
+      details: `تعطيل الحساب بناءً على طلب المستخدم (${student.deactivationReason})`,
+    })
+
+    return { success: true }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'تعذر تعطيل الحساب',
+    }
   }
 }
 
@@ -1812,12 +2391,20 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     })
   })
 
-  // 2. دمج الطلاب الحقيقيين وتحديث إحصاءاتهم الحية
+  // 2. دمج الطلاب الحقيقيين وتحديث إحصاءاتهم الحية مع احترام إعدادات الخصوصية
   registeredStudents.forEach((s) => {
-    if (s.isBanned) return // استبعاد أي حساب محظور إدارياً من لوحة الصدارة العامة وميدان التنافس
+    if (s.isBanned || s.isDeactivated) return // استبعاد أي حساب محظور إدارياً أو معطل من لوحة الصدارة العامة
 
     const sEmail = (s.email || '').trim()
-    const studentName = s.name && s.name.trim() && !s.name.includes('@')
+    const isMe = Boolean(cleanCurrentEmail && sEmail.toLowerCase() === cleanCurrentEmail)
+    if (!isMe && s.privacySettings?.showStudyStatsPublicly === false) {
+      return
+    }
+
+    const hideRealName = !isMe && s.privacySettings?.showRealNameInCommunity === false
+    const studentName = hideRealName
+      ? `طالب علم (${s.scholarlyId || 'سَنَد'})`
+      : s.name && s.name.trim() && !s.name.includes('@')
       ? s.name.trim()
       : sEmail.includes('bhaaljml480')
       ? 'المهندس بهاء طارق'
