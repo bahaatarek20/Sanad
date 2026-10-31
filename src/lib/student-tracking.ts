@@ -110,11 +110,25 @@ export interface StudentActivityRecord {
   userAgent?: string // معرف المتصفح الخام
   role?: PlatformRole // رتبة الحساب في المنصة: مالك المنصة (owner) | مشرف (admin) | طالب (student)
   roleUpdatedAt?: string // طابع زمني لآخر تعديل سيادي للرتبة لمنع طغيان البيانات السحابية القديمة
+  currentPage?: string // الصفحة الحالية التي يتواجد فيها العضو الآن حياً
+  lastAction?: string // آخر تحرك أو نشاط قام به العضو على المنصة
 }
 
 export interface PlatformEvent {
   id: string
-  type: 'register' | 'listen' | 'complete' | 'note' | 'ban' | 'unban' | 'role' | 'security' | 'visit'
+  type:
+    | 'register'
+    | 'login'
+    | 'navigation'
+    | 'community'
+    | 'listen'
+    | 'complete'
+    | 'note'
+    | 'ban'
+    | 'unban'
+    | 'role'
+    | 'security'
+    | 'visit'
   studentEmail: string
   studentName: string
   description: string
@@ -200,12 +214,20 @@ declare global {
   var __sanad_last_registered_time__: number | undefined
   // eslint-disable-next-line no-var
   var __sanad_cloud_sync_cache__:
-    | { students: StudentActivityRecord[]; visitorCount: number; unregisteredVisitors?: number; fetchedAt: number }
+    | {
+        students: StudentActivityRecord[]
+        visitorCount: number
+        unregisteredVisitors?: number
+        cloudEvents?: PlatformEvent[]
+        fetchedAt: number
+      }
     | undefined
   // eslint-disable-next-line no-var
   var __sanad_role_locks__: Record<string, { role: PlatformRole; roleUpdatedAt: string }> | undefined
   // eslint-disable-next-line no-var
   var __sanad_deleted_emails__: Set<string> | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_events_cache__: PlatformEvent[] | undefined
 }
 
 export function getDeletedStudentEmails(): Set<string> {
@@ -770,15 +792,47 @@ export function getAuditLogs(limit = 100): AuditLogEntry[] {
   return []
 }
 
-function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
+function readPlatformEventsLocal(): PlatformEvent[] {
+  ensureDataFiles()
+  const deletedSet = getDeletedStudentEmails()
+  const eventMap = new Map<string, PlatformEvent>()
+
+  const addList = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const item of list) {
+      if (item && typeof item === 'object' && 'id' in item && 'description' in item) {
+        const ev = item as PlatformEvent
+        const evEmail = (ev.studentEmail || '').toLowerCase().trim()
+        if (evEmail && deletedSet.has(evEmail)) continue
+        eventMap.set(ev.id, ev)
+      }
+    }
+  }
+
+  addList(globalThis.__sanad_events_cache__)
+  for (const file of [TMP_EVENTS_FILE, EVENTS_FILE, UPLOAD_EVENTS_FILE]) {
+    try {
+      if (fs.existsSync(file)) {
+        addList(JSON.parse(fs.readFileSync(file, 'utf8')))
+      }
+    } catch {}
+  }
+
+  const merged = Array.from(eventMap.values()).sort(
+    (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+  )
+  const sliced = merged.slice(0, 120)
+  globalThis.__sanad_events_cache__ = sliced
+  return sliced
+}
+
+export function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>): PlatformEvent | null {
   try {
     ensureDataFiles()
-    let events: PlatformEvent[] = []
-    try {
-      events = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8'))
-    } catch {
-      events = []
-    }
+    const cleanEmail = (event.studentEmail || '').toLowerCase().trim()
+    if (cleanEmail && isStudentDeleted(cleanEmail)) return null
+
+    let events = readPlatformEventsLocal()
 
     const newEvent: PlatformEvent = {
       ...event,
@@ -786,14 +840,32 @@ function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
       timestamp: new Date().toISOString(),
     }
 
-    events.unshift(newEvent)
-    if (events.length > 100) {
-      events = events.slice(0, 100)
-    }
+    events = [newEvent, ...events].slice(0, 120)
+    globalThis.__sanad_events_cache__ = events
 
-    fs.writeFileSync(EVENTS_FILE, JSON.stringify(events, null, 2), 'utf8')
+    const payload = JSON.stringify(events, null, 2)
+    try {
+      fs.writeFileSync(TMP_EVENTS_FILE, payload, 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(EVENTS_FILE, payload, 'utf8')
+    } catch {}
+    try {
+      const uploadDir = path.dirname(UPLOAD_EVENTS_FILE)
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+      fs.writeFileSync(UPLOAD_EVENTS_FILE, payload, 'utf8')
+    } catch {}
+
+    import('@/lib/cloud-db')
+      .then(({ savePlatformEventToCloud }) => {
+        savePlatformEventToCloud(newEvent).catch(() => {})
+      })
+      .catch(() => {})
+
+    return newEvent
   } catch (err) {
     console.error('Error logging platform event:', err)
+    return null
   }
 }
 
@@ -1587,14 +1659,32 @@ export function registerOrUpdateStudent(
     if (students[existingIdx].isBanned === undefined) {
       students[existingIdx].isBanned = false
     }
+    const prevLastActiveMs = students[existingIdx].lastActive
+      ? new Date(students[existingIdx].lastActive).getTime()
+      : 0
+    const isFreshLoginSession = Date.now() - prevLastActiveMs > 3 * 60 * 1000
+
     students[existingIdx].lastActive = now
     students[existingIdx].streak = students[existingIdx].streak || 0
     students[existingIdx].completedEpisodesMap = students[existingIdx].completedEpisodesMap || {}
     students[existingIdx].dailyStudyLog = students[existingIdx].dailyStudyLog || {}
+    if (!students[existingIdx].lastAction) {
+      students[existingIdx].lastAction = 'متصل ويتصفح المنصة'
+    }
 
     ensureStudentTelemetryDefaults(students[existingIdx])
     globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
+
+    if (isFreshLoginSession) {
+      students[existingIdx].lastAction = 'سجّل الدخول إلى المنصة'
+      logPlatformEvent({
+        type: 'login',
+        studentEmail: cleanEmail,
+        studentName: students[existingIdx].name,
+        description: `سجّل الدخول إلى المنصة [${students[existingIdx].scholarlyId || cleanEmail}] من ${students[existingIdx].country || 'مصر'} (${students[existingIdx].device || 'متصفح'})`,
+      })
+    }
 
     // مزامنة سحابية حية مع Cloud Firestore
     saveStudentToCloud(students[existingIdx]).catch(() => {})
@@ -1619,6 +1709,8 @@ export function registerOrUpdateStudent(
       userAgent: meta?.userAgent,
       registeredAt: now,
       lastActive: now,
+      currentPage: 'فهرس المتون والمقررات',
+      lastAction: 'انضم وسجّل حساباً جديداً في المنصة',
       totalStudyMinutes: 0,
       streak: 0,
       completedCourses: [],
@@ -1688,6 +1780,110 @@ export async function registerOrUpdateStudentAsync(
     console.warn('[registerOrUpdateStudentAsync] Cloud sync notice:', err)
   }
   return student
+}
+
+export function resolveArabicPageTitle(pathname: string): string {
+  const clean = (pathname || '/').split('?')[0].trim()
+  if (clean === '/' || clean === '') return 'الصفحة الرئيسية'
+  if (clean === '/courses') return 'فهرس المتون والمقررات'
+  if (clean.startsWith('/courses/')) {
+    const slug = decodeURIComponent(clean.replace('/courses/', '').split('/')[0] || '')
+    return `قاعة مدارسة متن (${slug})`
+  }
+  if (clean.startsWith('/roadmap')) return 'خارطة الطريق التأصيلية'
+  if (clean.startsWith('/community')) return 'مجلس المذاكرة التشاركي'
+  if (clean.startsWith('/dashboard')) return 'كشكول الطالب ولوحة الإنجاز'
+  if (clean.startsWith('/profile')) return 'إعدادات الحساب الشخصي'
+  if (clean.startsWith('/messages')) return 'صندوق الرسائل والإشعارات'
+  if (clean.startsWith('/verify')) return 'بوابة التحقق من الإجازات العلمية'
+  if (clean.startsWith('/login')) return 'بوابة تسجيل الدخول'
+  if (clean.startsWith('/admin') || clean.startsWith('/sanad-control-gate')) return 'لوحة الإشراف والتحكم'
+  return `صفحة (${clean})`
+}
+
+// 2.2 تحديث حالة التواجد المباشر (Online Presence) وتحركات العضو لحظياً بين صفحات المنصة
+export async function recordStudentPresenceHeartbeat(params: {
+  email: string
+  name?: string
+  pagePath: string
+  pageTitle?: string
+  eventType?: 'heartbeat' | 'navigation' | 'login'
+  actionDescription?: string
+  telemetry?: {
+    ip?: string
+    country?: string
+    countryCode?: string
+    city?: string
+    device?: string
+    browser?: string
+    userAgent?: string
+  }
+}): Promise<StudentActivityRecord | null> {
+  try {
+    ensureDataFiles()
+    const cleanEmail = (params.email || '').toLowerCase().trim()
+    if (!cleanEmail || isStudentDeleted(cleanEmail)) return null
+
+    let students = readAllLocalStudents(false)
+    let idx = students.findIndex((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    if (idx === -1) {
+      registerOrUpdateStudent(cleanEmail, params.name, params.telemetry)
+      students = readAllLocalStudents(false)
+      idx = students.findIndex((s) => s.email?.toLowerCase().trim() === cleanEmail)
+    }
+    if (idx === -1) return null
+
+    const student = students[idx]
+    const nowIso = new Date().toISOString()
+    const resolvedPage = params.pageTitle?.trim() || resolveArabicPageTitle(params.pagePath)
+    const previousPage = student.currentPage || ''
+    const prevActiveMs = student.lastActive ? new Date(student.lastActive).getTime() : 0
+    const wasOffline = Date.now() - prevActiveMs > 3 * 60 * 1000
+
+    student.lastActive = nowIso
+    student.currentPage = resolvedPage
+    student.lastAction =
+      params.actionDescription?.trim() ||
+      (params.eventType === 'login'
+        ? `سجّل الدخول ويتواجد في: ${resolvedPage}`
+        : `يتصفح الآن: ${resolvedPage}`)
+
+    if (params.telemetry?.ip) student.ip = params.telemetry.ip
+    if (params.telemetry?.country) student.country = params.telemetry.country
+    if (params.telemetry?.countryCode) student.countryCode = params.telemetry.countryCode
+    if (params.telemetry?.city) student.city = params.telemetry.city
+    if (params.telemetry?.device) student.device = params.telemetry.device
+    if (params.telemetry?.browser) student.browser = params.telemetry.browser
+
+    ensureStudentTelemetryDefaults(student)
+    saveAllLocalStudents(students)
+
+    // تسجيل الحدث في سجل التحركات المباشر عند التنقل لصفحة جديدة أو بدء جلسة جديدة بعد انقطاع
+    const isPageChanged = resolvedPage !== previousPage
+    if (params.eventType === 'login' || wasOffline || (params.eventType === 'navigation' && isPageChanged)) {
+      logPlatformEvent({
+        type: params.eventType === 'login' ? 'login' : 'navigation',
+        studentEmail: cleanEmail,
+        studentName: student.name,
+        description:
+          params.actionDescription?.trim() ||
+          (wasOffline
+            ? `متصل الآن على المنصة ويتواجد في «${resolvedPage}» [${student.scholarlyId || cleanEmail}]`
+            : `انتقل لتصفح «${resolvedPage}» [${student.scholarlyId || cleanEmail}]`),
+      })
+    }
+
+    // مزامنة سريعة مع Cloud Firestore ليظهر متصل الآن في كافة الحاويات فوراً
+    try {
+      const cloudTask = saveStudentToCloud(student)
+      const timeoutTask = new Promise((r) => setTimeout(r, 1200))
+      await Promise.race([cloudTask, timeoutTask])
+    } catch {}
+
+    return student
+  } catch {
+    return null
+  }
 }
 
 const profileCacheMap = new Map<string, { data: StudentActivityRecord | null; time: number }>()
@@ -2242,15 +2438,7 @@ export function getAdminDashboardData(forceRefresh: boolean = false): {
     ensureStudentTelemetryDefaults(s)
   })
 
-  try {
-    recentEvents = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8'))
-  } catch {
-    try {
-      if (fs.existsSync(TMP_EVENTS_FILE)) {
-        recentEvents = JSON.parse(fs.readFileSync(TMP_EVENTS_FILE, 'utf8'))
-      }
-    } catch {}
-  }
+  recentEvents = readPlatformEventsLocal()
 
   try {
     const loadedStats = readPlatformStatsLocal()
@@ -2291,27 +2479,32 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   const roleLocks = globalThis.__sanad_role_locks__ || {}
 
   const nowMs = Date.now()
-  const CLOUD_CACHE_TTL_MS = 12000 // كاش سحابي ذكي لمدة 12 ثانية لمنع اللاج والاستعلامات المتكررة كل بضع ثوانٍ
+  const CLOUD_CACHE_TTL_MS = 4500 // كاش سحابي سريع لمدة 4.5 ثانية لضمان رصد المتصلين والتحركات اللحظية فور حدوثها
   let cloudStudents: StudentActivityRecord[] = []
   let cloudVisitorCount = 0
   let cloudUnregisteredVisitors = 0
+  let cloudEvents: PlatformEvent[] = []
   let cloudFetchedFresh = false
 
   if (
+    !forceRefresh &&
     globalThis.__sanad_cloud_sync_cache__ &&
     nowMs - globalThis.__sanad_cloud_sync_cache__.fetchedAt < CLOUD_CACHE_TTL_MS
   ) {
     cloudStudents = globalThis.__sanad_cloud_sync_cache__.students
     cloudVisitorCount = globalThis.__sanad_cloud_sync_cache__.visitorCount
     cloudUnregisteredVisitors = globalThis.__sanad_cloud_sync_cache__.unregisteredVisitors || 0
+    cloudEvents = globalThis.__sanad_cloud_sync_cache__.cloudEvents || []
   } else {
     try {
-      const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
-      const [fetchedStudents, fetchedStats] = await Promise.all([
+      const { getPlatformStatsFromCloud, getPlatformEventsFromCloud } = await import('@/lib/cloud-db')
+      const [fetchedStudents, fetchedStats, fetchedEvents] = await Promise.all([
         getStudentsFromCloud().catch(() => [] as StudentActivityRecord[]),
         getPlatformStatsFromCloud().catch(() => null),
+        getPlatformEventsFromCloud(40).catch(() => [] as PlatformEvent[]),
       ])
       cloudStudents = fetchedStudents || []
+      cloudEvents = fetchedEvents || []
 
       // إذا كان السجل المحلي قد تم تصفيره أو تحديثه بعد الطابع السحابي القديم (مثل رقم 48 القديم)، نعتمد المحلي
       const localResetAt = localData.stats.statsResetAt || ''
@@ -2334,6 +2527,7 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
         students: cloudStudents,
         visitorCount: cloudVisitorCount,
         unregisteredVisitors: cloudUnregisteredVisitors,
+        cloudEvents,
         fetchedAt: nowMs,
       }
       cloudFetchedFresh = true
@@ -2476,10 +2670,25 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     totalNotesCount: mergedStudents.reduce((acc, s) => acc + (s.notesCount || 0), 0),
   }
 
+  // دمج أحداث المنصة المحلية والسحابية مع استبعاد الأعضاء المحذوفين
+  const eventsMap = new Map<string, PlatformEvent>()
+  for (const ev of [...cloudEvents, ...localData.recentEvents]) {
+    if (!ev || !ev.id) continue
+    const evEmail = (ev.studentEmail || '').toLowerCase().trim()
+    if (evEmail && deletedSet.has(evEmail)) continue
+    if (!eventsMap.has(ev.id)) {
+      eventsMap.set(ev.id, ev)
+    }
+  }
+  const mergedEvents = Array.from(eventsMap.values())
+    .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+    .slice(0, 50)
+  globalThis.__sanad_events_cache__ = mergedEvents
+
   return {
     students: mergedStudents,
     stats,
-    recentEvents: localData.recentEvents,
+    recentEvents: mergedEvents,
   }
 }
 

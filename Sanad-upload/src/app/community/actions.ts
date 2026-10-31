@@ -15,6 +15,7 @@ import {
   addReplyToCloudPost,
   upvoteCloudPost,
 } from '@/lib/cloud-db'
+import { logPlatformEvent, recordStudentPresenceHeartbeat } from '@/lib/student-tracking'
 
 export async function createCommunityPost(formData: FormData) {
   const user = await getCurrentStudentUser()
@@ -62,6 +63,20 @@ export async function createCommunityPost(formData: FormData) {
   saveLocalCommunityPost(newPost)
   await saveCommunityPostToCloud(newPost).catch(() => {})
 
+  logPlatformEvent({
+    type: 'community',
+    studentEmail: user.email,
+    studentName: identity.displayName,
+    description: `نشر مشاركة في مجلس المذاكرة: "${content.slice(0, 45)}"`,
+  })
+  await recordStudentPresenceHeartbeat({
+    email: user.email,
+    name: identity.displayName,
+    pagePath: '/community',
+    pageTitle: 'مجلس المذاكرة التشاركي',
+    actionDescription: `نشر مشاركة في مجلس المذاكرة`,
+  }).catch(() => {})
+
   revalidatePath('/community')
   revalidatePath('/sanad-control-gate')
 
@@ -107,6 +122,20 @@ export async function createCommunityReply(formData: FormData) {
 
   addLocalCommunityReply(postId, newReply)
   await addReplyToCloudPost(postId, newReply).catch(() => {})
+
+  logPlatformEvent({
+    type: 'community',
+    studentEmail: user.email,
+    studentName: identity.displayName,
+    description: `أضاف رداً وتعليقاً في مجلس المذاكرة: "${content.slice(0, 40)}"`,
+  })
+  await recordStudentPresenceHeartbeat({
+    email: user.email,
+    name: identity.displayName,
+    pagePath: '/community',
+    pageTitle: 'مجلس المذاكرة التشاركي',
+    actionDescription: `أضاف رداً في مجلس المذاكرة`,
+  }).catch(() => {})
 
   revalidatePath('/community')
   revalidatePath('/sanad-control-gate')

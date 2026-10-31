@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { recordVisitorHit, registerOrUpdateStudentAsync, ADMIN_EMAILS } from '@/lib/student-tracking'
+import {
+  recordVisitorHit,
+  registerOrUpdateStudentAsync,
+  recordStudentPresenceHeartbeat,
+  ADMIN_EMAILS,
+} from '@/lib/student-tracking'
 import { verifySessionToken } from '@/lib/auth-helper'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
@@ -13,14 +18,26 @@ export async function POST(request: NextRequest) {
     const cookies = request.cookies
     const clientTelemetry = extractClientTelemetry(request.headers)
     let pagePath = '/'
+    let pageTitle: string | undefined
+    let eventType: 'visit' | 'navigation' | 'heartbeat' = 'visit'
+
     try {
       const body = await request.json()
       if (body && typeof body.page === 'string') {
         pagePath = body.page
       }
+      if (body && typeof body.pageTitle === 'string') {
+        pageTitle = body.pageTitle
+      }
+      if (
+        body &&
+        (body.eventType === 'visit' || body.eventType === 'navigation' || body.eventType === 'heartbeat')
+      ) {
+        eventType = body.eventType
+      }
     } catch {}
 
-    // 1. مزامنة تسجيل الطالب الفعلي عبر فك تشفير توكن الجلسة الموقّع بـ HMAC
+    // 1. مزامنة تسجيل الطالب الفعلي وتحديث حالته (متصل الآن + الصفحة الحالية + التحرك اللحظي)
     let registeredStudentEmail = ''
     let registeredStudentName = ''
     const studentUserCookie = cookies.get('sanad_student_user')?.value
@@ -35,17 +52,38 @@ export async function POST(request: NextRequest) {
             student.authProvider === 'google' || student.authProvider === 'phone'
               ? student.authProvider
               : 'email'
-          await registerOrUpdateStudentAsync(email, registeredStudentName, {
-            phone: student.phone as string,
-            authProvider,
-            avatarUrl: student.avatarUrl as string,
-            ...clientTelemetry,
+
+          if (eventType === 'visit') {
+            await registerOrUpdateStudentAsync(email, registeredStudentName, {
+              phone: student.phone as string,
+              authProvider,
+              avatarUrl: student.avatarUrl as string,
+              ...clientTelemetry,
+            })
+          }
+
+          await recordStudentPresenceHeartbeat({
+            email,
+            name: registeredStudentName,
+            pagePath,
+            pageTitle,
+            eventType: eventType === 'navigation' ? 'navigation' : 'heartbeat',
+            telemetry: clientTelemetry,
           })
         }
       } catch {}
     }
 
-    // 2. استثناء جلسة المشرف النشطة فعلياً من عداد الزيارات
+    // 2. إذا كان الطلب مجرد نبض تواجد (heartbeat) أو تنقل داخلي (navigation)، لا نزيد عداد الزيارات الكلية مرة أخرى
+    if (eventType === 'heartbeat' || eventType === 'navigation') {
+      return NextResponse.json({
+        counted: false,
+        presenceUpdated: Boolean(registeredStudentEmail),
+        reason: 'presence_heartbeat_updated',
+      })
+    }
+
+    // 3. استثناء جلسة المشرف النشطة فعلياً من عداد الزيارات
     const hasAdminToken = cookies.has('sanad_admin_gate_token')
     const role = cookies.get('sanad_role')?.value
 
@@ -53,7 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ counted: false, reason: 'owner_excluded' })
     }
 
-    // 3. استثناء حسابات المشرف عند دخوله بحساب طالب العلم من عداد الزيارات
+    // 4. استثناء حسابات المشرف عند دخوله بحساب طالب العلم من عداد الزيارات
     if (
       registeredStudentEmail &&
       (EXCLUDED_ADMIN_EMAILS.includes(registeredStudentEmail) ||
@@ -62,7 +100,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ counted: false, reason: 'owner_account_excluded' })
     }
 
-    // 4. منع التكرار في نفس الجلسة (خلال 24 ساعة للزائر الواحد)
+    // 5. منع التكرار في نفس الجلسة (خلال 24 ساعة للزائر الواحد)
     const hasVisitedSession = cookies.has('sanad_visitor_session')
     if (hasVisitedSession) {
       return NextResponse.json({
@@ -72,7 +110,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 5. احتساب الزيارة الحقيقية وتصنيفها (مسجل أم زائر بدون تسجيل) مع تسجيل بياناته الجغرافية
+    // 6. احتساب الزيارة الحقيقية وتصنيفها (مسجل أم زائر بدون تسجيل) مع تسجيل بياناته الجغرافية
     const isRegistered = Boolean(registeredStudentEmail)
     const count = recordVisitorHit({
       isRegistered,

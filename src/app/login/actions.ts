@@ -440,7 +440,7 @@ export async function establishFirebaseServerSessionAction(params: {
   const headerList = await headers()
   const clientTelemetry = extractClientTelemetry(headerList)
 
-  const student = registerOrUpdateStudent(email, fullName, {
+  const student = await registerOrUpdateStudentAsync(email, fullName, {
     id: params.localId,
     phone: params.phone,
     authProvider: provider,

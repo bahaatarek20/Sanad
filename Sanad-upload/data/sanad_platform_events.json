@@ -1,5 +1,29 @@
 [
   {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793474751733_iwxv",
+    "timestamp": "2026-10-31T19:25:51.733Z"
+  },
+  {
+    "type": "role",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "تعديل رتبة العضو [Bahaa Tarek] [SND-1002] إلى رتبة طالب علم",
+    "id": "ev_1793467442247_fqat",
+    "timestamp": "2026-10-31T17:24:02.247Z"
+  },
+  {
+    "type": "role",
+    "studentEmail": "bhaaljml48@gmail.com",
+    "studentName": "Bahaa Tarek",
+    "description": "ترقية العضو [Bahaa Tarek] [SND-1002] إلى رتبة مشرف عام للمنصة",
+    "id": "ev_1793467435792_cjfu",
+    "timestamp": "2026-10-31T17:23:55.792Z"
+  },
+  {
     "type": "listen",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",

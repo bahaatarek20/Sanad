@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         count: sanitizedStudents.length,
         latestStudent,
         stats: data.stats,
-        recentEvents: data.recentEvents?.slice(0, 20) || [],
+        recentEvents: data.recentEvents?.slice(0, 40) || [],
         auditLogs,
         deletedEmails: Array.from(getDeletedStudentEmails()),
         currentActor: {

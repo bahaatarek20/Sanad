@@ -298,7 +298,7 @@ export default function SanadControlGatePage() {
     isOwner: true,
   })
   const [studentSearch, setStudentSearch] = useState('')
-  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
+  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'online' | 'offline' | 'active' | 'banned'>('all')
   const [studentRoleFilter, setStudentRoleFilter] = useState<'all' | 'student' | 'admin'>('all')
   const [studentViewMode, setStudentViewMode] = useState<'cards' | 'table'>('cards')
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<StudentActivityRecord | null>(null)
@@ -1023,6 +1023,7 @@ export default function SanadControlGatePage() {
     if (!isAuthenticated) return
 
     let unsubscribeStudents: (() => void) | undefined
+    let unsubscribeEvents: (() => void) | undefined
     try {
       const colRef = collection(db, 'students')
       unsubscribeStudents = onSnapshot(
@@ -1046,8 +1047,27 @@ export default function SanadControlGatePage() {
             })
 
             setStudents((prev) => {
+              const prevEmails = new Set(prev.map((p) => (p.email || '').toLowerCase().trim()))
               const map = new Map<string, StudentActivityRecord>()
-              firestoreStudents.forEach((s) => map.set(s.email.toLowerCase().trim(), s))
+              firestoreStudents.forEach((s) => {
+                const cleanEm = s.email.toLowerCase().trim()
+                map.set(cleanEm, s)
+                // رصد فوري لأي تسجيل جديد وصل عبر Cloud Firestore قبل دورة الفحص
+                if (
+                  !isInitialLiveLoadRef.current &&
+                  prev.length > 0 &&
+                  !prevEmails.has(cleanEm) &&
+                  s.registeredAt &&
+                  Date.now() - new Date(s.registeredAt).getTime() < 5 * 60 * 1000
+                ) {
+                  playNewStudentChime()
+                  setLiveAlert({
+                    student: s,
+                    time: new Date().toLocaleTimeString('ar-EG'),
+                  })
+                  setNewlyRegisteredIds((prevIds) => new Set([...prevIds, s.id]))
+                }
+              })
               prev.forEach((s) => {
                 const email = s.email.toLowerCase().trim()
                 const sId = (s.id || '').toLowerCase().trim()
@@ -1068,8 +1088,8 @@ export default function SanadControlGatePage() {
               })
               const merged = applyRoleOverrides(Array.from(map.values()), prev)
               merged.sort((a, b) => {
-                const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
-                const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+                const timeA = new Date(a.lastActive || a.registeredAt || 0).getTime()
+                const timeB = new Date(b.lastActive || b.registeredAt || 0).getTime()
                 return timeB - timeA
               })
               saveStudentsBackupToLocal(merged)
@@ -1081,6 +1101,43 @@ export default function SanadControlGatePage() {
           console.warn('[Firestore Live Students Sync Notice]:', error)
         }
       )
+
+      const eventsColRef = collection(db, 'platform_events')
+      unsubscribeEvents = onSnapshot(
+        eventsColRef,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const fsEvents: PlatformEvent[] = []
+            snapshot.forEach((docSnap) => {
+              const ev = docSnap.data() as PlatformEvent
+              if (ev && ev.id && ev.description) {
+                const cleanEm = (ev.studentEmail || '').toLowerCase().trim()
+                if (cleanEm && deletedEmailsRef.current.has(cleanEm)) return
+                fsEvents.push(ev)
+              }
+            })
+            if (fsEvents.length > 0) {
+              setRecentEvents((prev) => {
+                const evMap = new Map<string, PlatformEvent>()
+                fsEvents.forEach((e) => evMap.set(e.id, e))
+                prev.forEach((e) => {
+                  const cleanEm = (e.studentEmail || '').toLowerCase().trim()
+                  if (cleanEm && deletedEmailsRef.current.has(cleanEm)) return
+                  if (!evMap.has(e.id)) evMap.set(e.id, e)
+                })
+                const combined = Array.from(evMap.values())
+                combined.sort(
+                  (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+                )
+                return combined.slice(0, 40)
+              })
+            }
+          }
+        },
+        (error) => {
+          console.warn('[Firestore Live Events Sync Notice]:', error)
+        }
+      )
     } catch (err) {
       console.warn('[Firestore Listener Setup Notice]:', err)
     }
@@ -1089,10 +1146,13 @@ export default function SanadControlGatePage() {
       if (unsubscribeStudents) {
         unsubscribeStudents()
       }
+      if (unsubscribeEvents) {
+        unsubscribeEvents()
+      }
     }
   }, [isAuthenticated])
 
-  // 3. مراقبة لحظية خفيفة وسريعة كل 10 ثوانٍ بدون أي ثقل على المتصفح أو الخادم
+  // 3. مراقبة لحظية خفيفة وسريعة كل 4 ثوانٍ بدون أي ثقل على المتصفح أو الخادم
   useEffect(() => {
     if (!isAuthenticated) return
 
@@ -1104,7 +1164,7 @@ export default function SanadControlGatePage() {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         pollLiveStudents()
       }
-    }, 10000)
+    }, 4000)
 
     return () => {
       clearTimeout(t)
@@ -1927,6 +1987,61 @@ export default function SanadControlGatePage() {
     return st.role === 'owner' || st.role === 'admin'
   }
 
+  // فحص هل الحساب متصل الآن حياً على المنصة (خلال آخر 2.5 دقيقة)
+  const isStudentOnlineNow = (st: StudentActivityRecord | null | undefined): boolean => {
+    if (!st || st.isBanned) return false
+    const ts = st.lastActive || st.registeredAt
+    if (!ts) return false
+    const diffMs = Date.now() - new Date(ts).getTime()
+    return diffMs >= -60000 && diffMs <= 2.5 * 60 * 1000
+  }
+
+  // صياغة الوقت النسبي بالعربية ("متصل الآن"، "منذ 3 دقائق"، "منذ ساعتين")
+  const formatRelativeTimeAr = (iso?: string): string => {
+    if (!iso) return 'غير محدد'
+    const diffMs = Date.now() - new Date(iso).getTime()
+    if (isNaN(diffMs)) return 'غير محدد'
+    const diffSec = Math.max(0, Math.floor(diffMs / 1000))
+    if (diffSec < 60) return 'نشط الآن (منذ لحظات)'
+    const diffMin = Math.floor(diffSec / 60)
+    if (diffMin === 1) return 'منذ دقيقة واحدة'
+    if (diffMin === 2) return 'منذ دقيقتين'
+    if (diffMin <= 10) return `منذ ${diffMin} دقائق`
+    if (diffMin < 60) return `منذ ${diffMin} دقيقة`
+    const diffHours = Math.floor(diffMin / 60)
+    if (diffHours === 1) return 'منذ ساعة واحدة'
+    if (diffHours === 2) return 'منذ ساعتين'
+    if (diffHours <= 10) return `منذ ${diffHours} ساعات`
+    if (diffHours < 24) return `منذ ${diffHours} ساعة`
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays === 1) return 'منذ يوم واحد'
+    if (diffDays === 2) return 'منذ يومين'
+    if (diffDays <= 10) return `منذ ${diffDays} أيام`
+    return `منذ ${diffDays} يوماً`
+  }
+
+  // صياغة التاريخ والوقت الدقيق بالعربية (اليوم + الشهر + السنة + الساعة والدقيقة صباحاً/مساءً)
+  const formatExactDateTimeAr = (iso?: string): string => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return '—'
+    const datePart = d.toLocaleDateString('ar-EG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+    const timePart = d.toLocaleTimeString('ar-EG', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    return `${datePart} — ${timePart}`
+  }
+
+  const onlineStudentsList = students.filter((s) => isStudentOnlineNow(s))
+  const offlineStudentsList = students.filter((s) => !isStudentOnlineNow(s))
+  const onlineStudentsCount = onlineStudentsList.length
+  const offlineStudentsCount = offlineStudentsList.length
+
   const activeStudentsCount = students.filter((s) => !s.isBanned).length
   const bannedStudentsCount = students.filter((s) => s.isBanned).length
   const adminStudentsCount = students.filter((s) => isStudentAdmin(s)).length
@@ -1957,8 +2072,10 @@ export default function SanadControlGatePage() {
     students.length + unregisteredVisitorsCount
   )
 
-  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز والدور
+  // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز والدور وحالة الاتصال الحي
   const filteredStudents = students.filter((s) => {
+    if (studentStatusFilter === 'online' && !isStudentOnlineNow(s)) return false
+    if (studentStatusFilter === 'offline' && isStudentOnlineNow(s)) return false
     if (studentStatusFilter === 'active' && s.isBanned) return false
     if (studentStatusFilter === 'banned' && !s.isBanned) return false
 
@@ -2709,15 +2826,28 @@ export default function SanadControlGatePage() {
             <span className="text-[10px] text-stone-400">تصفحوا المنصة بدون حساب</span>
           </div>
 
-          <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
-            <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
-              <span className="text-[11px] font-bold">المتواجدون اليوم</span>
-              <Activity className="h-4 w-4 text-emerald-600 animate-pulse" />
+          <div
+            onClick={() => {
+              setActiveTab('analytics')
+              setStudentStatusFilter('online')
+            }}
+            className="rounded-2xl bg-emerald-50/70 p-4 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 cursor-pointer hover:border-emerald-500 transition shadow-2xs"
+            title="انقر لعرض الحسابات المتصلة الآن حياً على المنصة"
+          >
+            <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-300 mb-1">
+              <span className="text-[11px] font-black">المتصلون الآن حياً</span>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
             </div>
             <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">
-              {activeTodayCount.toLocaleString('ar-EG')}
+              {onlineStudentsCount.toLocaleString('ar-EG')}
             </div>
-            <span className="text-[10px] text-stone-400">نشاط خلال 24 ساعة</span>
+            <div className="flex items-center justify-between text-[10px] text-stone-500 dark:text-stone-400 mt-1 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/50">
+              <span>نشط اليوم: <strong>{activeTodayCount.toLocaleString('ar-EG')}</strong></span>
+              <span>غير متصل: <strong>{offlineStudentsCount.toLocaleString('ar-EG')}</strong></span>
+            </div>
           </div>
 
           <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
@@ -2851,7 +2981,14 @@ export default function SanadControlGatePage() {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-black text-emerald-900 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/50 px-3 py-1 rounded-xl border border-emerald-300 dark:border-emerald-700 inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>المتصلون الآن: {onlineStudentsCount}</span>
+              </span>
+              <span className="text-[11px] font-bold text-stone-600 dark:text-stone-300 bg-white dark:bg-stone-800 px-3 py-1 rounded-xl border border-stone-200 dark:border-stone-700">
+                غير متصل: <strong className="text-stone-800 dark:text-stone-200">{offlineStudentsCount}</strong>
+              </span>
               <span className="text-[11px] font-bold text-stone-600 dark:text-stone-300 bg-white dark:bg-stone-800 px-3 py-1 rounded-xl border border-stone-200 dark:border-stone-700">
                 إجمالي المسجلين: <strong className="text-emerald-700 dark:text-emerald-400">{students.length}</strong>
               </span>
@@ -2864,6 +3001,161 @@ export default function SanadControlGatePage() {
                 <RotateCcw className={`h-3 w-3 ${isRefreshingLive ? 'animate-spin' : ''}`} />
                 <span>تحديث فوري للسجل 🔄</span>
               </button>
+            </div>
+          </div>
+
+          {/* مرصد التواجد الحي وحركة الحسابات اللحظية (من متصل الآن على المنصة ومن غير متصل + آخر نشاط بالتاريخ والوقت) */}
+          <div className="rounded-3xl border border-emerald-500/25 bg-white p-5 shadow-xs dark:border-stone-800 dark:bg-stone-900 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3.5 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                </span>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-stone-900 dark:text-white">
+                    مرصد التواجد الحي وحركة الحسابات اللحظية على المنصة
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    متابعة فورية لمن هو متصل الآن وأي صفحة يتصفحها، ومن هو غير متصل مع تاريخ وتوقيت آخر تواجد له
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setStudentStatusFilter(studentStatusFilter === 'online' ? 'all' : 'online')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition cursor-pointer border ${
+                    studentStatusFilter === 'online'
+                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                      : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>متصل الآن حياً: {onlineStudentsCount}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStudentStatusFilter(studentStatusFilter === 'offline' ? 'all' : 'offline')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition cursor-pointer border ${
+                    studentStatusFilter === 'offline'
+                      ? 'bg-stone-800 text-white border-stone-800 shadow-xs dark:bg-stone-700'
+                      : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-stone-400" />
+                  <span>غير متصل حالياً: {offlineStudentsCount}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* القسم الأول: الحسابات المتصلة الآن حياً */}
+              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/30 p-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/15 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span>🟢 الحسابات المتصلة الآن على المنصة ({onlineStudentsCount})</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">تحديث لحظي مباشر</span>
+                </div>
+
+                {onlineStudentsList.length === 0 ? (
+                  <div className="rounded-xl bg-white/80 dark:bg-stone-900/60 p-4 text-center text-xs text-stone-500 dark:text-stone-400 border border-stone-200/60 dark:border-stone-800">
+                    لا يوجد طلاب متصلون في هذه اللحظة. بمجرد فتح أي طالب للمنصة سيظهر هنا فوراً مع الصفحة التي يتصفحها.
+                  </div>
+                ) : (
+                  <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                    {onlineStudentsList.map((st) => (
+                      <div
+                        key={`online-${st.id}`}
+                        onClick={() => setSelectedStudentForDetail(st)}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-white p-2.5 text-xs shadow-2xs border border-emerald-200/80 hover:border-emerald-500 transition cursor-pointer dark:bg-stone-900 dark:border-emerald-900/60"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white font-black text-xs">
+                            {st.name.charAt(0).toUpperCase()}
+                            <span className="absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-stone-900" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-black text-stone-900 dark:text-white truncate">{st.name}</span>
+                              <span className="font-mono text-[10px] text-stone-500 dark:text-stone-400">
+                                ({st.scholarlyId || st.email})
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold truncate mt-0.5">
+                              🧭 {st.lastAction || (st.currentPage ? `يتصفح الآن: ${st.currentPage}` : 'يتصفح المنصة الآن')}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-left shrink-0">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            متصل الآن 🟢
+                          </span>
+                          <span className="block text-[10px] font-mono text-stone-400 mt-0.5">
+                            {formatExactDateTimeAr(st.lastActive || st.registeredAt)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* القسم الثاني: الحسابات غير المتصلة حالياً مع آخر وقت وتاريخ تواجد */}
+              <div className="rounded-2xl border border-stone-200/80 bg-stone-50/60 p-3.5 dark:border-stone-800 dark:bg-stone-800/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-stone-400" />
+                    <span>⚪ الحسابات غير المتصلة حالياً ({offlineStudentsCount})</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500 dark:text-stone-400 font-bold">آخر وقت وتاريخ ظهور</span>
+                </div>
+
+                {offlineStudentsList.length === 0 ? (
+                  <div className="rounded-xl bg-white/80 dark:bg-stone-900/60 p-4 text-center text-xs text-emerald-700 dark:text-emerald-400 font-bold border border-stone-200/60 dark:border-stone-800">
+                    جميع الحسابات المسجلة متصلة ونشطة على المنصة في هذه اللحظة! 🎉
+                  </div>
+                ) : (
+                  <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                    {offlineStudentsList.slice(0, 15).map((st) => (
+                      <div
+                        key={`offline-${st.id}`}
+                        onClick={() => setSelectedStudentForDetail(st)}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-white p-2.5 text-xs border border-stone-200/70 hover:border-stone-400 transition cursor-pointer dark:bg-stone-900 dark:border-stone-800"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-stone-200 text-stone-700 font-black text-xs dark:bg-stone-800 dark:text-stone-300">
+                            {st.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-stone-800 dark:text-stone-200 truncate">{st.name}</span>
+                              <span className="font-mono text-[10px] text-stone-400">
+                                ({st.scholarlyId || st.email})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate mt-0.5">
+                              آخر نشاط: {st.lastAction || st.currentPage || 'جلسة سابقة على المنصة'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-left shrink-0">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                            {formatRelativeTimeAr(st.lastActive || st.registeredAt)}
+                          </span>
+                          <span className="block text-[10px] font-mono text-stone-500 dark:text-stone-400 mt-0.5">
+                            {formatExactDateTimeAr(st.lastActive || st.registeredAt)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2881,8 +3173,8 @@ export default function SanadControlGatePage() {
                 <Search className="absolute right-3.5 top-3 h-4 w-4 text-stone-400" />
               </div>
 
-              {/* أزرار تصفية الحالة: الكل / النشطون / المحظورون */}
-              <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100/70 p-1 dark:border-stone-800 dark:bg-stone-900/80">
+              {/* أزرار تصفية الحالة: الكل / متصل الآن / غير متصل / النشطون / المحظورون */}
+              <div className="inline-flex flex-wrap rounded-2xl border border-stone-200 bg-stone-100/70 p-1 dark:border-stone-800 dark:bg-stone-900/80">
                 <button
                   type="button"
                   onClick={() => setStudentStatusFilter('all')}
@@ -2893,6 +3185,30 @@ export default function SanadControlGatePage() {
                   }`}
                 >
                   الكل ({students.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentStatusFilter('online')}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    studentStatusFilter === 'online'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'text-emerald-800 hover:bg-emerald-50 dark:text-emerald-400'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>متصل الآن ({onlineStudentsCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentStatusFilter('offline')}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    studentStatusFilter === 'offline'
+                      ? 'bg-stone-700 text-white shadow-2xs'
+                      : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-stone-400" />
+                  <span>غير متصل ({offlineStudentsCount})</span>
                 </button>
                 <button
                   type="button"
@@ -3252,17 +3568,43 @@ export default function SanadControlGatePage() {
                           </div>
                         </div>
 
-                        {/* تاريخ التسجيل وآخر ظهور */}
-                        <div className="flex items-center justify-between text-[10px] text-stone-400 dark:text-stone-500 pt-1 border-t border-stone-100 dark:border-stone-800">
-                          <span>
-                            انضم: {new Date(st.registeredAt).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                          <span className="flex items-center gap-1 font-mono">
-                            <Clock className="h-3 w-3" />
-                            <span>
-                              {new Date(st.lastActive).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {/* تاريخ التسجيل + حالة الاتصال الحي + آخر وقت وتاريخ كان نشطاً فيه */}
+                        <div className="rounded-2xl bg-stone-50/90 dark:bg-stone-800/60 p-2.5 border border-stone-100 dark:border-stone-700/60 space-y-1.5 text-[10px]">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-stone-600 dark:text-stone-300 flex items-center gap-1.5">
+                              {isStudentOnlineNow(st) ? (
+                                <>
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  </span>
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-black">🟢 متصل الآن حياً</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="h-2 w-2 rounded-full bg-stone-400" />
+                                  <span className="text-stone-500 dark:text-stone-400 font-bold">⚪ غير متصل ({formatRelativeTimeAr(st.lastActive || st.registeredAt)})</span>
+                                </>
+                              )}
                             </span>
-                          </span>
+                            <span className="text-stone-400 dark:text-stone-500">
+                              انضم: {new Date(st.registeredAt).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </div>
+
+                          {(st.lastAction || st.currentPage) && (
+                            <div className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold truncate bg-white dark:bg-stone-900/70 px-2 py-1 rounded-lg border border-stone-200/60 dark:border-stone-700/50">
+                              🧭 {st.lastAction || `يتصفح: ${st.currentPage}`}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 pt-1 border-t border-stone-200/50 dark:border-stone-700/50">
+                            <span className="font-bold">آخر نشاط وتاريخ ظهور:</span>
+                            <span className="flex items-center gap-1 font-mono font-bold text-stone-800 dark:text-stone-200">
+                              <Clock className="h-3 w-3 text-emerald-600" />
+                              <span>{formatExactDateTimeAr(st.lastActive || st.registeredAt)}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -3583,17 +3925,32 @@ export default function SanadControlGatePage() {
                           })}
                         </td>
 
-                        {/* 9. آخر تواجد */}
+                        {/* 9. آخر تواجد ونشاط + حالة الاتصال الحي */}
                         <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-stone-400" />
-                            {new Date(st.lastActive).toLocaleDateString('ar-EG', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              {isStudentOnlineNow(st) ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 border border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-300 dark:border-emerald-700">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                  <span>متصل الآن 🟢</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-600 border border-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-stone-400" />
+                                  <span>غير متصل ({formatRelativeTimeAr(st.lastActive || st.registeredAt)})</span>
+                                </span>
+                              )}
+                            </div>
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-stone-800 dark:text-stone-200">
+                              <Clock className="h-3 w-3 text-emerald-600" />
+                              <span>{formatExactDateTimeAr(st.lastActive || st.registeredAt)}</span>
+                            </span>
+                            {(st.lastAction || st.currentPage) && (
+                              <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold truncate max-w-[190px]" title={st.lastAction || st.currentPage}>
+                                🧭 {st.lastAction || st.currentPage}
+                              </div>
+                            )}
+                          </div>
                         </td>
 
                         {/* 10. وقت المدارسة */}
@@ -3758,28 +4115,37 @@ export default function SanadControlGatePage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] font-mono text-stone-400 shrink-0">
-                      {new Date(v.timestamp).toLocaleTimeString('ar-EG', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
+                    <div className="text-left shrink-0">
+                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block">
+                        {formatRelativeTimeAr(v.timestamp)}
+                      </span>
+                      <span className="text-[11px] font-mono text-stone-500 dark:text-stone-400 shrink-0 block">
+                        {formatExactDateTimeAr(v.timestamp)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* شريط الأحداث والنشاط المباشر */}
+          {/* شريط الأحداث والنشاط المباشر الشامل لكل التحركات على المنصة */}
           <div className="rounded-3xl border border-stone-200/90 bg-white p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900 space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-stone-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3 dark:border-stone-800">
               <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
-                <h3 className="text-base font-black text-stone-900 dark:text-white">
-                  سجل الأحداث والنشاط المباشر على المنصة
-                </h3>
+                <Activity className="h-5 w-5 text-emerald-700 dark:text-emerald-400 animate-pulse" />
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white">
+                    سجل الأحداث والنشاط المباشر على المنصة
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    رصد لحظي شامل للتسجيلات الجديدة، الدخول، التنقل بين الصفحات، الاستماع للمجالس، تدوين الفوائد، ومشاركات المذاكرة بالتاريخ والوقت الدقيق
+                  </p>
+                </div>
               </div>
-              <span className="text-xs text-stone-400 font-bold">آخر 20 حركة تدريبية</span>
+              <span className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-xl font-black">
+                آخر {Math.min(recentEvents.length, 35)} حركة مسجلة حياً
+              </span>
             </div>
 
             {recentEvents.length === 0 ? (
@@ -3787,39 +4153,53 @@ export default function SanadControlGatePage() {
                 لا توجد أحداث مسجلة بعد في السجل المباشر.
               </p>
             ) : (
-              <div className="space-y-2.5">
-                {recentEvents.slice(0, 15).map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="flex items-center justify-between rounded-2xl bg-stone-50 p-3 text-xs dark:bg-stone-800/60 border border-stone-100 dark:border-stone-700/50"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={`h-2 w-2 rounded-full ${
-                          ev.type === 'complete'
-                            ? 'bg-emerald-500'
-                            : ev.type === 'listen'
-                            ? 'bg-amber-500'
-                            : ev.type === 'note'
-                            ? 'bg-indigo-500'
-                            : 'bg-teal-500'
-                        }`}
-                      />
-                      <div>
-                        <span className="font-extrabold text-stone-900 dark:text-white ml-1">
-                          {ev.studentName}
+              <div className="max-h-96 overflow-y-auto space-y-2.5 pr-1">
+                {recentEvents.slice(0, 35).map((ev) => {
+                  const badgeInfo =
+                    ev.type === 'register'
+                      ? { label: '⚡ تسجيل جديد', cls: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800', dot: 'bg-emerald-500' }
+                      : ev.type === 'login'
+                      ? { label: '🟢 دخول للمنصة', cls: 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800', dot: 'bg-teal-500' }
+                      : ev.type === 'navigation'
+                      ? { label: '🧭 تنقل وتصفح', cls: 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800', dot: 'bg-sky-500' }
+                      : ev.type === 'listen'
+                      ? { label: '🎧 استماع لمجلس', cls: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800', dot: 'bg-amber-500' }
+                      : ev.type === 'complete'
+                      ? { label: '🎓 إتمام متن', cls: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800', dot: 'bg-emerald-600' }
+                      : ev.type === 'note'
+                      ? { label: '📝 تدوين فائدة', cls: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800', dot: 'bg-indigo-500' }
+                      : ev.type === 'community'
+                      ? { label: '💬 مجلس المذاكرة', cls: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800', dot: 'bg-purple-500' }
+                      : { label: '🛡️ قرار إداري', cls: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800', dot: 'bg-rose-500' }
+
+                  return (
+                    <div
+                      key={ev.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl bg-stone-50 p-3.5 text-xs dark:bg-stone-800/60 border border-stone-100 dark:border-stone-700/50 hover:border-emerald-500/40 transition"
+                    >
+                      <div className="flex items-start sm:items-center gap-2.5 flex-wrap">
+                        <span className={`h-2.5 w-2.5 rounded-full shrink-0 mt-1 sm:mt-0 ${badgeInfo.dot}`} />
+                        <span className={`rounded-lg border px-2 py-0.5 text-[10px] font-black shrink-0 ${badgeInfo.cls}`}>
+                          {badgeInfo.label}
                         </span>
-                        <span className="text-stone-600 dark:text-stone-300">{ev.description}</span>
+                        <div className="leading-relaxed">
+                          <span className="font-extrabold text-stone-900 dark:text-white ml-1.5">
+                            {ev.studentName}
+                          </span>
+                          <span className="text-stone-600 dark:text-stone-300">{ev.description}</span>
+                        </div>
+                      </div>
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-stone-200/60 dark:border-stone-700/50">
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                          {formatRelativeTimeAr(ev.timestamp)}
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-stone-500 dark:text-stone-400">
+                          {formatExactDateTimeAr(ev.timestamp)}
+                        </span>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-stone-400 shrink-0 mr-2">
-                      {new Date(ev.timestamp).toLocaleTimeString('ar-EG', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -5134,16 +5514,21 @@ export default function SanadControlGatePage() {
                       )}
                     </button>
 
-                    {/* شارة الحالة */}
+                    {/* شارة الحالة والاتصال الحي */}
                     {selectedStudentForDetail.isBanned ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 border border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-900">
                         <Ban className="h-3 w-3" />
                         <span>محظور إدارياً</span>
                       </span>
+                    ) : isStudentOnlineNow(selectedStudentForDetail) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span>متصل الآن حياً 🟢</span>
+                      </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                        <Check className="h-3 w-3" />
-                        <span>حساب نشط</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-bold text-stone-700 border border-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700">
+                        <span className="h-2 w-2 rounded-full bg-stone-400" />
+                        <span>غير متصل ({formatRelativeTimeAr(selectedStudentForDetail.lastActive || selectedStudentForDetail.registeredAt)})</span>
                       </span>
                     )}
                   </div>
@@ -5151,6 +5536,19 @@ export default function SanadControlGatePage() {
                   <p className="font-mono text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1 mt-0.5">
                     <Mail className="h-3 w-3 text-stone-400" />
                     <span>{selectedStudentForDetail.email}</span>
+                  </p>
+                  <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-1 flex flex-wrap items-center gap-2">
+                    <span>
+                      <strong>آخر وقت وتاريخ نشاط:</strong>{' '}
+                      <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300">
+                        {formatExactDateTimeAr(selectedStudentForDetail.lastActive || selectedStudentForDetail.registeredAt)}
+                      </span>
+                    </span>
+                    {(selectedStudentForDetail.lastAction || selectedStudentForDetail.currentPage) && (
+                      <span className="rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-300">
+                        🧭 {selectedStudentForDetail.lastAction || selectedStudentForDetail.currentPage}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>

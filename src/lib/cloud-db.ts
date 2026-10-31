@@ -11,11 +11,12 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore'
-import type { StudentActivityRecord } from '@/lib/student-tracking'
+import type { StudentActivityRecord, PlatformEvent } from '@/lib/student-tracking'
 import type { CommunityPost, CommunityReply } from '@/components/community-hub'
 
 const STUDENTS_COLLECTION = 'students'
 const COMMUNITY_POSTS_COLLECTION = 'community_posts'
+const PLATFORM_EVENTS_COLLECTION = 'platform_events'
 
 let firestoreDisabledNoticeLogged = false
 let firestoreCooldownUntil = 0
@@ -113,6 +114,8 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
               city: student.city,
               device: student.device,
               browser: student.browser,
+              currentPage: student.currentPage || null,
+              lastAction: student.lastAction || null,
               lastLoginAt: student.lastActive || new Date().toISOString(),
             },
             { merge: true }
@@ -737,6 +740,52 @@ export async function deleteStudentFromCloud(
     2000
   )
 }
+
+/**
+ * 17. حفظ حدث نشاط مباشر في Cloud Firestore (للبث الفوري لحركة الحسابات عبر جميع حاويات السيرفرلس)
+ */
+export async function savePlatformEventToCloud(event: PlatformEvent): Promise<boolean> {
+  if (isFirestoreCoolingDown()) return false
+  return withCloudTimeout(
+    (async () => {
+      if (!event || !event.id) return false
+      const docRef = doc(db, PLATFORM_EVENTS_COLLECTION, event.id)
+      await setDoc(docRef, {
+        ...event,
+        updatedAt: new Date().toISOString(),
+      })
+      return true
+    })(),
+    false,
+    1200
+  )
+}
+
+/**
+ * 18. جلب أحدث أحداث وتحركات الحسابات من Cloud Firestore
+ */
+export async function getPlatformEventsFromCloud(maxLimit = 40): Promise<PlatformEvent[]> {
+  if (isFirestoreCoolingDown()) return []
+  return withCloudTimeout(
+    (async () => {
+      const colRef = collection(db, PLATFORM_EVENTS_COLLECTION)
+      const q = query(colRef, orderBy('timestamp', 'desc'), limit(maxLimit))
+      const snapshot = await getDocs(q)
+      if (snapshot.empty) return []
+      const events: PlatformEvent[] = []
+      snapshot.forEach((d) => {
+        const data = d.data() as PlatformEvent
+        if (data && data.id && data.description) {
+          events.push(data)
+        }
+      })
+      return events
+    })(),
+    [],
+    1500
+  )
+}
+
 
 
 
