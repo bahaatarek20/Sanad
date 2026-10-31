@@ -18,9 +18,12 @@
     "course_slug": null,
     "post_type": "benefit",
     "content": "نفع الله بكم",
-    "upvotes_count": 3,
+    "upvotes_count": 4,
     "created_at": "2026-10-06T21:27:38.729Z",
-    "replies": []
+    "replies": [],
+    "upvoter_keys": [
+      "7bb9c3989fce5d9b"
+    ]
   },
   {
     "id": "post_1791137785398_2w4c",
@@ -28,9 +31,12 @@
     "course_slug": null,
     "post_type": "benefit",
     "content": "تبارك الله",
-    "upvotes_count": 6,
+    "upvotes_count": 7,
     "created_at": "2026-10-04T18:16:25.398Z",
-    "replies": []
+    "replies": [],
+    "upvoter_keys": [
+      "7bb9c3989fce5d9b"
+    ]
   },
   {
     "id": "sample-1",

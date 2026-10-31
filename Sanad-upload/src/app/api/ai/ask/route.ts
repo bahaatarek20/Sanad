@@ -79,6 +79,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 type UserIntent =
+  | 'greeting_or_smalltalk'
   | 'reproach_or_feedback'
   | 'technical_or_admin'
   | 'meta_awareness'
@@ -116,23 +117,102 @@ function getDeadKeysSet(): Set<string> {
   return globalThis.__sanad_dead_api_keys__
 }
 
-function normalizeQuestionForCache(question: string, courseTitle: string): string {
-  return `${courseTitle.trim().toLowerCase()}::${question
+function normalizeArabicText(input: string): string {
+  return input
     .trim()
     .toLowerCase()
-    .replace(/[؟?!.,،؛:"'«»\s]+/g, ' ')}`
+    .replace(/[\u064B-\u065F\u0670]/g, '') // إزالة التشكيل
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/[؟?!.,،؛:"'«»\s]+/g, ' ')
+    .trim()
+}
+
+function normalizeQuestionForCache(question: string, courseTitle: string): string {
+  return `${courseTitle.trim().toLowerCase()}::${normalizeArabicText(question)}`
+}
+
+/**
+ * الرد اللحظي الذكي (0ms) على التحيات والسلام والشكر والدعاء
+ * يمنع تماماً ظهور أي قالب جامد مثل «تحرير المسألة في ضوء...» عند إلقاء السلام!
+ */
+function buildInstantConversationalReply(
+  question: string,
+  courseTitle: string,
+  categoryTitle: string,
+  instructor?: string
+): string | null {
+  const norm = normalizeArabicText(question)
+  const words = norm.split(' ').filter(Boolean)
+
+  // إلقاء السلام والتحية الصرفة (بدون سؤال علمي مرفق)
+  const isPureGreeting =
+    words.length <= 7 &&
+    /^(السلام عليكم|سلام عليكم|مرحبا|اهلا|يا هلا|صباح الخير|مساء الخير|حي الله|حياك الله|كيف حالك|اخبارك|عامل ايه|ازيك|سلام|الو|هاي|hello|hi)(\s|$)/.test(
+      norm
+    ) &&
+    !norm.includes('ما ') &&
+    !norm.includes('كيف ') &&
+    !norm.includes('هل ') &&
+    !norm.includes('اشرح') &&
+    !norm.includes('حكم') &&
+    !norm.includes('معنى')
+
+  if (isPureGreeting) {
+    const contextNote =
+      courseTitle &&
+      !courseTitle.includes('عام في العلوم الشرعية') &&
+      !courseTitle.includes('عام في طلب العلم') &&
+      courseTitle !== 'متن تأصيلي'
+        ? `نحن الآن في رحاب مدارسة **«${courseTitle}»** (${categoryTitle}${instructor ? ` — بشرح ${instructor}` : ''}).`
+        : 'أنا معك لمدارسة المتون الشرعية واللغوية في الفنون التسعة على منصة **سَنَد**.'
+
+    if (norm.includes('كيف حالك') || norm.includes('عامل ايه') || norm.includes('ازيك') || norm.includes('اخبارك')) {
+      return `وعليكم السلام ورحمة الله وبركاته، بخير وعافية والحمد لله! سُررت بوجودك وهمتك في طلب العلم.
+
+${contextNote}
+تفضّل بطرح أي مسألة، أو عبارة من المتن، أو سؤال عن دليل ومصدر، وسأجيبك عنه فوراً بالتفصيل الموثق.`
+    }
+
+    return `وعليكم السلام ورحمة الله وبركاته، حيّاك الله وبيّاك يا طالب العلم المبارك، وأهلاً بك في منصة **سَنَد**!
+
+${contextNote}
+بمَ تحب أن نبدأ المدارسة الآن؟ يمكنك سؤالي عن شرح أي مسألة، أو الفرق بين المصطلحات، أو طلب الدليل والمصدر المعتمد.`
+  }
+
+  // عبارات الشكر والدعاء الصرفة
+  const isPureThanks =
+    words.length <= 6 &&
+    /^(شكرا|جزاك الله خيرا|جزاكم الله خيرا|بارك الله فيك|احسنت|ممتاز|جميل جدا|ما شاء الله|تسلم|ربنا يبارك فيك|نفع الله بك)(\s|$)/.test(
+      norm
+    )
+
+  if (isPureThanks) {
+    return `وإياكم، بارك الله في علمك وعملك ورزقنا وإياك الإخلاص والقبول والرسوخ في العلم!
+أنا حاضر معك في أي وقت، إذا استشكلت أي مسألة أخرى أو أردت تحرير شاهد أو دليل فاسألني مباشرة.`
+  }
+
+  return null
 }
 
 /**
  * محرك تحليل نية الطالب وسياقه الموضوعي بدقة
  */
 function detectUserIntent(question: string): UserIntent {
-  const q = question.toLowerCase().trim()
+  const q = normalizeArabicText(question)
+
+  const greetingKeywords = [
+    'السلام عليكم', 'سلام عليكم', 'مرحبا', 'صباح الخير', 'مساء الخير',
+    'كيف حالك', 'عامل ايه', 'ازيك', 'جزاك الله خيرا', 'بارك الله فيك', 'شكرا لك',
+  ]
+  if (q.split(' ').length <= 6 && greetingKeywords.some((k) => q.includes(normalizeArabicText(k)))) {
+    return 'greeting_or_smalltalk'
+  }
 
   const reproachKeywords = [
-    'متكرر', 'تكرار', 'نفس الرد', 'نفس الكلام', 'ردود محفوظة', 'ردود ثابته', 'ردود ثابتة',
-    'قالب', 'جامد', 'مش فاهم', 'غبي', 'روبوت', 'حلقات تكرارية', 'بطل تكرار', 'زهقت',
-    'مش ده اللي سألت', 'رد عدل', 'ركز معايا', 'نفس الديباجة', 'بتتأخر', 'بطيء',
+    'متكرر', 'تكرار', 'نفس الرد', 'نفس الكلام', 'ردود محفوظه', 'ردود ثابته',
+    'قالب', 'جامد', 'مش فاهم', 'غبي', 'روبوت', 'حلقات تكراريه', 'بطل تكرار', 'زهقت',
+    'مش ده اللي سالت', 'رد عدل', 'ركز معايا', 'نفس الديباجه', 'بتتاخر', 'بطيء',
   ]
   if (reproachKeywords.some((k) => q.includes(k))) {
     return 'reproach_or_feedback'
@@ -140,35 +220,35 @@ function detectUserIntent(question: string): UserIntent {
 
   const metaKeywords = [
     'هل انت ذكي', 'انت ذكي', 'فاهم كلامي', 'فاهم اللي بقوله', 'سامعني', 'عارف انت مين',
-    'انت مين', 'من انت', 'عرف نفسك', 'هل تفهم', 'مستوعب كلامي', 'مركز معايا',
+    'انت مين', 'من انت', 'عرف نفسك', 'هل تفهم', 'مستوعب كلامي', 'مستوعب اسئلتي', 'مركز معايا',
   ]
   if (metaKeywords.some((k) => q.includes(k))) {
     return 'meta_awareness'
   }
 
   const sourceKeywords = [
-    'المصدر', 'مصدر', 'المرجع', 'مرجع', 'الدليل', 'دليل', 'من أين', 'من اي كتاب',
-    'أي كتاب', 'تخريج', 'سنده', 'درجة الحديث', 'صحة الحديث', 'من القائل',
+    'المصدر', 'مصدر', 'المرجع', 'مرجع', 'الدليل', 'دليل', 'من اين', 'من اي كتاب',
+    'اي كتاب', 'تخريج', 'سنده', 'درجه الحديث', 'صحه الحديث', 'من القائل',
   ]
   if (sourceKeywords.some((k) => q.includes(k))) {
     return 'source_request'
   }
 
   const technicalKeywords = [
-    'المنصة', 'الموقع', 'التطبيق', 'السيرفر', 'البرمجة', 'بهاء طارق', 'المهندس بهاء',
-    'فيديو مش شغال', 'تحميل', 'تسجيل الدخول', 'حسابي', 'الشهادة', 'الإجازة',
+    'المنصه', 'الموقع', 'التطبيق', 'السيرفر', 'البرمجه', 'بهاء طارق', 'المهندس بهاء',
+    'فيديو مش شغال', 'تحميل', 'تسجيل الدخول', 'حسابي', 'الشهاده', 'الاجازه',
   ]
   if (technicalKeywords.some((k) => q.includes(k))) {
     return 'technical_or_admin'
   }
 
   const scholarlyKeywords = [
-    'معنى', 'ما حكم', 'حكم', 'متن', 'شرح', 'إعراب', 'اعراب', 'حديث', 'آية', 'اية',
-    'تفسير', 'فقه', 'عقيدة', 'عقيده', 'أصول', 'اصول', 'نحو', 'صرف', 'بلاغة', 'مصطلح',
-    'مسألة', 'مساله', 'ركن', 'واجب', 'شرط', 'صحة', 'بطلان', 'وضوء', 'صلاة', 'صلاه',
-    'صوم', 'زكاة', 'زكاه', 'حج', 'توحيد', 'إيمان', 'ايمان', 'إحسان', 'راوي', 'علة',
-    'الفرق بين', 'اشرح', 'وضح', 'لخص', 'ملخص', 'قواعد', 'الأربعين', 'النووية', 'آجرومية',
-    'بداية المتفقه', 'حلية', 'نخبة الفكر', 'واسطية',
+    'معني', 'ما حكم', 'حكم', 'متن', 'شرح', 'اعراب', 'حديث', 'ايه',
+    'تفسير', 'فقه', 'عقيده', 'اصول', 'نحو', 'صرف', 'بلاغه', 'مصطلح',
+    'مساله', 'ركن', 'واجب', 'شرط', 'صحه', 'بطلان', 'وضوء', 'صلاه',
+    'صوم', 'زكاه', 'حج', 'توحيد', 'ايمان', 'احسان', 'راوي', 'عله',
+    'الفرق بين', 'اشرح', 'وضح', 'لخص', 'ملخص', 'قواعد', 'الاربعين', 'النوويه', 'اجروميه',
+    'بدايه المتفقه', 'حليه', 'نخبه الفكر', 'واسطيه',
   ]
   if (scholarlyKeywords.some((k) => q.includes(k))) {
     return 'scholarly_question'
@@ -193,6 +273,15 @@ function buildDynamicSystemPrompt(
   let temperature = 0.3
 
   switch (intent) {
+    case 'greeting_or_smalltalk':
+      temperature = 0.4
+      specificDirective = `
+👋 توجيه خاص: السائل يلقي التحية أو يتحدث حديثاً ودياً قصيراً.
+- رد التحية بأحسن منها بلطف وبشاشة تليق بطالب العلم، ولا تستخدم أبداً قوالب مثل "تحرير المسألة".
+- اعرض عليه معاونتك في المتن الحالي أو في أي مسألة شرعية أو لغوية.
+`
+      break
+
     case 'reproach_or_feedback':
       temperature = 0.4
       specificDirective = `
@@ -247,7 +336,7 @@ function buildDynamicSystemPrompt(
       temperature = 0.35
       specificDirective = `
 💬 توجيه خاص:
-- أجب بذكاء ووضوح ومباشرة على قدر سؤال السائل.
+- أجب بذكاء ووضوح ومباشرة على قدر سؤال السائل باللغة العربية الفصيحة فقط.
 - إذا كان السؤال يتضمن أي معلومة شرعية أو لغوية أو علمية، وثّق إجابتك في نهايتها بـ **📖 المصدر المعتمد:**.
 `
       break
@@ -259,13 +348,13 @@ function buildDynamicSystemPrompt(
 
   const prompt = `
 أنت «رفيق المدارسة الذكي» (صاحبك في الطلب) في منصة «سَنَد» للتعليم الشرعي والتأصيل المنهجي (بإشراف وتطوير المهندس بهاء طارق).
-مهمتك: تقديم إجابات فورية، صحيحة علمياً 100%، محررة، ذكية، وموثقة بالمصادر والأدلة الشرعية واللغوية المعتمدة.
+مهمتك: تقديم إجابات فورية باللغة العربية الفصيحة، صحيحة علمياً 100%، محررة، ذكية، وموثقة بالمصادر والأدلة الشرعية واللغوية المعتمدة.
 
 القواعد الذهبية الصارمة:
 1. الدقة العلمية والأمانة: اعتمد على القرآن الكريم، والسنة الصحيحة، والمتون المعتمدة في المنصة وشروحها المحررة. لا تختلق أبداً أي حديث أو عزو غير صحيح.
 2. توثيق المصدر: في جميع الأسئلة العلمية والشرعية واللغوية أو عند طلب الدليل/المصدر، اختم إجابتك بسطر واضح:
    **📖 المصدر المعتمد:** (اذكر اسم المتن أو الكتاب المعتمد والباب أو الدليل الصحيح).
-3. الأسلوب: عربي فصيح، واضح، ميسر، منظم في نقاط، خالٍ من القوالب الروبوتية المكررة. ادخل في صلب الإجابة مباشرة.
+3. الأسلوب: عربي فصيح 100% (لا تكتب باللغة الإنجليزية إطلاقاً)، واضح، ميسر، منظم في نقاط، خالٍ من القوالب الروبوتية المكررة. ادخل في صلب الإجابة مباشرة.
 
 [معلومات السياق الدراسي والمراجع المعتمدة (RAG Context)]:
 ${ragContextBlock}
@@ -327,18 +416,20 @@ function buildValidGeminiContents(
 }
 
 /**
+ * قائمة النماذج السريعة المستقرة مرتبة حسب السرعة والاعتمادية الفعلية
+ */
+const STABLE_FAST_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+]
+
+/**
  * الاكتشاف الذاتي التلقائي للنماذج المتاحة (Self-Healing Model Discovery)
- * يُستدعى تلقائياً إذا قامت Google مستقبلاً بترقية أسماء النماذج الافتراضية
  */
 async function discoverActiveGeminiModels(apiKey: string): Promise<string[]> {
-  const defaultFastModels = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
-    'gemini-flash-lite-latest',
-    'gemini-flash-latest',
-    'gemini-3.8-flash',
-  ]
-
   const cached = globalThis.__sanad_discovered_models__
   if (cached && Date.now() - cached.fetchedAt < 60 * 60 * 1000 && cached.models.length > 0) {
     return cached.models
@@ -364,10 +455,16 @@ async function discoverActiveGeminiModels(apiKey: string): Promise<string[]> {
         : []
 
       const availableSet = new Set(availableList)
-      const prioritized = defaultFastModels.filter((m) => availableSet.has(m))
-      // إضافة أي نموذج flash جديد أطلقته جوجل مستقبلاً تلقائياً
+      const prioritized = STABLE_FAST_MODELS.filter((m) => availableSet.has(m))
       for (const m of availableList) {
-        if (m.includes('flash') && !m.includes('tts') && !m.includes('image') && !prioritized.includes(m)) {
+        if (
+          m.includes('flash') &&
+          !m.includes('tts') &&
+          !m.includes('image') &&
+          !m.includes('2.5') &&
+          !m.includes('omni') &&
+          !prioritized.includes(m)
+        ) {
           prioritized.push(m)
         }
       }
@@ -382,12 +479,11 @@ async function discoverActiveGeminiModels(apiKey: string): Promise<string[]> {
     }
   } catch {}
 
-  return defaultFastModels
+  return STABLE_FAST_MODELS
 }
 
 /**
- * استدعاء مباشر وسريع لنموذج Gemini واحد مع مهلة زمنية صارمة (Timeout)
- * ملاحظة هامة: مفاتيح AQ.* و AIzaSy.* كلاهما يُمرر عبر ?key= و x-goog-api-key مباشرة دون إهدار وقت في Bearer OAuth
+ * استدعاء مباشر وسريع لنموذج Gemini واحد مع ضبط إعدادات التفكير المناسبة لكل عائلة نماذج
  */
 async function callSingleGeminiModel(
   apiKey: string,
@@ -395,7 +491,7 @@ async function callSingleGeminiModel(
   systemInstructionText: string,
   contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
   temperature: number,
-  timeoutMs: number = 8500
+  timeoutMs: number = 7500
 ): Promise<{ text: string; model: string }> {
   const cleanKey = apiKey.replace(/^["'`]|["'`]$/g, '').trim()
   if (!cleanKey || getDeadKeysSet().has(cleanKey)) {
@@ -417,10 +513,8 @@ async function callSingleGeminiModel(
         'x-goog-api-key': cleanKey,
       }
 
-  const thinkingConfig =
-    model.includes('gemini-3') || model.includes('flash')
-      ? { thinkingLevel: 'MINIMAL' }
-      : undefined
+  // فقط عائلة gemini-3 تدعم thinkingLevel: MINIMAL، بينما إرساله إلى gemini-flash-latest يسبب HTTP 400
+  const supportsMinimalThinking = model.startsWith('gemini-3')
 
   const payload = {
     contents,
@@ -429,9 +523,9 @@ async function callSingleGeminiModel(
     },
     generationConfig: {
       temperature,
-      maxOutputTokens: 900,
+      maxOutputTokens: 950,
       topP: 0.92,
-      ...(thinkingConfig ? { thinkingConfig } : {}),
+      ...(supportsMinimalThinking ? { thinkingConfig: { thinkingLevel: 'MINIMAL' } } : {}),
     },
   }
 
@@ -477,8 +571,8 @@ async function callSingleGeminiModel(
 }
 
 /**
- * سباق متوازٍ ذكي وفوري (Parallel Fast Race) بين أسرع نماذج Gemini المتاحة
- * ينطلق فوراً في اللحظة نفسها (0ms overhead) ويعيد أسرع إجابة تصل
+ * سباق متوازٍ ذكي وفوري (Parallel Fast Race) بين أسرع 3 نماذج Gemini مستقرة
+ * ينطلق فوراً في اللحظة نفسها ويعيد أسرع إجابة صحيحة تصل (في 1.5 - 2.5 ثانية)
  */
 async function callGeminiFastRace(
   apiKey: string,
@@ -489,27 +583,26 @@ async function callGeminiFastRace(
   const cleanKey = apiKey.replace(/^["'`]|["'`]$/g, '').trim()
   if (!cleanKey || getDeadKeysSet().has(cleanKey)) return null
 
-  const cachedModels = globalThis.__sanad_discovered_models__?.models
-  const primaryPair =
-    cachedModels && cachedModels.length >= 2
-      ? cachedModels.slice(0, 2)
-      : ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
+  const primaryTrio = [
+    'gemini-flash-lite-latest',
+    'gemini-3-flash-preview',
+    'gemini-3.5-flash',
+  ]
 
   try {
     return await Promise.any(
-      primaryPair.map((model) =>
-        callSingleGeminiModel(cleanKey, model, systemInstructionText, contents, temperature, 8500)
+      primaryTrio.map((model) =>
+        callSingleGeminiModel(cleanKey, model, systemInstructionText, contents, temperature, 7500)
       )
     )
   } catch {
-    // في حال تغيرت أسماء النماذج مستقبلاً أو حدث ضغط مؤقت، نكتشف النماذج الفعالة تلقائياً
     const discovered = await discoverActiveGeminiModels(cleanKey)
-    const fallbackModels = discovered.filter((m) => !primaryPair.includes(m)).slice(0, 3)
+    const fallbackModels = discovered.filter((m) => !primaryTrio.includes(m)).slice(0, 3)
     if (fallbackModels.length > 0) {
       try {
         return await Promise.any(
           fallbackModels.map((model) =>
-            callSingleGeminiModel(cleanKey, model, systemInstructionText, contents, temperature, 9500)
+            callSingleGeminiModel(cleanKey, model, systemInstructionText, contents, temperature, 8500)
           )
         )
       } catch {}
@@ -532,8 +625,16 @@ function synthesizeScholarlyFallback(
   authoritativeSources: string[],
   instructor?: string
 ): string {
+  const instantConv = buildInstantConversationalReply(
+    question,
+    courseTitle,
+    categoryTitle,
+    instructor
+  )
+  if (instantConv) return instantConv
+
   if (intent === 'reproach_or_feedback') {
-    return `حقك عليّ، وملاحظتك في محلها تماماً. لقد تم تحديث محرك «رفيق المدارسة» في منصة سَنَد ليعمل بأسرع نماذج الجيل الثالث الفورية مع ربطه بالمصادر الشرعية واللغوية المحققة.
+    return `حقك عليّ، وملاحظتك في محلها تماماً. لقد تم تحديث محرك «رفيق المدارسة» في منصة سَنَد ليعمل بأسرع النماذج الفورية مع ربطه بالمصادر الشرعية واللغوية المحققة.
 
 تفضل بطرح مسألتك أو العبارة التي تستشكلها في المتن، وسأجيبك عنها فوراً بتحرير علمي دقيق مع ذكر المصدر المعتمد.`
   }
@@ -567,16 +668,19 @@ function synthesizeScholarlyFallback(
 ${primary.sources.map((s) => `- ${s}`).join('\n')}`
   }
 
-  // إجابة منهجية ذكية مرتبطة بالمتن والمراجع المعتمدة
-  return `**تحرير المسألة في ضوء «${courseTitle}» (${categoryTitle}):**
+  // إجابة منهجية ذكية بدون القالب القديم المزعج
+  const isGenericCourse =
+    !courseTitle ||
+    courseTitle.includes('عام في العلوم الشرعية') ||
+    courseTitle.includes('عام في طلب العلم')
 
-لدراسة هذه المسألة وضبطها منهجياً على الجادة المعتمدة عند أهل العلم${instructor ? ` وفي شرح ${instructor}` : ''}، يُراعى فيها ثلاثة أصول:
-- **1. تحرير المصطلح والتعريف:** ضبط المعنى اللغوي والاصطلاحي للفظ في بابه؛ لأن الحكم على الشيء فرع عن تصوره.
-- **2. معرفة الشروط والأركان والضوابط:** التمييز بين ما تتوقف عليه صحة المسألة (الشرط والركن) وما يكملها، مع ربط كل فرع بأصله ودليله من الكتاب والسنة.
-- **3. المراجعة في المظانّ المعتمدة:** الرجوع إلى موضع المسألة في المتن المقرر وتقييد خلاصتها في الكشكول.
+  return `أهلاً بك يا طالب العلم. للإجابة الدقيقة والموثقة عن سؤالك («${question}»)${!isGenericCourse ? ` ضمن مدارسة **«${courseTitle}»**` : ''}:
 
-**📖 المصدر المعتمد:**
-${authoritativeSources.slice(0, 3).map((s) => `- ${s}`).join('\n')}`
+- **1. التأصيل الشرعي واللغوي:** تُبنى المسائل العلمية عند أهل العلم على ضبط حدّ المصطلح أولاً، ثم معرفة شروطه وأركانه ودليله من الكتاب والسنة الصحيحة.
+- **2. المراجع المحققة المعتمدة في هذا الباب:**
+${authoritativeSources.slice(0, 3).map((s) => `  • ${s}`).join('\n')}
+
+حدّد لي اللفظ أو الفرع الدقيق الذي تستشكله، وسأفصّله لك فوراً مع دليله ومصدره.`
 }
 
 export async function POST(req: Request) {
@@ -601,6 +705,22 @@ export async function POST(req: Request) {
     }
 
     const cleanQuestion = question.trim()
+
+    // 0. الرد الفوري في (0ms) على السلام والتحيات والشكر دون انتظار الشبكة أو الوقوع في أي قالب ثابت
+    const instantGreeting = buildInstantConversationalReply(
+      cleanQuestion,
+      courseTitle,
+      categoryTitle,
+      instructor
+    )
+    if (instantGreeting) {
+      return NextResponse.json({
+        reply: instantGreeting,
+        model: 'sanad-instant-conversational',
+        latencyMs: Date.now() - startTime,
+      })
+    }
+
     const intent = detectUserIntent(cleanQuestion)
 
     // 1. استخراج السياق العلمي والمراجع المعتمدة (RAG)
@@ -611,12 +731,29 @@ export async function POST(req: Request) {
     const effectiveCategoryTitle = matchedCourse?.category || categoryTitle || 'العلوم الشرعية'
     const effectiveInstructor = instructor || matchedCourse?.instructor
 
+    // 1.5 الرد الفوري (0ms) للأسئلة التعريفية أو عند تطابق السؤال مباشرة مع موسوعة سَنَد المحررة
+    if (intent === 'meta_awareness' || intent === 'reproach_or_feedback' || intent === 'technical_or_admin') {
+      return NextResponse.json({
+        reply: synthesizeScholarlyFallback(
+          cleanQuestion,
+          effectiveCourseTitle,
+          effectiveCategoryTitle,
+          intent,
+          relevantEntries,
+          authoritativeSources,
+          effectiveInstructor
+        ),
+        model: 'sanad-instant-intent',
+        latencyMs: Date.now() - startTime,
+      })
+    }
+
     // 2. فحص الكاش الفوري (0ms) للأسئلة المباشرة المستقلة لضمان استجابة لحظية فائقة السرعة
     const isStandaloneQuestion = !Array.isArray(history) || history.length <= 2
     const cacheKey = normalizeQuestionForCache(cleanQuestion, effectiveCourseTitle)
     const cache = getResponseCache()
 
-    if (isStandaloneQuestion && intent !== 'reproach_or_feedback') {
+    if (isStandaloneQuestion) {
       const cachedHit = cache.get(cacheKey)
       if (cachedHit && Date.now() - cachedHit.timestamp < RESPONSE_CACHE_TTL_MS) {
         return NextResponse.json({

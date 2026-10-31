@@ -302,7 +302,7 @@
     "isBanned": false,
     "authProvider": "email",
     "registeredAt": "2026-09-27T01:40:48.076Z",
-    "lastActive": "2026-09-27T02:08:58.202Z",
+    "lastActive": "2026-10-31T17:24:02.242Z",
     "totalStudyMinutes": 33,
     "streak": 1,
     "completedCourses": [],
@@ -347,7 +347,7 @@
       "spacedRepetition": true,
       "security": true
     },
-    "roleUpdatedAt": "2026-10-23T22:36:21.228Z"
+    "roleUpdatedAt": "2026-10-31T17:24:02.242Z"
   },
   {
     "id": "student_1790470821796_fqawb",

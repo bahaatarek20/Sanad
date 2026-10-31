@@ -1,5 +1,23 @@
 [
   {
+    "action": "ROLE_DEMOTE",
+    "actorEmail": "bhaaljml480@gmail.com",
+    "actorRole": "owner",
+    "targetEmail": "bhaaljml48@gmail.com",
+    "details": "تخفيض رتبة العضو [Bahaa Tarek] من (admin) إلى رتبة طالب علم (student)",
+    "id": "aud_1793467442245_1biof",
+    "timestamp": "2026-10-31T17:24:02.245Z"
+  },
+  {
+    "action": "ROLE_PROMOTE",
+    "actorEmail": "bhaaljml480@gmail.com",
+    "actorRole": "owner",
+    "targetEmail": "bhaaljml48@gmail.com",
+    "details": "ترقية العضو [Bahaa Tarek] من (student) إلى رتبة مشرف (admin)",
+    "id": "aud_1793467435787_jxgrm",
+    "timestamp": "2026-10-31T17:23:55.787Z"
+  },
+  {
     "action": "PROFILE_UPDATE",
     "actorEmail": "bhaaljml480@gmail.com",
     "actorRole": "owner",
