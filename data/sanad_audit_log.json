@@ -5,6 +5,33 @@
     "actorRole": "owner",
     "targetEmail": "bhaaljml480@gmail.com",
     "details": "تحديث بيانات الملف الشخصي وإعدادات الحساب (بشمهندس بهاء طارق)",
+    "id": "aud_1793473048441_s2p7d",
+    "timestamp": "2026-10-31T18:57:28.441Z"
+  },
+  {
+    "action": "PROFILE_UPDATE",
+    "actorEmail": "bhaaljml480@gmail.com",
+    "actorRole": "owner",
+    "targetEmail": "bhaaljml480@gmail.com",
+    "details": "تحديث بيانات الملف الشخصي وإعدادات الحساب (بشمهندس بهاء طارق)",
+    "id": "aud_1793473046112_oilu3",
+    "timestamp": "2026-10-31T18:57:26.112Z"
+  },
+  {
+    "action": "AVATAR_UPDATE",
+    "actorEmail": "bhaaljml480@gmail.com",
+    "actorRole": "owner",
+    "targetEmail": "bhaaljml480@gmail.com",
+    "details": "تحديث الصورة الشخصية للحساب",
+    "id": "aud_1793473046093_escny",
+    "timestamp": "2026-10-31T18:57:26.093Z"
+  },
+  {
+    "action": "PROFILE_UPDATE",
+    "actorEmail": "bhaaljml480@gmail.com",
+    "actorRole": "owner",
+    "targetEmail": "bhaaljml480@gmail.com",
+    "details": "تحديث بيانات الملف الشخصي وإعدادات الحساب (بشمهندس بهاء طارق)",
     "id": "aud_1793470416606_10lcl",
     "timestamp": "2026-10-31T18:13:36.606Z"
   },

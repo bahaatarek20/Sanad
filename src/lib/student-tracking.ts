@@ -57,6 +57,7 @@ export interface AuditLogEntry {
     | 'AVATAR_UPLOAD'
     | 'AVATAR_DELETE'
     | 'SESSION_REVOKE'
+    | 'ACCOUNT_DELETE'
     | 'UNAUTHORIZED_ATTEMPT'
   actorEmail: string
   actorRole: 'owner' | 'admin' | 'student' | 'system' | 'anonymous' | null
@@ -162,6 +163,8 @@ const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
 const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_certificates.json')
 const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
 const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
+const DELETED_STUDENTS_FILE = path.join(DATA_DIR, 'sanad_deleted_students.json')
+const UPLOAD_DELETED_STUDENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_deleted_students.json')
 
 export const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
 
@@ -184,6 +187,7 @@ const TMP_REGISTRY_FILE = path.join(TMP_DATA_DIR, 'sanad_students_registry.json'
 const TMP_STATS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_stats.json')
 const TMP_EVENTS_FILE = path.join(TMP_DATA_DIR, 'sanad_platform_events.json')
 const TMP_AUDIT_LOG_FILE = path.join(TMP_DATA_DIR, 'sanad_audit_log.json')
+const TMP_DELETED_STUDENTS_FILE = path.join(TMP_DATA_DIR, 'sanad_deleted_students.json')
 
 declare global {
   // eslint-disable-next-line no-var
@@ -200,6 +204,55 @@ declare global {
     | undefined
   // eslint-disable-next-line no-var
   var __sanad_role_locks__: Record<string, { role: PlatformRole; roleUpdatedAt: string }> | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_deleted_emails__: Set<string> | undefined
+}
+
+export function getDeletedStudentEmails(): Set<string> {
+  const deleted = new Set<string>(globalThis.__sanad_deleted_emails__ || [])
+  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE, UPLOAD_DELETED_STUDENTS_FILE]) {
+    try {
+      if (fs.existsSync(file)) {
+        const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+        if (Array.isArray(parsed)) {
+          parsed.forEach((em) => {
+            if (typeof em === 'string' && em.trim() && em.toLowerCase().trim() !== SUPER_ADMIN_EMAIL) {
+              deleted.add(em.toLowerCase().trim())
+            }
+          })
+        }
+      }
+    } catch {}
+  }
+  globalThis.__sanad_deleted_emails__ = deleted
+  return deleted
+}
+
+export function isStudentDeleted(emailOrId?: string | null): boolean {
+  if (!emailOrId) return false
+  const clean = emailOrId.toLowerCase().trim()
+  if (!clean || clean === SUPER_ADMIN_EMAIL) return false
+  const deleted = getDeletedStudentEmails()
+  return deleted.has(clean)
+}
+
+function recordDeletedStudentEmail(email: string, id?: string, scholarlyId?: string) {
+  const cleanEmail = (email || '').toLowerCase().trim()
+  if (!cleanEmail || cleanEmail === SUPER_ADMIN_EMAIL) return
+  const deleted = getDeletedStudentEmails()
+  deleted.add(cleanEmail)
+  if (id) deleted.add(id.toLowerCase().trim())
+  if (scholarlyId) deleted.add(scholarlyId.toLowerCase().trim())
+  globalThis.__sanad_deleted_emails__ = deleted
+
+  const payload = JSON.stringify(Array.from(deleted), null, 2)
+  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE, UPLOAD_DELETED_STUDENTS_FILE]) {
+    try {
+      const dir = path.dirname(file)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(file, payload, 'utf8')
+    } catch {}
+  }
 }
 
 export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
@@ -412,8 +465,14 @@ function ensureDataFiles() {
 }
 
 export function readAllLocalStudents(forceRefresh: boolean = false): StudentActivityRecord[] {
+  const deletedSet = getDeletedStudentEmails()
   if (!forceRefresh && globalThis.__sanad_registry_cache__ && globalThis.__sanad_registry_cache__.length > 0) {
-    return globalThis.__sanad_registry_cache__
+    return globalThis.__sanad_registry_cache__.filter(
+      (s) =>
+        !deletedSet.has((s.email || '').toLowerCase().trim()) &&
+        !deletedSet.has((s.id || '').toLowerCase().trim()) &&
+        !(s.scholarlyId && deletedSet.has(s.scholarlyId.toLowerCase().trim()))
+    )
   }
 
   const map = new Map<string, StudentActivityRecord>()
@@ -428,6 +487,11 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
           arr.forEach((st: StudentActivityRecord) => {
             if (st && (st.email || st.id)) {
               const key = (st.email || st.id).toLowerCase().trim()
+              const idLower = (st.id || '').toLowerCase().trim()
+              const schLower = (st.scholarlyId || '').toLowerCase().trim()
+              if (deletedSet.has(key) || (idLower && deletedSet.has(idLower)) || (schLower && deletedSet.has(schLower))) {
+                return
+              }
               if (!map.has(key)) {
                 ensureStudentTelemetryDefaults(st)
                 map.set(key, st)
@@ -480,6 +544,7 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
             if (!recip) continue
             if (recip.includes('@')) {
               const key = recip.toLowerCase()
+              if (deletedSet.has(key)) continue
               if (!map.has(key)) {
                 const isGmail = key.includes('@gmail.com')
                 const fakeStudent: StudentActivityRecord = {
@@ -504,6 +569,7 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
             } else if (recip.startsWith('+')) {
               const fakeEmail = `${recip.replace(/[^0-9]/g, '')}@student.sanad.edu`
               const key = fakeEmail.toLowerCase()
+              if (deletedSet.has(key)) continue
               if (!map.has(key)) {
                 const fakeStudent: StudentActivityRecord = {
                   id: `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -544,7 +610,8 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
         if (Array.isArray(events)) {
           for (const ev of events) {
             const evEmail = (ev.studentEmail || '').trim().toLowerCase()
-            if (evEmail && evEmail.includes('@')) {
+            if (evEmail && evEmail.includes('@') && evEmail !== 'guest@visitor.sanad') {
+              if (deletedSet.has(evEmail)) continue
               if (!map.has(evEmail)) {
                 const isGmail = evEmail.includes('@gmail.com')
                 const fakeStudent: StudentActivityRecord = {
@@ -916,13 +983,20 @@ export function generateScholarlyId(existingStudents: StudentActivityRecord[]): 
   return `SND-${maxNum + 1}`
 }
 
-// 1.6 فحص هل حساب الطالب محظور إدارياً
+// 1.6 فحص هل حساب الطالب محظور إدارياً أو محذوف نهائياً
 export function isStudentBanned(emailOrId: string): { isBanned: boolean; banReason?: string; bannedAt?: string } {
   try {
     ensureDataFiles()
     const clean = emailOrId.toLowerCase().trim()
     if (clean === SUPER_ADMIN_EMAIL) {
       return { isBanned: false }
+    }
+    if (isStudentDeleted(clean)) {
+      return {
+        isBanned: true,
+        banReason: 'تم حذف هذا الحساب نهائياً من منصة سَنَد بقرار من مالك المنصة.',
+        bannedAt: new Date().toISOString(),
+      }
     }
     const students = readAllLocalStudents(false)
     const student = students.find(
@@ -1209,6 +1283,238 @@ export async function updateStudentRole(
   }
 }
 
+// 1.9 حذف عضو أو طالب نهائياً من المنصة وجميع سجلاتها (حصرياً لمالك المنصة bhaaljml480@gmail.com)
+export async function permanentlyDeleteStudent(
+  emailOrId: string,
+  actorEmail: string = SUPER_ADMIN_EMAIL
+): Promise<{
+  success: boolean
+  deletedEmail?: string
+  deletedId?: string
+  deletedScholarlyId?: string
+  students?: StudentActivityRecord[]
+  stats?: PlatformStats
+  error?: string
+}> {
+  try {
+    ensureDataFiles()
+    const clean = (emailOrId || '').toLowerCase().trim()
+    const cleanActor = (actorEmail || '').toLowerCase().trim()
+
+    if (!clean) {
+      return { success: false, error: 'معرف العضو غير صالح' }
+    }
+
+    // التحقق الصارم أن المنفذ هو مالك المنصة حصراً (bhaaljml480@gmail.com)
+    if (cleanActor !== SUPER_ADMIN_EMAIL) {
+      recordAuditLog({
+        action: 'UNAUTHORIZED_ATTEMPT',
+        actorEmail: cleanActor || 'unknown',
+        actorRole: 'admin',
+        targetEmail: clean,
+        details: `رفض محاولة حذف حساب العضو (${clean}) نهائياً من غير مالك المنصة`,
+      })
+      return {
+        success: false,
+        error: 'صلاحية سيادية: الحذف النهائي للأعضاء محصور بمالك المنصة (المهندس بهاء طارق) حصراً.',
+      }
+    }
+
+    const students = readAllLocalStudents(true)
+    const idx = students.findIndex(
+      (s) =>
+        s.email?.toLowerCase().trim() === clean ||
+        s.scholarlyId?.toLowerCase().trim() === clean ||
+        s.id?.toLowerCase().trim() === clean
+    )
+
+    const targetStudent = idx >= 0 ? students[idx] : undefined
+    const targetEmail = (targetStudent?.email || (clean.includes('@') ? clean : '')).toLowerCase().trim()
+    const targetId = targetStudent?.id || (!clean.includes('@') ? clean : undefined)
+    const targetScholarlyId = targetStudent?.scholarlyId
+    const targetName = targetStudent?.name || targetEmail || clean
+
+    // حماية مطلقة لصاحب المنصة والمشرف الأعلى المهندس بهاء طارق
+    if (
+      targetEmail === SUPER_ADMIN_EMAIL ||
+      clean === SUPER_ADMIN_EMAIL ||
+      targetStudent?.role === 'owner'
+    ) {
+      recordAuditLog({
+        action: 'UNAUTHORIZED_ATTEMPT',
+        actorEmail: cleanActor,
+        actorRole: 'owner',
+        targetEmail: SUPER_ADMIN_EMAIL,
+        details: 'منع محاولة حذف حساب مالك المنصة (Owner Sovereign Protection)',
+      })
+      return {
+        success: false,
+        error: 'حماية سيادية: لا يمكن حذف حساب مالك المنصة (المهندس بهاء طارق) تحت أي ظرف.',
+      }
+    }
+
+    // 1. تسجيل الحذف السيادي الدائم (Tombstone) لمنع إعادة البناء أو الظهور مجدداً من أي مصدر
+    recordDeletedStudentEmail(targetEmail || clean, targetId, targetScholarlyId)
+    const deletedSet = getDeletedStudentEmails()
+
+    // 2. إزالة العضو من قائمة الطلاب النشطة وحفظها في كافة ملفات السجل
+    const remainingStudents = students.filter((s) => {
+      const sEmail = (s.email || '').toLowerCase().trim()
+      const sId = (s.id || '').toLowerCase().trim()
+      const sSch = (s.scholarlyId || '').toLowerCase().trim()
+      if (targetEmail && sEmail === targetEmail) return false
+      if (targetId && sId === targetId.toLowerCase().trim()) return false
+      if (targetScholarlyId && sSch === targetScholarlyId.toLowerCase().trim()) return false
+      if (sEmail === clean || sId === clean || sSch === clean) return false
+      return !deletedSet.has(sEmail)
+    })
+
+    // تنظيف الكاش الحي في الذاكرة
+    if (
+      globalThis.__sanad_latest_registered_student__ &&
+      ((targetEmail &&
+        globalThis.__sanad_latest_registered_student__.email?.toLowerCase().trim() === targetEmail) ||
+        globalThis.__sanad_latest_registered_student__.id === targetId)
+    ) {
+      globalThis.__sanad_latest_registered_student__ = undefined
+    }
+
+    if (globalThis.__sanad_cloud_sync_cache__?.students) {
+      globalThis.__sanad_cloud_sync_cache__.students =
+        globalThis.__sanad_cloud_sync_cache__.students.filter((cs) => {
+          const csEmail = (cs.email || '').toLowerCase().trim()
+          const csId = (cs.id || '').toLowerCase().trim()
+          return csEmail !== targetEmail && csEmail !== clean && csId !== clean && !deletedSet.has(csEmail)
+        })
+    }
+
+    if (targetEmail && globalThis.__sanad_role_locks__?.[targetEmail]) {
+      delete globalThis.__sanad_role_locks__[targetEmail]
+    }
+
+    invalidateStudentProfileCache(targetEmail || clean)
+    saveAllLocalStudents(remainingStudents)
+
+    // 3. مسح جميع أحداث العضو من سجل الأحداث (EVENTS_FILE, UPLOAD_EVENTS_FILE, TMP_EVENTS_FILE)
+    for (const evtFile of [EVENTS_FILE, UPLOAD_EVENTS_FILE, TMP_EVENTS_FILE]) {
+      try {
+        if (fs.existsSync(evtFile)) {
+          const parsed = JSON.parse(fs.readFileSync(evtFile, 'utf8'))
+          if (Array.isArray(parsed)) {
+            const filteredEvents = parsed.filter((ev) => {
+              const evEmail = (ev?.studentEmail || '').toLowerCase().trim()
+              return evEmail !== targetEmail && evEmail !== clean && !deletedSet.has(evEmail)
+            })
+            fs.writeFileSync(evtFile, JSON.stringify(filteredEvents, null, 2), 'utf8')
+          }
+        }
+      } catch {}
+    }
+
+    // 4. مسح جميع رسائل العضو من سجل الرسائل (MESSAGES_FILE, UPLOAD_MESSAGES_FILE)
+    const tmpMessagesFile = path.join(TMP_DATA_DIR, 'sanad_messages_registry.json')
+    for (const msgFile of [MESSAGES_FILE, UPLOAD_MESSAGES_FILE, tmpMessagesFile]) {
+      try {
+        if (fs.existsSync(msgFile)) {
+          const parsed = JSON.parse(fs.readFileSync(msgFile, 'utf8'))
+          if (Array.isArray(parsed)) {
+            const filteredMsgs = parsed.filter((m) => {
+              const recip = (m?.recipient || '').toLowerCase().trim()
+              const sender = (m?.senderEmail || '').toLowerCase().trim()
+              if (targetEmail && (recip === targetEmail || sender === targetEmail)) return false
+              if (recip === clean || sender === clean) return false
+              return !deletedSet.has(recip)
+            })
+            fs.writeFileSync(msgFile, JSON.stringify(filteredMsgs, null, 2), 'utf8')
+          }
+        }
+      } catch {}
+    }
+
+    // 5. مسح أي إجازات علمية مرتبطة بالعضو المحذوف (CERTIFICATES_FILE, UPLOAD_CERTIFICATES_FILE)
+    const tmpCertsFile = path.join(TMP_DATA_DIR, 'sanad_certificates.json')
+    for (const certFile of [CERTIFICATES_FILE, UPLOAD_CERTIFICATES_FILE, tmpCertsFile]) {
+      try {
+        if (fs.existsSync(certFile)) {
+          const parsed = JSON.parse(fs.readFileSync(certFile, 'utf8'))
+          if (Array.isArray(parsed)) {
+            const filteredCerts = parsed.filter((c) => {
+              const cEmail = (c?.studentEmail || '').toLowerCase().trim()
+              return cEmail !== targetEmail && cEmail !== clean && !deletedSet.has(cEmail)
+            })
+            fs.writeFileSync(certFile, JSON.stringify(filteredCerts, null, 2), 'utf8')
+          }
+        }
+      } catch {}
+    }
+
+    // 6. مسح جميع مشاركات وتعليقات العضو من مجلس المذاكرة (محلياً وسحابياً)
+    let deletedPostIds: string[] = []
+    try {
+      const { purgeStudentCommunityContent } = await import('@/lib/community-store')
+      deletedPostIds = purgeStudentCommunityContent(targetEmail || clean, targetName, targetScholarlyId)
+    } catch {}
+
+    // 7. تحديث إحصائيات المنصة وسجل الزوار (إزالة الزيارات المرتبطة بالعضو المحذوف وتحديث العدادات)
+    const stats = readPlatformStatsLocal()
+    const nowIso = new Date().toISOString()
+    stats.totalRegisteredStudents = remainingStudents.length
+    stats.totalCompletedCoursesCount = remainingStudents.reduce(
+      (acc, s) => acc + (s.completedCourses?.length || 0),
+      0
+    )
+    stats.totalStudyMinutes = remainingStudents.reduce(
+      (acc, s) => acc + (s.totalStudyMinutes || 0),
+      0
+    )
+    stats.totalNotesCount = remainingStudents.reduce((acc, s) => acc + (s.notesCount || 0), 0)
+    if (Array.isArray(stats.recentVisitorsLog)) {
+      stats.recentVisitorsLog = stats.recentVisitorsLog.filter((v) => {
+        const vEmail = (v.email || '').toLowerCase().trim()
+        return !vEmail || (vEmail !== targetEmail && vEmail !== clean && !deletedSet.has(vEmail))
+      })
+    }
+    stats.lastUpdated = nowIso
+    savePlatformStatsLocal(stats)
+
+    // 8. الحذف الفوري من Cloud Firestore (بمهلة سريعة 2 ثانية لمنع أي تأخير في الواجهة)
+    try {
+      const { deleteStudentFromCloud, deleteCommunityPostFromCloud, savePlatformStatsToCloud } =
+        await import('@/lib/cloud-db')
+      const cloudTasks: Promise<unknown>[] = [
+        deleteStudentFromCloud(targetEmail || clean, targetId, Array.from(deletedSet)),
+        savePlatformStatsToCloud(stats as unknown as Record<string, unknown>),
+      ]
+      for (const pid of deletedPostIds) {
+        cloudTasks.push(deleteCommunityPostFromCloud(pid))
+      }
+      const fastTimeout = new Promise((resolve) => setTimeout(resolve, 2000))
+      await Promise.race([Promise.allSettled(cloudTasks), fastTimeout])
+    } catch {}
+
+    // 9. توثيق عملية الحذف في سجل التدقيق الأمني فقط (دون إضافة studentEmail إلى أحداث المنصة حتى لا يُعاد بناؤه)
+    recordAuditLog({
+      action: 'ACCOUNT_DELETE',
+      actorEmail: cleanActor,
+      actorRole: 'owner',
+      targetEmail: targetEmail || clean,
+      details: `حذف حساب العضو [${targetName}] (${targetScholarlyId || targetEmail || clean}) نهائياً من المنصة وكافة قواعد البيانات`,
+    })
+
+    return {
+      success: true,
+      deletedEmail: targetEmail || clean,
+      deletedId: targetId,
+      deletedScholarlyId: targetScholarlyId,
+      students: remainingStudents,
+      stats,
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'تعذر حذف حساب العضو نهائياً'
+    return { success: false, error: msg }
+  }
+}
+
 // 2. تسجيل أو تحديث حساب طالب مسجل مع التقاط البيانات الجغرافية والـ IP
 export function registerOrUpdateStudent(
   email: string,
@@ -1229,6 +1535,9 @@ export function registerOrUpdateStudent(
 ): StudentActivityRecord {
   ensureDataFiles()
   const cleanEmail = email.toLowerCase().trim()
+  if (isStudentDeleted(cleanEmail) && cleanEmail !== SUPER_ADMIN_EMAIL) {
+    throw new Error('تم حذف هذا الحساب نهائياً من منصة سَنَد بقرار من مالك المنصة.')
+  }
   const students = readAllLocalStudents()
 
   const existingIdx = students.findIndex((s) => s.email.toLowerCase() === cleanEmail)
@@ -1395,6 +1704,10 @@ export function invalidateStudentProfileCache(email?: string) {
 // 2.5 جلب بيانات الحساب العلمي للطالب (السجل الكامل المشفر مع كاش سريع في الذاكرة)
 export function getStudentProfileData(email: string): StudentActivityRecord | null {
   const cleanEmail = email.toLowerCase().trim()
+  if (isStudentDeleted(cleanEmail)) {
+    profileCacheMap.delete(cleanEmail)
+    return null
+  }
   const cached = profileCacheMap.get(cleanEmail)
   if (cached && Date.now() - cached.time < PROFILE_CACHE_TTL) {
     return cached.data
@@ -2029,12 +2342,14 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     }
   }
 
+  const deletedSet = getDeletedStudentEmails()
   let hasMergedChanges = false
   if (cloudStudents && cloudStudents.length > 0) {
     const existingEmails = new Set(mergedStudents.map((s) => s.email.toLowerCase().trim()))
     for (const cs of cloudStudents) {
       const clean = (cs.email || '').toLowerCase().trim()
-      if (!clean) continue
+      const cleanId = (cs.id || '').toLowerCase().trim()
+      if (!clean || deletedSet.has(clean) || (cleanId && deletedSet.has(cleanId))) continue
       if (!existingEmails.has(clean)) {
         if (roleLocks[clean]) {
           cs.role = roleLocks[clean].role
@@ -2091,27 +2406,29 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   if (globalThis.__sanad_latest_registered_student__) {
     const latest = globalThis.__sanad_latest_registered_student__
     const latestEmail = (latest.email || '').toLowerCase().trim()
-    const idx = mergedStudents.findIndex((s) => s.email.toLowerCase().trim() === latestEmail)
-    if (idx === -1) {
-      mergedStudents.unshift(latest)
-      hasMergedChanges = true
-    } else {
-      const existingRole = mergedStudents[idx].role
-      const existingRoleTime = mergedStudents[idx].roleUpdatedAt || ''
-      const latestRoleTime = latest.roleUpdatedAt || ''
-      const finalRole =
-        roleLocks[latestEmail]?.role ||
-        (existingRoleTime >= latestRoleTime ? existingRole : latest.role) ||
-        'student'
-      const finalRoleTime =
-        roleLocks[latestEmail]?.roleUpdatedAt ||
-        (existingRoleTime >= latestRoleTime ? existingRoleTime : latestRoleTime) ||
-        undefined
-      mergedStudents[idx] = {
-        ...mergedStudents[idx],
-        ...latest,
-        role: latestEmail === SUPER_ADMIN_EMAIL ? 'owner' : finalRole,
-        roleUpdatedAt: finalRoleTime,
+    if (!deletedSet.has(latestEmail)) {
+      const idx = mergedStudents.findIndex((s) => s.email.toLowerCase().trim() === latestEmail)
+      if (idx === -1) {
+        mergedStudents.unshift(latest)
+        hasMergedChanges = true
+      } else {
+        const existingRole = mergedStudents[idx].role
+        const existingRoleTime = mergedStudents[idx].roleUpdatedAt || ''
+        const latestRoleTime = latest.roleUpdatedAt || ''
+        const finalRole =
+          roleLocks[latestEmail]?.role ||
+          (existingRoleTime >= latestRoleTime ? existingRole : latest.role) ||
+          'student'
+        const finalRoleTime =
+          roleLocks[latestEmail]?.roleUpdatedAt ||
+          (existingRoleTime >= latestRoleTime ? existingRoleTime : latestRoleTime) ||
+          undefined
+        mergedStudents[idx] = {
+          ...mergedStudents[idx],
+          ...latest,
+          role: latestEmail === SUPER_ADMIN_EMAIL ? 'owner' : finalRole,
+          roleUpdatedAt: finalRoleTime,
+        }
       }
     }
   }

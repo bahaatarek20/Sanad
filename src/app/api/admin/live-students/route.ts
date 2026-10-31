@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { verifyAdminSession, validateAdminTokenString, getAdminActor } from '@/lib/admin-security'
-import { getAdminDashboardDataAsync, getLatestRegisteredStudent, getAuditLogs } from '@/lib/student-tracking'
+import {
+  getAdminDashboardDataAsync,
+  getLatestRegisteredStudent,
+  getAuditLogs,
+  getDeletedStudentEmails,
+} from '@/lib/student-tracking'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -41,6 +46,7 @@ export async function GET(request: NextRequest) {
         stats: data.stats,
         recentEvents: data.recentEvents?.slice(0, 20) || [],
         auditLogs,
+        deletedEmails: Array.from(getDeletedStudentEmails()),
         currentActor: {
           email: actor.email || 'bhaaljml480@gmail.com',
           role: actor.role || 'owner',

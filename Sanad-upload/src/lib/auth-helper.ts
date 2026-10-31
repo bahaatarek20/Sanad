@@ -3,6 +3,7 @@ import { cache } from 'react'
 import { cookies } from 'next/headers'
 import {
   isStudentBanned,
+  isStudentDeleted,
   getStudentProfileData,
   SUPER_ADMIN_EMAIL,
   type PlatformRole,
@@ -140,6 +141,18 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
       const parsed = verifySessionToken(localSession.value)
       if (parsed && parsed.email) {
         const email = String(parsed.email).toLowerCase().trim()
+        const uid = parsed.id ? String(parsed.id) : ''
+
+        // التحقق الفوري مما إذا كان الحساب قد حُذف نهائياً من قِبل مالك المنصة
+        if (isStudentDeleted(email) || (uid && isStudentDeleted(uid))) {
+          try {
+            cookieStore.delete('sanad_student_user')
+            cookieStore.delete('sanad_student_display')
+            cookieStore.delete('sanad_admin_gate_token')
+          } catch {}
+          return null
+        }
+
         const banCheck = isStudentBanned(email)
         if (banCheck.isBanned) {
           try {

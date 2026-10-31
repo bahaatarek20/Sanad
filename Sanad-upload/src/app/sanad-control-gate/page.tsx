@@ -67,7 +67,7 @@ import {
 } from 'lucide-react'
 import { auth, db } from '@/lib/firebase/config'
 import { onAuthStateChanged } from 'firebase/auth'
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore'
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { subscribeToOverviewStats } from '@/lib/user-service'
 
 const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
@@ -92,6 +92,7 @@ import {
   toggleBanStudentAdminAction,
   resetVisitorCountAdminAction,
   updateStudentRoleAdminAction,
+  deleteStudentAdminAction,
 } from './actions'
 import type { CategoryItem } from '@/lib/courses-store'
 import type { StudentActivityRecord, PlatformStats, PlatformEvent, AuditLogEntry } from '@/lib/student-tracking'
@@ -251,13 +252,27 @@ export default function SanadControlGatePage() {
   const [intelligenceType, setIntelligenceType] = useState<'matn' | 'science'>('matn')
 
   // بيانات التتبع والإحصائيات
+  const deletedEmailsRef = useRef<Set<string>>(new Set())
   const [students, setStudents] = useState<StudentActivityRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
+        const storedDeleted = localStorage.getItem('sanad_deleted_emails')
+        if (storedDeleted) {
+          const parsedDel = JSON.parse(storedDeleted)
+          if (Array.isArray(parsedDel)) {
+            parsedDel.forEach((em) => typeof em === 'string' && deletedEmailsRef.current.add(em.toLowerCase().trim()))
+          }
+        }
         const cached = localStorage.getItem('sanad_admin_students_backup')
         if (cached) {
           const parsed = JSON.parse(cached)
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter(
+              (s: StudentActivityRecord) =>
+                !deletedEmailsRef.current.has((s.email || '').toLowerCase().trim()) &&
+                !deletedEmailsRef.current.has((s.id || '').toLowerCase().trim())
+            )
+          }
         }
       } catch {}
     }
@@ -289,6 +304,8 @@ export default function SanadControlGatePage() {
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<StudentActivityRecord | null>(null)
   const [banModalStudent, setBanModalStudent] = useState<StudentActivityRecord | null>(null)
   const [banReasonInput, setBanReasonInput] = useState('حظر إداري بقرار من المشرف العام')
+  const [deleteModalStudent, setDeleteModalStudent] = useState<StudentActivityRecord | null>(null)
+  const [isDeletingStudentPending, setIsDeletingStudentPending] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isBanningPending, setIsBanningPending] = useState(false)
   const [roleActionLoadingId, setRoleActionLoadingId] = useState<string | null>(null)
@@ -334,7 +351,7 @@ export default function SanadControlGatePage() {
   }
 
   const saveStudentsBackupToLocal = (list: StudentActivityRecord[]) => {
-    if (typeof window === 'undefined' || list.length === 0) return
+    if (typeof window === 'undefined') return
     try {
       const lightweight = list.slice(0, 120).map(({ savedNotes, ...rest }) => {
         void savedNotes
@@ -342,6 +359,21 @@ export default function SanadControlGatePage() {
       })
       localStorage.setItem('sanad_admin_students_backup', JSON.stringify(lightweight))
     } catch {}
+  }
+
+  const syncDeletedEmailsToLocal = (emails?: string[]) => {
+    if (Array.isArray(emails)) {
+      emails.forEach((em) => {
+        if (typeof em === 'string' && em.trim()) {
+          deletedEmailsRef.current.add(em.toLowerCase().trim())
+        }
+      })
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sanad_deleted_emails', JSON.stringify(Array.from(deletedEmailsRef.current)))
+      } catch {}
+    }
   }
 
   const showRoleToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -745,13 +777,16 @@ export default function SanadControlGatePage() {
     try {
       const res = await getAdminDashboardAction()
       if (res.success && 'students' in res && res.students && res.stats) {
+        if ('deletedEmails' in res && Array.isArray(res.deletedEmails)) {
+          syncDeletedEmailsToLocal(res.deletedEmails)
+        }
         setStudents((prev) => {
           const map = new Map<string, StudentActivityRecord>()
-          res.students.forEach((s: StudentActivityRecord) => map.set(s.email.toLowerCase().trim(), s))
-          prev.forEach((s) => {
-            const email = s.email.toLowerCase().trim()
-            if (!map.has(email)) {
-              map.set(email, s)
+          res.students.forEach((s: StudentActivityRecord) => {
+            const em = (s.email || '').toLowerCase().trim()
+            const id = (s.id || '').toLowerCase().trim()
+            if (em && !deletedEmailsRef.current.has(em) && !deletedEmailsRef.current.has(id)) {
+              map.set(em, s)
             }
           })
           const merged = applyRoleOverrides(Array.from(map.values()), prev)
@@ -903,7 +938,14 @@ export default function SanadControlGatePage() {
       if (res.ok) {
         const json = await res.json()
         if (json.success && Array.isArray(json.students)) {
-          const freshStudents: StudentActivityRecord[] = json.students
+          if (Array.isArray(json.deletedEmails)) {
+            syncDeletedEmailsToLocal(json.deletedEmails)
+          }
+          const freshStudents: StudentActivityRecord[] = (json.students as StudentActivityRecord[]).filter(
+            (s) =>
+              !deletedEmailsRef.current.has((s.email || '').toLowerCase().trim()) &&
+              !deletedEmailsRef.current.has((s.id || '').toLowerCase().trim())
+          )
           const latest: StudentActivityRecord | null = json.latestStudent || freshStudents[0] || null
 
           setLastLivePollTime(new Date().toLocaleTimeString('ar-EG'))
@@ -912,8 +954,11 @@ export default function SanadControlGatePage() {
           if (
             !isInitialLiveLoadRef.current &&
             latest &&
+            !deletedEmailsRef.current.has((latest.email || '').toLowerCase().trim()) &&
             ((prevStudentsCountRef.current !== null && freshStudents.length > prevStudentsCountRef.current) ||
-              (prevLatestStudentIdRef.current !== null && latest.id !== prevLatestStudentIdRef.current))
+              (prevLatestStudentIdRef.current !== null &&
+                latest.id !== prevLatestStudentIdRef.current &&
+                freshStudents.length >= (prevStudentsCountRef.current || 0)))
           ) {
             playNewStudentChime()
             setLiveAlert({
@@ -937,11 +982,10 @@ export default function SanadControlGatePage() {
 
           setStudents((prev) => {
             const map = new Map<string, StudentActivityRecord>()
-            freshStudents.forEach((s) => map.set(s.email.toLowerCase().trim(), s))
-            prev.forEach((s) => {
-              const email = s.email.toLowerCase().trim()
-              if (!map.has(email)) {
-                map.set(email, s)
+            freshStudents.forEach((s) => {
+              const em = (s.email || '').toLowerCase().trim()
+              if (em && !deletedEmailsRef.current.has(em)) {
+                map.set(em, s)
               }
             })
             const merged = applyRoleOverrides(Array.from(map.values()), prev)
@@ -989,7 +1033,12 @@ export default function SanadControlGatePage() {
             snapshot.forEach((docSnap) => {
               const data = docSnap.data() as StudentActivityRecord
               if (data && data.email) {
-                if (data.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
+                const cleanEm = data.email.toLowerCase().trim()
+                const cleanId = (data.id || '').toLowerCase().trim()
+                if (deletedEmailsRef.current.has(cleanEm) || (cleanId && deletedEmailsRef.current.has(cleanId))) {
+                  return
+                }
+                if (cleanEm === SUPER_ADMIN_EMAIL) {
                   data.role = 'owner'
                 }
                 firestoreStudents.push(data)
@@ -1001,6 +1050,10 @@ export default function SanadControlGatePage() {
               firestoreStudents.forEach((s) => map.set(s.email.toLowerCase().trim(), s))
               prev.forEach((s) => {
                 const email = s.email.toLowerCase().trim()
+                const sId = (s.id || '').toLowerCase().trim()
+                if (deletedEmailsRef.current.has(email) || (sId && deletedEmailsRef.current.has(sId))) {
+                  return
+                }
                 if (!map.has(email)) {
                   map.set(email, s)
                 } else {
@@ -2189,6 +2242,110 @@ export default function SanadControlGatePage() {
     await handleToggleRole(st)
   }
 
+  // فتح نافذة التأكيد للحذف النهائي السيادي لأي عضو أو طالب (حصرياً لمالك المنصة)
+  const handleOpenDeleteStudentModal = (st: StudentActivityRecord, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (isStudentOwner(st)) {
+      showRoleToast('حساب مالك المنصة (bhaaljml480@gmail.com) محمي سيادياً ولا يمكن حذفه مطلقاً.', 'error')
+      return
+    }
+    if (!currentActor.isOwner) {
+      showRoleToast('الحذف النهائي للأعضاء حق سيادي حصري لمالك المنصة فقط (bhaaljml480@gmail.com).', 'error')
+      return
+    }
+    setDeleteModalStudent(st)
+  }
+
+  // تنفيذ الحذف النهائي الكامل للعضو من جميع قواعد البيانات والمنصة (0 ثانية استجابة)
+  const handleConfirmPermanentDeleteStudent = async () => {
+    if (!deleteModalStudent) return
+    const st = deleteModalStudent
+    if (isStudentOwner(st)) return
+
+    setIsDeletingStudentPending(true)
+    const cleanEmail = (st.email || '').toLowerCase().trim()
+    const cleanId = (st.id || '').toLowerCase().trim()
+    const cleanScholarly = (st.scholarlyId || '').toLowerCase().trim()
+
+    // 1. تسجيل فوري في سجل الحذف المحلي بالمتصفح لمنع أي Snapshot أو Poll من إعادته
+    const keysToTombstone = [cleanEmail, cleanId, cleanScholarly].filter(Boolean)
+    syncDeletedEmailsToLocal(keysToTombstone)
+
+    // 2. إزالة فورية من واجهة المستخدم في 0 ثانية وتحديث الإحصائيات والكاش المحلي
+    setStudents((prev) => {
+      const updated = prev.filter((item) => {
+        const iEmail = (item.email || '').toLowerCase().trim()
+        const iId = (item.id || '').toLowerCase().trim()
+        return iEmail !== cleanEmail && iId !== cleanId
+      })
+      saveStudentsBackupToLocal(updated)
+      prevStudentsCountRef.current = updated.length
+      return updated
+    })
+
+    setStats((prev) => ({
+      ...prev,
+      totalRegisteredStudents: Math.max(0, (prev.totalRegisteredStudents || 1) - 1),
+      recentVisitorsLog: Array.isArray(prev.recentVisitorsLog)
+        ? prev.recentVisitorsLog.filter((v) => (v.email || '').toLowerCase().trim() !== cleanEmail)
+        : [],
+    }))
+
+    if (
+      selectedStudentForDetail &&
+      ((selectedStudentForDetail.email || '').toLowerCase().trim() === cleanEmail ||
+        selectedStudentForDetail.id === st.id)
+    ) {
+      setSelectedStudentForDetail(null)
+    }
+
+    setDeleteModalStudent(null)
+
+    try {
+      // 3. الحذف من الخادم وجميع ملفات المنصة (الطلاب، الأحداث، الرسائل، الإجازات، المجتمع، وFirestore)
+      const res = await deleteStudentAdminAction(cleanEmail || st.id)
+
+      // 4. حذف متوازٍ من متصفح المالك مباشرة في Cloud Firestore لضمان مسح المستند فوراً
+      void (async () => {
+        try {
+          if (cleanEmail) {
+            const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+            await Promise.allSettled([
+              deleteDoc(doc(db, 'students', studentDocId)),
+              deleteDoc(doc(db, 'students', cleanEmail)),
+              st.id ? deleteDoc(doc(db, 'users', st.id)) : Promise.resolve(),
+            ])
+          }
+        } catch {}
+      })()
+
+      if (res && res.success) {
+        if ('deletedEmails' in res && Array.isArray(res.deletedEmails)) {
+          syncDeletedEmailsToLocal(res.deletedEmails)
+        }
+        if ('stats' in res && res.stats) {
+          setStats(res.stats)
+        }
+        if ('auditLogs' in res && Array.isArray(res.auditLogs)) {
+          setAuditLogs(res.auditLogs)
+        }
+        if ('recentEvents' in res && Array.isArray(res.recentEvents)) {
+          setRecentEvents(res.recentEvents)
+        }
+        showRoleToast(
+          `تم حذف حساب «${st.name}» (${st.scholarlyId || st.email}) نهائياً من المنصة وكافة قواعد البيانات ولن يظهر مجدداً.`,
+          'success'
+        )
+      } else {
+        showRoleToast(res?.error || 'تم إخفاء العضو محلياً ولكن تعذر استكمال الحذف الخادمي', 'error')
+      }
+    } catch {
+      showRoleToast('حدث خطأ أثناء الاتصال بالخادم لحذف العضو', 'error')
+    } finally {
+      setIsDeletingStudentPending(false)
+    }
+  }
+
   // إرسال رابط رسمي لإعادة تعيين كلمة المرور
   const handleSendPasswordReset = async (email: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -3136,26 +3293,42 @@ export default function SanadControlGatePage() {
                             <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
                             <span>محمي سيادياً</span>
                           </span>
-                        ) : st.isBanned ? (
-                          <button
-                            type="button"
-                            onClick={(e) => handleUnbanStudent(st, e)}
-                            className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer shadow-2xs"
-                            title="فك الحظر عن الحساب"
-                          >
-                            <Check className="h-3.5 w-3.5 text-amber-300" />
-                            <span>فك الحظر</span>
-                          </button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenBanModal(st, e)}
-                            className="inline-flex items-center justify-center gap-1 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 px-2.5 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-100 transition cursor-pointer dark:text-rose-300 shadow-2xs"
-                            title="حظر حساب الطالب"
-                          >
-                            <Ban className="h-3.5 w-3.5 text-rose-600" />
-                            <span>حظر</span>
-                          </button>
+                          <>
+                            {st.isBanned ? (
+                              <button
+                                type="button"
+                                onClick={(e) => handleUnbanStudent(st, e)}
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                                title="فك الحظر عن الحساب"
+                              >
+                                <Check className="h-3.5 w-3.5 text-amber-300" />
+                                <span>فك الحظر</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenBanModal(st, e)}
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 px-2.5 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-100 transition cursor-pointer dark:text-rose-300 shadow-2xs"
+                                title="حظر حساب الطالب"
+                              >
+                                <Ban className="h-3.5 w-3.5 text-rose-600" />
+                                <span>حظر</span>
+                              </button>
+                            )}
+
+                            {currentActor.isOwner && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenDeleteStudentModal(st, e)}
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 text-[11px] font-black transition cursor-pointer shadow-2xs"
+                                title="حذف الحساب نهائياً من المنصة وكافة قواعد البيانات"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-white" />
+                                <span>حذف نهائي</span>
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -3473,26 +3646,42 @@ export default function SanadControlGatePage() {
                                 <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
                                 <span>محمي سيادياً</span>
                               </span>
-                            ) : st.isBanned ? (
-                              <button
-                                type="button"
-                                onClick={(e) => handleUnbanStudent(st, e)}
-                                className="inline-flex items-center gap-1 rounded-xl bg-emerald-800 px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-emerald-900 transition cursor-pointer dark:bg-emerald-700"
-                                title="فك الحظر واستعادة الحساب فوراً"
-                              >
-                                <Check className="h-3.5 w-3.5 text-amber-300" />
-                                <span>فك الحظر</span>
-                              </button>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => handleOpenBanModal(st, e)}
-                                className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60"
-                                title="حظر حساب الطالب فوراً"
-                              >
-                                <Ban className="h-3.5 w-3.5 text-rose-600" />
-                                <span>حظر</span>
-                              </button>
+                              <>
+                                {st.isBanned ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUnbanStudent(st, e)}
+                                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-800 px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-emerald-900 transition cursor-pointer dark:bg-emerald-700"
+                                    title="فك الحظر واستعادة الحساب فوراً"
+                                  >
+                                    <Check className="h-3.5 w-3.5 text-amber-300" />
+                                    <span>فك الحظر</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleOpenBanModal(st, e)}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60"
+                                    title="حظر حساب الطالب فوراً"
+                                  >
+                                    <Ban className="h-3.5 w-3.5 text-rose-600" />
+                                    <span>حظر</span>
+                                  </button>
+                                )}
+
+                                {currentActor.isOwner && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleOpenDeleteStudentModal(st, e)}
+                                    className="inline-flex items-center gap-1 rounded-xl bg-red-600 hover:bg-red-700 px-3 py-1.5 text-xs font-black text-white shadow-2xs transition cursor-pointer"
+                                    title="حذف الحساب نهائياً من المنصة وكافة قواعد البيانات"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 text-white" />
+                                    <span>حذف نهائي</span>
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -5218,24 +5407,39 @@ export default function SanadControlGatePage() {
                   <span>إرسال رابط تعيين كلمة المرور</span>
                 </button>
 
-                {selectedStudentForDetail.isBanned ? (
-                  <button
-                    type="button"
-                    onClick={() => handleUnbanStudent(selectedStudentForDetail)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-800 px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-emerald-900 transition cursor-pointer dark:bg-emerald-700"
-                  >
-                    <Check className="h-4 w-4 text-amber-300" />
-                    <span>فك الحظر واستعادة الحساب الآن</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenBanModal(selectedStudentForDetail)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-800 hover:bg-rose-100 transition cursor-pointer dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300"
-                  >
-                    <Ban className="h-4 w-4 text-rose-600" />
-                    <span>حظر هذا الحساب إدارياً</span>
-                  </button>
+                {!isStudentOwner(selectedStudentForDetail) && (
+                  <>
+                    {selectedStudentForDetail.isBanned ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnbanStudent(selectedStudentForDetail)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-800 px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-emerald-900 transition cursor-pointer dark:bg-emerald-700"
+                      >
+                        <Check className="h-4 w-4 text-amber-300" />
+                        <span>فك الحظر واستعادة الحساب الآن</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBanModal(selectedStudentForDetail)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-800 hover:bg-rose-100 transition cursor-pointer dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300"
+                      >
+                        <Ban className="h-4 w-4 text-rose-600" />
+                        <span>حظر هذا الحساب إدارياً</span>
+                      </button>
+                    )}
+
+                    {currentActor.isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDeleteStudentModal(selectedStudentForDetail)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2 text-xs font-black text-white shadow-xs transition cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4 text-white" />
+                        <span>حذف الحساب نهائياً من المنصة</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -5246,6 +5450,107 @@ export default function SanadControlGatePage() {
               >
                 إغلاق النافذة
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تأكيد الحذف النهائي السيادي للعضو من المنصة (خاص بمالك المنصة حصراً) */}
+      {deleteModalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border-2 border-red-500 bg-white p-6 shadow-2xl dark:border-red-800 dark:bg-stone-900 my-8">
+            <div className="absolute top-0 right-0 left-0 h-2 bg-linear-to-r from-red-600 via-rose-500 to-red-800" />
+
+            <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-red-800 dark:text-red-300">
+                    حذف نهائي للحساب من المنصة بالكامل
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    قرار سيادي لمالك المنصة (المهندس بهاء طارق) — لا يمكن التراجع عنه
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isDeletingStudentPending}
+                onClick={() => setDeleteModalStudent(null)}
+                className="rounded-lg p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* بطاقة بيانات العضو المعني بالحذف النهائي */}
+              <div className="rounded-2xl border border-red-200 bg-red-50/50 p-3.5 space-y-2 text-xs dark:border-red-900/60 dark:bg-red-950/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500 font-bold">اسم العضو:</span>
+                  <span className="font-black text-stone-900 dark:text-white">{deleteModalStudent.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500 font-bold">المعرّف الأكاديمي:</span>
+                  <span className="font-mono font-black text-red-700 dark:text-red-400">
+                    {deleteModalStudent.scholarlyId || `#${deleteModalStudent.id.slice(-6)}`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500 font-bold">البريد الإلكتروني:</span>
+                  <span className="font-mono text-stone-700 dark:text-stone-300">{deleteModalStudent.email}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500 font-bold">الرتبة الحالية:</span>
+                  <span className="font-bold text-stone-800 dark:text-stone-200">
+                    {isStudentAdmin(deleteModalStudent) ? 'مشرف عام' : 'طالب علم'}
+                  </span>
+                </div>
+              </div>
+
+              {/* تحذير أثر الحذف النهائي */}
+              <div className="rounded-2xl border border-red-300 bg-red-50 p-3.5 text-[11px] text-red-950 leading-relaxed dark:border-red-900 dark:bg-red-950/60 dark:text-red-200">
+                <span className="font-black block mb-1 text-xs">🚨 ماذا سيحدث فور الضغط على «حذف الحساب نهائياً»؟</span>
+                <ul className="list-disc pr-4 space-y-1 font-medium">
+                  <li>مسح الحساب فوراً من سجل الطلاب ولوحة الإدارة وقاعدة بيانات Cloud Firestore.</li>
+                  <li>إبطال جلسته فوراً وطرده من المنصة إذا كان متصلاً حالياً.</li>
+                  <li>حذف كافة مشاركاته وتعليقاته من مجلس المذاكرة، وإخفاؤه من لوحة الصدارة والرسائل والإجازات.</li>
+                  <li>تسجيل البريد في قائمة الحذف النهائي بحيث لا يظهر مجدداً في أي مكان على المنصة إطلاقاً.</li>
+                </ul>
+              </div>
+
+              {/* أزرار التأكيد والإلغاء */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  disabled={isDeletingStudentPending}
+                  onClick={() => setDeleteModalStudent(null)}
+                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingStudentPending}
+                  onClick={handleConfirmPermanentDeleteStudent}
+                  className="rounded-xl bg-red-600 px-5 py-2 text-xs font-black text-white shadow-md hover:bg-red-700 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeletingStudentPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>جاري الحذف النهائي...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      <span>تأكيد الحذف النهائي من المنصة</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

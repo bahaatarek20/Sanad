@@ -141,13 +141,32 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
       const usersColRef = collection(db, 'users')
       const usersQ = query(usersColRef, limit(300))
 
-      const [snapshotRes, usersSnapshotRes] = await Promise.allSettled([getDocs(q), getDocs(usersQ)])
+      const [snapshotRes, usersSnapshotRes, deletedConfigRes] = await Promise.allSettled([
+        getDocs(q),
+        getDocs(usersQ),
+        getDoc(doc(db, 'platform_config', 'deleted_students')),
+      ])
+
+      const deletedEmailsSet = new Set<string>()
+      if (deletedConfigRes.status === 'fulfilled' && deletedConfigRes.value.exists()) {
+        const delData = deletedConfigRes.value.data()
+        if (Array.isArray(delData?.emails)) {
+          delData.emails.forEach((em: unknown) => {
+            if (typeof em === 'string' && em.trim()) {
+              deletedEmailsSet.add(em.toLowerCase().trim())
+            }
+          })
+        }
+      }
 
       if (snapshotRes.status === 'fulfilled') {
         snapshotRes.value.forEach((d) => {
           const data = d.data() as StudentActivityRecord
           if (data && data.email) {
-            studentsMap.set(data.email.toLowerCase().trim(), data)
+            const cleanEm = data.email.toLowerCase().trim()
+            if (!deletedEmailsSet.has(cleanEm)) {
+              studentsMap.set(cleanEm, data)
+            }
           }
         })
       }
@@ -156,7 +175,7 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
         usersSnapshotRes.value.forEach((d) => {
           const u = d.data() as Record<string, unknown>
           const email = typeof u.email === 'string' ? u.email.toLowerCase().trim() : ''
-          if (!email) return
+          if (!email || deletedEmailsSet.has(email)) return
 
           const existing = studentsMap.get(email)
           const createdAtStr =
@@ -645,6 +664,80 @@ export async function getPlatformConfigFromCloud(
     1500
   )
 }
+
+/**
+ * 16. حذف عضو/طالب نهائياً من Cloud Firestore (مجموعتي students و users + تسجيله في سجل الحذف السيادي)
+ */
+export async function deleteStudentFromCloud(
+  email: string,
+  id?: string,
+  allDeletedEmails?: string[]
+): Promise<boolean> {
+  if (isFirestoreCoolingDown()) return false
+  return withCloudTimeout(
+    (async () => {
+      const cleanEmail = email.toLowerCase().trim()
+      if (!cleanEmail || cleanEmail === 'bhaaljml480@gmail.com') return false
+
+      const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+      const ops: Promise<unknown>[] = [
+        deleteDoc(doc(db, STUDENTS_COLLECTION, studentDocId)),
+        deleteDoc(doc(db, STUDENTS_COLLECTION, cleanEmail)),
+      ]
+
+      if (id) {
+        ops.push(deleteDoc(doc(db, 'users', id)))
+        ops.push(deleteDoc(doc(db, STUDENTS_COLLECTION, id)))
+      }
+
+      // حذف أي مستند مرتبط بهذا البريد في مجموعتي users و students
+      try {
+        const usersQ = query(collection(db, 'users'), where('email', '==', cleanEmail))
+        const studentsQ = query(collection(db, STUDENTS_COLLECTION), where('email', '==', cleanEmail))
+        const [uSnap, sSnap] = await Promise.allSettled([getDocs(usersQ), getDocs(studentsQ)])
+        if (uSnap.status === 'fulfilled') {
+          uSnap.value.forEach((d) => {
+            ops.push(deleteDoc(doc(db, 'users', d.id)))
+          })
+        }
+        if (sSnap.status === 'fulfilled') {
+          sSnap.value.forEach((d) => {
+            ops.push(deleteDoc(doc(db, STUDENTS_COLLECTION, d.id)))
+          })
+        }
+      } catch {}
+
+      // توثيق الحذف السيادي في platform_config/deleted_students لمنع إعادة مزامنته
+      try {
+        const delDocRef = doc(db, PLATFORM_CONFIG_COLLECTION, 'deleted_students')
+        let existingList: string[] = Array.isArray(allDeletedEmails) ? [...allDeletedEmails] : []
+        if (existingList.length === 0) {
+          const snap = await getDoc(delDocRef)
+          if (snap.exists() && Array.isArray(snap.data()?.emails)) {
+            existingList = snap.data().emails as string[]
+          }
+        }
+        const merged = Array.from(new Set([...existingList.map((e) => e.toLowerCase().trim()), cleanEmail]))
+        ops.push(
+          setDoc(
+            delDocRef,
+            {
+              emails: merged,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          )
+        )
+      } catch {}
+
+      await Promise.allSettled(ops)
+      return true
+    })(),
+    false,
+    2000
+  )
+}
+
 
 
 

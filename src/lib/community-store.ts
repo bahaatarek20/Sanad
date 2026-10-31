@@ -3,7 +3,7 @@ import os from 'os'
 import crypto from 'crypto'
 import path from 'path'
 import type { CommunityPost, CommunityReply } from '@/components/community-hub'
-import { getStudentProfileData, SUPER_ADMIN_EMAIL } from '@/lib/student-tracking'
+import { getStudentProfileData, isStudentDeleted, SUPER_ADMIN_EMAIL } from '@/lib/student-tracking'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
@@ -179,7 +179,11 @@ export function resolveAuthorCommunityIdentity(email: string, fallbackName?: str
  * إثراء المشاركات والردود بالصور الرمزية والأسماء المحدثة حياً من سجلات الطلاب مع إخفاء البريد الخاص
  */
 export function enrichCommunityPostsForPublic(posts: CommunityPost[]): CommunityPost[] {
-  return posts.map((post) => {
+  const activePosts = posts.filter((post) => {
+    if (post.author_email && isStudentDeleted(post.author_email)) return false
+    return true
+  })
+  return activePosts.map((post) => {
     let enrichedAlias = post.anonymous_alias
     let enrichedAvatar = post.author_avatar_url
     let enrichedRole = post.author_role || 'student'
@@ -195,7 +199,9 @@ export function enrichCommunityPostsForPublic(posts: CommunityPost[]): Community
       enrichedRole = 'owner'
     }
 
-    const enrichedReplies: CommunityReply[] = (post.replies || []).map((rep) => {
+    const enrichedReplies: CommunityReply[] = (post.replies || [])
+      .filter((rep) => !(rep.author_email && isStudentDeleted(rep.author_email)))
+      .map((rep) => {
       let repAlias = rep.anonymous_alias
       let repAvatar = rep.author_avatar_url
       let repRole = rep.author_role || 'student'
@@ -402,12 +408,13 @@ function recordDeletedCommunityId(id: string) {
  */
 export function filterDeletedCommunityContent(posts: CommunityPost[]): CommunityPost[] {
   const deleted = getDeletedCommunityIds()
-  if (deleted.size === 0) return posts
   return posts
-    .filter((p) => !deleted.has(p.id))
+    .filter((p) => !deleted.has(p.id) && !(p.author_email && isStudentDeleted(p.author_email)))
     .map((p) => ({
       ...p,
-      replies: (p.replies || []).filter((r) => !deleted.has(r.id)),
+      replies: (p.replies || []).filter(
+        (r) => !deleted.has(r.id) && !(r.author_email && isStudentDeleted(r.author_email))
+      ),
     }))
 }
 
@@ -434,4 +441,45 @@ export function deleteLocalCommunityReply(postId: string, replyId: string): Comm
   recordDeletedCommunityId(replyId)
   return enrichCommunityPostsForPublic(updated)
 }
+
+/**
+ * حذف جميع مشاركات وتعليقات عضو محذوف نهائياً من مجلس المذاكرة
+ */
+export function purgeStudentCommunityContent(email: string, studentName?: string, scholarlyId?: string): string[] {
+  const cleanEmail = (email || '').toLowerCase().trim()
+  if (!cleanEmail || cleanEmail === SUPER_ADMIN_EMAIL) return []
+
+  const posts = getRawLocalCommunityPosts()
+  const deletedPostIds: string[] = []
+
+  const updated = posts
+    .filter((p) => {
+      const pEmail = (p.author_email || '').toLowerCase().trim()
+      const matchesEmail = pEmail && pEmail === cleanEmail
+      const matchesScholarlyId = scholarlyId && p.anonymous_alias?.includes(scholarlyId)
+      if (matchesEmail || matchesScholarlyId) {
+        deletedPostIds.push(p.id)
+        recordDeletedCommunityId(p.id)
+        return false
+      }
+      return true
+    })
+    .map((p) => ({
+      ...p,
+      replies: (p.replies || []).filter((r) => {
+        const rEmail = (r.author_email || '').toLowerCase().trim()
+        const matchesEmail = rEmail && rEmail === cleanEmail
+        const matchesScholarlyId = scholarlyId && r.anonymous_alias?.includes(scholarlyId)
+        if (matchesEmail || matchesScholarlyId) {
+          recordDeletedCommunityId(r.id)
+          return false
+        }
+        return true
+      }),
+    }))
+
+  writeCommunityPosts(updated)
+  return deletedPostIds
+}
+
 

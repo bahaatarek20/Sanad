@@ -13,6 +13,8 @@ import {
   getAdminDashboardDataAsync,
   toggleStudentBan,
   updateStudentRole,
+  permanentlyDeleteStudent,
+  getDeletedStudentEmails,
   resetVisitorCount,
   getAuditLogs,
   recordAuditLog,
@@ -75,6 +77,7 @@ export async function getAdminDashboardAction() {
   const categories = getActiveCategories()
   const broadcast = getBroadcastNotice()
   const auditLogs = getAuditLogs(50)
+  const deletedEmails = Array.from(getDeletedStudentEmails())
 
   return {
     success: true,
@@ -82,6 +85,7 @@ export async function getAdminDashboardAction() {
     categories,
     broadcast,
     auditLogs,
+    deletedEmails,
     currentActor: {
       email: actor.email,
       role: actor.role,
@@ -427,4 +431,53 @@ export async function updateStudentRoleAdminAction(
     recentEvents: getAdminDashboardData(false).recentEvents,
   }
 }
+
+/**
+ * 14. الحذف النهائي السيادي لأي عضو أو طالب من المنصة وجميع سجلاتها — حصرياً لمالك المنصة (bhaaljml480@gmail.com)
+ */
+export async function deleteStudentAdminAction(studentEmailOrId: string) {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
+    recordAuditLog({
+      actorEmail: actor.email || 'anonymous',
+      actorRole: actor.role || 'anonymous',
+      targetEmail: studentEmailOrId,
+      action: 'UNAUTHORIZED_ATTEMPT',
+      details: `رفض محاولة حذف العضو (${studentEmailOrId}) بدون جلسة إدارية`,
+    })
+    return { success: false, error: 'غير مصرح بحذف حسابات الأعضاء' }
+  }
+
+  if (!actor.isOwner) {
+    recordAuditLog({
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      targetEmail: studentEmailOrId,
+      action: 'UNAUTHORIZED_ATTEMPT',
+      details: `رفض محاولة حذف العضو (${studentEmailOrId}) لأن الفاعل ليس مالك المنصة (owner)`,
+    })
+    return {
+      success: false,
+      error: 'الحذف النهائي للأعضاء حق سيادي حصري لمالك المنصة فقط (bhaaljml480@gmail.com).',
+    }
+  }
+
+  const result = await permanentlyDeleteStudent(studentEmailOrId, actor.email)
+
+  revalidatePath('/', 'layout')
+  revalidatePath('/sanad-control-gate')
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+  revalidatePath('/community')
+  revalidatePath('/courses')
+  revalidatePath('/settings')
+
+  return {
+    ...result,
+    deletedEmails: Array.from(getDeletedStudentEmails()),
+    auditLogs: getAuditLogs(50),
+    recentEvents: getAdminDashboardData(false).recentEvents,
+  }
+}
+
 
