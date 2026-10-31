@@ -376,8 +376,8 @@ export function getDeletedCommunityIds(): Set<string> {
   const ids = new Set<string>()
   for (const file of [DELETED_FILE, TMP_DELETED_FILE]) {
     try {
-      if (!fs.existsSync(file)) continue
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (!fs.existsSync(/*turbopackIgnore: true*/ file)) continue
+      const parsed = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ file, 'utf8'))
       if (Array.isArray(parsed)) parsed.forEach((id) => typeof id === 'string' && ids.add(id))
     } catch {}
   }

@@ -42,7 +42,7 @@ async function resolvePdfFile(filename: string) {
   if (!targetPath) return null
 
   // تأكيد إضافي بأن المسار الفعلي داخل المجلدات المسموحة فقط
-  const resolvedTarget = path.resolve(targetPath)
+  const resolvedTarget = path.resolve(/*turbopackIgnore: true*/ targetPath)
   if (!resolvedTarget.startsWith(dataPdfsDir) && !resolvedTarget.startsWith(publicPdfsDir)) {
     return null
   }
@@ -99,7 +99,7 @@ export async function GET(
     const cleanDisplayName = decodedFilename.replace(/^sanad_pdf_[a-z0-9]+_[a-z0-9]+_/, '')
 
     // دفق عالي السرعة بمخزن مؤقت 1 ميجابايت (1MB Buffer) للاستجابة الفورية
-    const fileStream = fs.createReadStream(targetPath, { highWaterMark: 1024 * 1024 })
+    const fileStream = fs.createReadStream(/*turbopackIgnore: true*/ targetPath, { highWaterMark: 1024 * 1024 })
     const webStream = Readable.toWeb(fileStream)
 
     return new Response(webStream as BodyInit, {
