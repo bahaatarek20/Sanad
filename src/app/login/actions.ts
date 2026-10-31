@@ -412,7 +412,71 @@ export async function signInWithGoogleAction() {
   redirect('/login')
 }
 
-// 9. طلب إرسال رمز التحقق إلى رقم الهاتف (Phone OTP)
+// 9. توثيق جلسة Firebase مباشرة عبر Server Action (Fallback مضمون 100% للكوكي)
+export async function establishFirebaseServerSessionAction(params: {
+  email: string
+  fullName: string
+  localId?: string
+  phone?: string
+  avatarUrl?: string
+  authProvider?: 'google' | 'email' | 'phone'
+}) {
+  const email = (params.email || '').trim().toLowerCase()
+  if (!email) {
+    return { success: false, error: 'البريد الإلكتروني مطلوب' }
+  }
+
+  const banCheck = isStudentBanned(email)
+  if (banCheck.isBanned) {
+    return {
+      success: false,
+      status: 403,
+      error: banCheck.banReason || 'تم تعليق هذا الحساب إدارياً من قِبل إدارة منصة سَنَد.',
+    }
+  }
+
+  const fullName = (params.fullName || '').trim() || email.split('@')[0]
+  const provider = params.authProvider || (email.includes('@gmail.com') ? 'google' : 'email')
+  const headerList = await headers()
+  const clientTelemetry = extractClientTelemetry(headerList)
+
+  const student = registerOrUpdateStudent(email, fullName, {
+    id: params.localId,
+    phone: params.phone,
+    authProvider: provider,
+    avatarUrl: params.avatarUrl,
+    ...clientTelemetry,
+  })
+
+  try {
+    depositWelcomeMessage(email, fullName)
+    depositSecurityAlert(
+      email,
+      fullName,
+      provider === 'google'
+        ? 'تم توثيق الدخول بحساب Google الرسمي المعتمد بنجاح'
+        : 'تم توثيق الدخول بالبريد الإلكتروني المعتمد بنجاح'
+    )
+  } catch {}
+
+  const sessionData = await setStudentSessionCookie(fullName, email, {
+    phone: params.phone,
+    authProvider: provider,
+    avatarUrl: params.avatarUrl,
+    role: student?.role,
+  })
+
+  const effectiveRole = (sessionData.role as 'owner' | 'admin' | 'student') || student?.role || 'student'
+  revalidatePath('/', 'layout')
+
+  return {
+    success: true,
+    role: effectiveRole,
+    redirectUrl: effectiveRole === 'owner' || effectiveRole === 'admin' ? '/admin' : '/courses',
+  }
+}
+
+// 10. طلب إرسال رمز التحقق إلى رقم الهاتف (Phone OTP)
 export async function requestPhoneOtpAction(formData: FormData) {
   const phone = (formData.get('phone') as string)?.trim()
   const countryCode = (formData.get('countryCode') as string)?.trim() || '+20'

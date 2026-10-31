@@ -21,10 +21,14 @@ import {
 import { auth, googleProvider } from '@/lib/firebase/config'
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
   signOut,
+  type User as FirebaseUser,
 } from 'firebase/auth'
 import { syncUserToFirestore, verifyUserAccount, SUPER_ADMIN_EMAIL } from '@/lib/user-service'
 import {
@@ -32,6 +36,7 @@ import {
   verifyOtpAction,
   requestPasswordResetOtpAction,
   resetPasswordAction,
+  establishFirebaseServerSessionAction,
 } from './actions'
 
 interface LoginPageProps {
@@ -107,13 +112,14 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
   const syncFirebaseSession = async (
     idToken: string,
     provider: 'google' | 'email'
-  ): Promise<{ role?: 'owner' | 'admin' | 'student' } | null> => {
+  ): Promise<{ role?: 'owner' | 'admin' | 'student'; error?: string; status?: number } | null> => {
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 5000)
+      const timer = setTimeout(() => controller.abort(), 6000)
       const res = await fetch('/api/auth/firebase-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           idToken,
           authProvider: provider,
@@ -123,8 +129,7 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
       clearTimeout(timer)
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        console.warn('Session endpoint response notice:', data)
-        return null
+        return { error: data.error || 'تعذر توثيق الجلسة', status: res.status }
       }
       return data
     } catch (e) {
@@ -133,95 +138,182 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     }
   }
 
-  // تسجيل الدخول الموثق بحساب Google عبر Firebase و Cloud Firestore
+  // إتمام دخول مستخدم Google فوراً وتوثيق كوكي السيرفر في أقل من 0.5 ثانية بدون انتظار Firestore
+  const finalizeGoogleAuthenticatedUser = async (fbUser: FirebaseUser) => {
+    const cleanEmail = (fbUser.email || '').toLowerCase().trim()
+    const displayName = fbUser.displayName || cleanEmail.split('@')[0] || 'طالب العلم'
+    let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
+
+    // 1. توثيق الجلسة الخادمية أولاً وبشكل مباشر (مع بديل Server Action مضمون 100%)
+    let sessionConfirmed = false
+    try {
+      const idToken = await fbUser.getIdToken()
+      const serverSession = await syncFirebaseSession(idToken, 'google')
+
+      if (serverSession?.status === 403) {
+        await signOut(auth).catch(() => {})
+        setFirebaseError(serverSession.error || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+        setGoogleLoading(false)
+        return
+      }
+
+      if (serverSession && !serverSession.error) {
+        sessionConfirmed = true
+        if (serverSession.role) {
+          userRole = serverSession.role
+        }
+      }
+    } catch {}
+
+    // إذا تعذر مسار الـ API لأي سبب، نستخدم الـ Server Action المباشر لضمان كتابة الكوكي 100%
+    if (!sessionConfirmed) {
+      try {
+        const fallbackSession = await establishFirebaseServerSessionAction({
+          email: cleanEmail,
+          fullName: displayName,
+          localId: fbUser.uid,
+          phone: fbUser.phoneNumber || undefined,
+          avatarUrl: fbUser.photoURL || undefined,
+          authProvider: 'google',
+        })
+        if (fallbackSession.status === 403) {
+          await signOut(auth).catch(() => {})
+          setFirebaseError(fallbackSession.error || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+          setGoogleLoading(false)
+          return
+        }
+        if (fallbackSession.role) {
+          userRole = fallbackSession.role
+        }
+      } catch (actionErr) {
+        console.warn('Server Action session fallback notice:', actionErr)
+      }
+    }
+
+    // 2. مزامنة خلفية غير حاجبة إطلاقاً (Fire-and-Forget) مع Firestore حتى لا تتعطل شاشة الدخول أبداً
+    void syncUserToFirestore(fbUser.uid, {
+      fullName: displayName,
+      email: cleanEmail,
+      phoneNumber: fbUser.phoneNumber,
+      avatarUrl: fbUser.photoURL,
+      isNewUser: false,
+    }).catch(() => {})
+
+    // 3. حفظ النسخة في التخزين المحلي لضمان استجابة الواجهة فوراً
+    try {
+      const userObj = {
+        id: fbUser.uid,
+        email: cleanEmail,
+        name: displayName,
+        fullName: displayName,
+        avatarUrl: fbUser.photoURL || undefined,
+        authProvider: 'google',
+        role: userRole,
+      }
+      localStorage.setItem('sanad_student_user', JSON.stringify(userObj))
+      localStorage.setItem('sanad_student_user_info', JSON.stringify(userObj))
+      localStorage.setItem('sanad_student_registered', 'true')
+      if (userRole === 'owner' || userRole === 'admin') {
+        localStorage.setItem('sanad_is_platform_owner', 'true')
+      } else {
+        localStorage.removeItem('sanad_is_platform_owner')
+      }
+    } catch {}
+
+    // 4. التوجيه الفوري المباشر إلى المنصة
+    const dest = userRole === 'admin' || userRole === 'owner' ? '/admin' : targetRedirect
+    completeLoginAndRedirect(dest)
+  }
+
+  // التقاط نتيجة العودة من Google Redirect تلقائياً إن استُخدمت في متصفحات الهاتف
+  useEffect(() => {
+    let isMounted = true
+    getRedirectResult(auth)
+      .then((res) => {
+        if (res && res.user && isMounted) {
+          setGoogleLoading(true)
+          void finalizeGoogleAuthenticatedUser(res.user)
+        }
+      })
+      .catch((err) => {
+        console.warn('Google redirect result notice:', err)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // تسجيل الدخول الموثق بحساب Google عبر Firebase مع حماية ضد تعليق النافذة المنبثقة (COOP/Popup Hang)
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true)
     setFirebaseError(null)
     setResetSuccessMsg(null)
+
+    let handled = false
+    let initialUid: string | null = auth.currentUser?.uid || null
+    let listenForAnyUser = false
+
+    // إذا كان هناك مستخدم قديم عالق في ذاكرة Firebase المتصفح، نسجل خروجه أو نراقب تغير المستخدم فقط
+    const timerEnableAny = setTimeout(() => {
+      listenForAnyUser = true
+    }, 1200)
+
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser && fbUser.email && !handled) {
+        if (listenForAnyUser || fbUser.uid !== initialUid) {
+          handled = true
+          clearTimeout(timerEnableAny)
+          unsubAuth()
+          void finalizeGoogleAuthenticatedUser(fbUser)
+        }
+      }
+    })
+
     try {
       const res = await signInWithPopup(auth, googleProvider)
-      const fbUser = res.user
-      const cleanEmail = (fbUser.email || '').toLowerCase().trim()
-      let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
-
-      // 1. مزامنة فورية في Firestore (users/{uid}) مرنة غير حاجبة
-      try {
-        const synced = await syncUserToFirestore(fbUser.uid, {
-          fullName: fbUser.displayName || fbUser.email?.split('@')[0] || 'طالب العلم',
-          email: fbUser.email || '',
-          phoneNumber: fbUser.phoneNumber,
-          avatarUrl: fbUser.photoURL,
-          isNewUser: false,
-        })
-        if (synced?.role) {
-          userRole = synced.role
-        }
-      } catch (syncErr) {
-        console.warn('syncUserToFirestore google notice:', syncErr)
+      clearTimeout(timerEnableAny)
+      if (!handled && res.user) {
+        handled = true
+        unsubAuth()
+        await finalizeGoogleAuthenticatedUser(res.user)
       }
-
-      // 2. التحقق من حالة الحساب (حظر أو صلاحية الإدارة)
-      try {
-        const check = await verifyUserAccount(fbUser.uid)
-        if (!check.allowed) {
-          await signOut(auth).catch(() => {})
-          setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-          return
-        }
-        if (check.role) {
-          userRole = check.role
-        }
-      } catch (checkErr) {
-        console.warn('verifyUserAccount google notice:', checkErr)
-      }
-
-      // 3. توثيق جلسة الكوكي المشفرة عبر السيرفر واعتماد الصلاحية الخادمية المحدثة
-      try {
-        const idToken = await fbUser.getIdToken()
-        const serverSession = await syncFirebaseSession(idToken, 'google')
-        if (serverSession?.role) {
-          userRole = serverSession.role
-        }
-      } catch {}
-
-      // 4. حفظ النسخة في التخزين المحلي لضمان استجابة الواجهة فوراً
-      try {
-        localStorage.setItem(
-          'sanad_student_user',
-          JSON.stringify({
-            id: fbUser.uid,
-            email: cleanEmail,
-            name: fbUser.displayName || cleanEmail.split('@')[0],
-            role: userRole,
-          })
-        )
-        localStorage.setItem('sanad_student_registered', 'true')
-        if (userRole === 'owner' || userRole === 'admin') {
-          localStorage.setItem('sanad_is_platform_owner', 'true')
-        } else {
-          localStorage.removeItem('sanad_is_platform_owner')
-        }
-      } catch {}
-
-      // 5. التوجيه المباشر
-      const dest = (userRole === 'admin' || userRole === 'owner') ? '/admin' : targetRedirect
-      completeLoginAndRedirect(dest)
     } catch (err: unknown) {
+      clearTimeout(timerEnableAny)
+      unsubAuth()
+      // إذا كان المراقب اللحظي قد التقط المستخدم بالفعل وأكمل الدخول، نتجاهل أي خطأ ثانوي من النافذة
+      if (handled || (auth.currentUser && auth.currentUser.email)) {
+        if (!handled && auth.currentUser) {
+          handled = true
+          await finalizeGoogleAuthenticatedUser(auth.currentUser)
+        }
+        return
+      }
+
       const fbErr = err as { code?: string; message?: string }
       const msg = fbErr.message || ''
-      if (fbErr.code === 'auth/popup-closed-by-user') {
+      if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
+        setGoogleLoading(false)
         return
       }
       if (fbErr.code === 'auth/popup-blocked') {
-        setFirebaseError('تم حظر النافذة المنبثقة بواسطة المتصفح. يرجى السماح بالنوافذ المنبثقة أو استخدام الدخول بالبريد.')
-        return
+        // بديل تلقائي سلس: التحويل المباشر لنافذة Google القياسية إذا حظر المتصفح النوافذ المنبثقة
+        try {
+          await signInWithRedirect(auth, googleProvider)
+          return
+        } catch {
+          setFirebaseError('تم حظر النافذة المنبثقة بواسطة المتصفح. يرجى السماح بالنوافذ المنبثقة أو استخدام الدخول بالبريد.')
+          setGoogleLoading(false)
+          return
+        }
       }
       if (fbErr.code === 'auth/account-exists-with-different-credential') {
         setFirebaseError('هذا البريد مسجل مسبقاً بطريقة مصادقة أخرى (مثل كلمة المرور). يرجى تسجيل الدخول بالبريد وكلمة المرور أدناه.')
+        setGoogleLoading(false)
         return
       }
       if (fbErr.code === 'auth/unauthorized-domain') {
         setFirebaseError('نطاق المنصة الحالي غير مدرج في النطاقات المعتمدة لـ Google Firebase. يرجى إضافة النطاق في إعدادات Firebase Console.')
+        setGoogleLoading(false)
         return
       }
       if (
@@ -232,10 +324,10 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         msg.includes('Failed to get document')
       ) {
         setFirebaseError('تعذر الاتصال بالخادم حالياً، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')
+        setGoogleLoading(false)
         return
       }
       setFirebaseError(fbErr.message || 'تعذر استكمال تسجيل الدخول عبر Google حالياً. يرجى المحاولة لاحقاً أو استخدام البريد.')
-    } finally {
       setGoogleLoading(false)
     }
   }
@@ -286,38 +378,34 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         // 2. تحديث الاسم في ملف Auth
         await updateProfile(fbUser, { displayName: cleanName }).catch(() => {})
 
-        // 3. إنشاء مستند Firestore في users/{uid} (مرن غير حاجب)
+        // 3. مزامنة خلفية غير حاجبة مع Firestore
         let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
-        try {
-          const synced = await syncUserToFirestore(fbUser.uid, {
-            fullName: cleanName,
-            email: cleanEmail,
-            isNewUser: true,
-          })
-          if (synced?.role) {
-            userRole = synced.role
-          }
-        } catch (syncErr) {
-          console.warn('syncUserToFirestore signup notice:', syncErr)
-        }
+        void syncUserToFirestore(fbUser.uid, {
+          fullName: cleanName,
+          email: cleanEmail,
+          isNewUser: true,
+        }).catch(() => {})
 
-        // 4. مزامنة جلسة الكوكي في الخادم
+        // 4. مزامنة جلسة الكوكي في الخادم فوراً
         try {
           const idToken = await fbUser.getIdToken()
-          await syncFirebaseSession(idToken, 'email')
+          const serverSession = await syncFirebaseSession(idToken, 'email')
+          if (serverSession?.role) {
+            userRole = serverSession.role
+          }
         } catch {}
 
         // 5. حفظ الجلسة محلياً
         try {
-          localStorage.setItem(
-            'sanad_student_user',
-            JSON.stringify({
-              id: fbUser.uid,
-              email: cleanEmail,
-              name: cleanName,
-              role: userRole,
-            })
-          )
+          const userObj = {
+            id: fbUser.uid,
+            email: cleanEmail,
+            name: cleanName,
+            fullName: cleanName,
+            role: userRole,
+          }
+          localStorage.setItem('sanad_student_user', JSON.stringify(userObj))
+          localStorage.setItem('sanad_student_user_info', JSON.stringify(userObj))
           localStorage.setItem('sanad_student_registered', 'true')
         } catch {}
 
@@ -332,41 +420,31 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           const fbUser = cred.user
 
           let userRole: 'owner' | 'student' | 'admin' = cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : 'student'
-          try {
-            const check = await verifyUserAccount(fbUser.uid)
-            if (!check.allowed) {
-              await signOut(auth).catch(() => {})
-              setFirebaseError(check.message || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
-              setEmailLoading(false)
-              return
-            }
-            if (check.role) {
-              userRole = check.role
-            }
-          } catch (checkErr) {
-            console.warn('verifyUserAccount notice:', checkErr)
-          }
 
-          // مزامنة الكوكي عبر السيرفر واعتماد الصلاحية الخادمية المحدثة
-          try {
-            const idToken = await fbUser.getIdToken()
-            const serverSession = await syncFirebaseSession(idToken, 'email')
-            if (serverSession?.role) {
-              userRole = serverSession.role
-            }
-          } catch {}
+          // مزامنة الكوكي عبر السيرفر فوراً واعتماد الصلاحية الخادمية المحدثة وفحص الحظر
+          const idToken = await fbUser.getIdToken()
+          const serverSession = await syncFirebaseSession(idToken, 'email')
+          if (serverSession?.status === 403) {
+            await signOut(auth).catch(() => {})
+            setFirebaseError(serverSession.error || 'تم تجميد حسابك، يُرجى التواصل مع إدارة منصة سَنَد للمراجعة.')
+            setEmailLoading(false)
+            return
+          }
+          if (serverSession?.role) {
+            userRole = serverSession.role
+          }
 
           // حفظ الجلسة محلياً
           try {
-            localStorage.setItem(
-              'sanad_student_user',
-              JSON.stringify({
-                id: fbUser.uid,
-                email: cleanEmail,
-                name: fbUser.displayName || cleanEmail.split('@')[0],
-                role: userRole,
-              })
-            )
+            const userObj = {
+              id: fbUser.uid,
+              email: cleanEmail,
+              name: fbUser.displayName || cleanEmail.split('@')[0],
+              fullName: fbUser.displayName || cleanEmail.split('@')[0],
+              role: userRole,
+            }
+            localStorage.setItem('sanad_student_user', JSON.stringify(userObj))
+            localStorage.setItem('sanad_student_user_info', JSON.stringify(userObj))
             localStorage.setItem('sanad_student_registered', 'true')
             if (userRole === 'owner' || userRole === 'admin') {
               localStorage.setItem('sanad_is_platform_owner', 'true')

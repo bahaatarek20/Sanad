@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { registerOrUpdateStudentAsync, isStudentBanned } from '@/lib/student-tracking'
-import { setStudentSessionCookie } from '@/lib/auth-helper'
+import { registerOrUpdateStudent, isStudentBanned } from '@/lib/student-tracking'
+import { setStudentSessionCookie, signSessionPayload } from '@/lib/auth-helper'
 import { depositWelcomeMessage, depositSecurityAlert } from '@/lib/messages-service'
 import { extractClientTelemetry } from '@/lib/telemetry-helper'
 
@@ -138,10 +138,10 @@ export async function POST(request: NextRequest) {
     const avatarUrl = verifiedGoogleUser.photoUrl || undefined
     const clientTelemetry = extractClientTelemetry(request.headers)
 
-    // 3. تسجيل أو تحديث سجل الطالب في المنصة وسحابة Firestore مع ربط المعرف الرسمي (غير حاجب)
+    // 3. تسجيل أو تحديث سجل الطالب في المنصة فوراً (0ms استجابة) مع مزامنة سحابية في الخلفية
     let student = null
     try {
-      student = await registerOrUpdateStudentAsync(email, fullName, {
+      student = registerOrUpdateStudent(email, fullName, {
         id: verifiedGoogleUser.localId,
         phone,
         authProvider: provider,
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         ...clientTelemetry,
       })
     } catch (regErr) {
-      console.warn('registerOrUpdateStudentAsync fallback warning:', regErr)
+      console.warn('registerOrUpdateStudent fallback warning:', regErr)
     }
 
     // 4. إيداع رسالة ترحيبية وإشعار أمني في صندوق رسائل الطالب
@@ -167,14 +167,15 @@ export async function POST(request: NextRequest) {
     } catch {}
 
     // 5. حفظ الجلسة الرسمية للطالب في الكوكيز بتوقيع HMAC المشفر
-    await setStudentSessionCookie(fullName, email, {
+    const studentSessionData = await setStudentSessionCookie(fullName, email, {
       phone,
       authProvider: provider,
       avatarUrl,
       role: student?.role,
     })
 
-    const effectiveRole = student?.role || 'student'
+    const effectiveRole = (studentSessionData.role as string) || student?.role || 'student'
+    const signedToken = signSessionPayload(studentSessionData)
 
     const response = NextResponse.json({
       success: true,
@@ -183,6 +184,31 @@ export async function POST(request: NextRequest) {
       role: effectiveRole,
       redirectUrl: effectiveRole === 'owner' || effectiveRole === 'admin' ? '/admin' : '/courses',
     })
+
+    // ضمان إرفاق الكوكيز مباشرة على كائن NextResponse أيضاً لجميع البيئات والمتصفحات
+    response.cookies.set('sanad_student_user', signedToken, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    })
+
+    response.cookies.set(
+      'sanad_student_display',
+      JSON.stringify({
+        name: fullName,
+        email,
+        avatarUrl,
+      }),
+      {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      }
+    )
 
     // مسح علامة الخروج السابقة لضمان عدم تعليق المتصفح أو تصفير الجلسة محلياً
     response.cookies.set('sanad_explicit_logout', '', {

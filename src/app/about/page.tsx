@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     canonical: 'https://sanad-edu1.vercel.app/about',
   },
   openGraph: {
-    title: 'عن منصة سَنَد التعليمية || بإشراف وتطوير المهندس بهاء طارق',
+    title: 'عن منصة سَنَد التعليمية',
     description:
       'تعرّف على منصة سَنَد التعليمية: بيئة علمية رصينة لتيسير مدارسة المتون وضبط مسالك العلوم الشرعية، تطوير م. بهاء طارق.',
     url: 'https://sanad-edu1.vercel.app/about',
