@@ -262,7 +262,15 @@ export default function GlobalAiTutor() {
         if (storedChat) {
           const parsed = JSON.parse(storedChat)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setMessages(parsed)
+            const cleaned = parsed.filter(
+              (m: { text?: string }) =>
+                typeof m?.text === 'string' && !m.text.includes('تحرير المسألة في ضوء «')
+            )
+            if (cleaned.length > 0) {
+              setMessages(cleaned)
+            } else {
+              localStorage.removeItem('sanad_ai_chat_history')
+            }
           }
         }
         fetch('/api/courses')
@@ -540,13 +548,13 @@ export default function GlobalAiTutor() {
             </div>
 
             {/* اقتراحات الأسئلة السريعة الديناميكية حسب المقرر المختار */}
-            <div className="px-3 py-2 border-t border-stone-200/60 bg-[#f7f5ed] flex flex-wrap gap-1.5 dark:border-stone-800 dark:bg-[#181614]">
+            <div className="px-3 py-2 border-t border-stone-200/60 bg-[#f7f5ed] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 dark:border-stone-800 dark:bg-[#181614]">
               {getDynamicSuggestedQuestions(selectedCourse).map((chip) => (
                 <button
                   key={chip}
                   type="button"
                   onClick={() => handleSendMessage(chip)}
-                  className="rounded-lg border border-stone-200/80 bg-white px-2 py-1 text-[10px] font-bold text-stone-600 hover:border-emerald-800 hover:text-emerald-900 transition cursor-pointer dark:border-stone-700/80 dark:bg-stone-800/90 dark:text-stone-300 dark:hover:border-emerald-500"
+                  className="shrink-0 whitespace-nowrap rounded-xl border border-stone-200/90 bg-white px-2.5 py-1.5 text-[10px] font-bold text-stone-600 hover:border-emerald-800 hover:text-emerald-900 transition cursor-pointer shadow-2xs dark:border-stone-700/80 dark:bg-stone-800/90 dark:text-stone-300 dark:hover:border-emerald-500"
                 >
                   {chip}
                 </button>
