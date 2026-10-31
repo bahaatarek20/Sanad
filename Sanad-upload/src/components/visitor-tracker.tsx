@@ -1,46 +1,38 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 export default function VisitorTracker() {
+  const pathname = usePathname()
+
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // 1. إذا كان هذا المتصفح محفوظاً كمتصفح صاحب المنصة / المشرف العام
-    if (
-      localStorage.getItem('sanad_is_platform_owner') === 'true' ||
-      document.cookie.includes('sanad_admin_gate_token') ||
-      document.cookie.includes('sanad_is_platform_owner')
-    ) {
-      localStorage.setItem('sanad_is_platform_owner', 'true')
+    // لا نحتسب زيارات صفحة لوحة التحكم الإدارية نفسها
+    if (pathname?.startsWith('/sanad-control-gate') || pathname?.startsWith('/admin')) {
       return
     }
 
-    // 2. إذا احتُسبت الزيارة بالفعل في جلسة المتصفح الحالية
+    // إذا احتُسبت الزيارة بالفعل في جلسة المتصفح الحالية
     if (sessionStorage.getItem('sanad_visit_logged') === 'true') {
       return
     }
 
-    // 3. إرسال طلب احتساب الزيارة للتحقق الخادمي
+    // إرسال طلب احتساب الزيارة للتحقق الخادمي الدقيق (يميز المسجل والزائر بدون تسجيل ويستثني جلسة المالك النشطة)
     fetch('/api/track-visit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: pathname || '/' }),
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.counted) {
-          sessionStorage.setItem('sanad_visit_logged', 'true')
-        } else if (
-          data.reason === 'owner_excluded' ||
-          data.reason === 'owner_account_excluded'
-        ) {
-          localStorage.setItem('sanad_is_platform_owner', 'true')
-        } else if (data.reason === 'already_counted_in_session') {
+        if (data.counted || data.reason === 'already_counted_in_session') {
           sessionStorage.setItem('sanad_visit_logged', 'true')
         }
       })
       .catch(() => {})
-  }, [])
+  }, [pathname])
 
   return null
 }

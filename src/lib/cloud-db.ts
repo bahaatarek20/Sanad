@@ -409,10 +409,11 @@ export async function savePlatformStatsToCloud(stats: Record<string, unknown>): 
     (async () => {
       const summaryRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
       const siteStatsRef = doc(db, 'site_stats', 'overview')
+      const nowIso = new Date().toISOString()
 
       const payload = {
         ...stats,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso,
       }
 
       await Promise.allSettled([
@@ -420,9 +421,12 @@ export async function savePlatformStatsToCloud(stats: Record<string, unknown>): 
         setDoc(
           siteStatsRef,
           {
-            totalVisits: stats.totalVisitors || stats.totalVisits || 0,
-            totalUsers: stats.totalRegisteredStudents || stats.totalUsers || 0,
-            lastUpdated: new Date().toISOString(),
+            totalVisits: typeof stats.totalVisitors === 'number' ? stats.totalVisitors : (stats.totalVisits || 0),
+            unregisteredVisitors: typeof stats.unregisteredVisitors === 'number' ? stats.unregisteredVisitors : 0,
+            registeredVisitsCount: typeof stats.registeredVisitsCount === 'number' ? stats.registeredVisitsCount : 0,
+            totalUsers: typeof stats.totalRegisteredStudents === 'number' ? stats.totalRegisteredStudents : (stats.totalUsers || 0),
+            statsResetAt: stats.statsResetAt || null,
+            lastUpdated: nowIso,
           },
           { merge: true }
         ),
@@ -445,17 +449,42 @@ export async function getPlatformStatsFromCloud(): Promise<Record<string, unknow
       const docRef = doc(db, PLATFORM_STATS_COLLECTION, 'summary')
       const [siteSnapRes, snapRes] = await Promise.allSettled([getDoc(siteStatsRef), getDoc(docRef)])
 
-      if (siteSnapRes.status === 'fulfilled' && siteSnapRes.value.exists()) {
-        const d = siteSnapRes.value.data()
+      const summaryData =
+        snapRes.status === 'fulfilled' && snapRes.value.exists() ? snapRes.value.data() : null
+      const siteData =
+        siteSnapRes.status === 'fulfilled' && siteSnapRes.value.exists() ? siteSnapRes.value.data() : null
+
+      if (summaryData) {
         return {
-          totalVisitors: d.totalVisits || 0,
-          totalRegisteredStudents: d.totalUsers || 0,
-          ...d,
+          totalVisitors:
+            typeof summaryData.totalVisitors === 'number'
+              ? summaryData.totalVisitors
+              : siteData?.totalVisits || 0,
+          unregisteredVisitors:
+            typeof summaryData.unregisteredVisitors === 'number'
+              ? summaryData.unregisteredVisitors
+              : siteData?.unregisteredVisitors || 0,
+          registeredVisitsCount:
+            typeof summaryData.registeredVisitsCount === 'number'
+              ? summaryData.registeredVisitsCount
+              : siteData?.registeredVisitsCount || 0,
+          totalRegisteredStudents:
+            typeof summaryData.totalRegisteredStudents === 'number'
+              ? summaryData.totalRegisteredStudents
+              : siteData?.totalUsers || 0,
+          ...siteData,
+          ...summaryData,
         }
       }
 
-      if (snapRes.status === 'fulfilled' && snapRes.value.exists()) {
-        return snapRes.value.data()
+      if (siteData) {
+        return {
+          totalVisitors: siteData.totalVisits || 0,
+          unregisteredVisitors: siteData.unregisteredVisitors || 0,
+          registeredVisitsCount: siteData.registeredVisitsCount || 0,
+          totalRegisteredStudents: siteData.totalUsers || 0,
+          ...siteData,
+        }
       }
       return null
     })(),

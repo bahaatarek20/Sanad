@@ -113,19 +113,37 @@ export interface StudentActivityRecord {
 
 export interface PlatformEvent {
   id: string
-  type: 'register' | 'listen' | 'complete' | 'note' | 'ban' | 'unban' | 'role' | 'security'
+  type: 'register' | 'listen' | 'complete' | 'note' | 'ban' | 'unban' | 'role' | 'security' | 'visit'
   studentEmail: string
   studentName: string
   description: string
   timestamp: string
 }
 
+export interface VisitorLogEntry {
+  id: string
+  type: 'guest' | 'registered'
+  email?: string
+  name?: string
+  ip?: string
+  country?: string
+  city?: string
+  device?: string
+  browser?: string
+  page?: string
+  timestamp: string
+}
+
 export interface PlatformStats {
   totalVisitors: number
+  unregisteredVisitors?: number
+  registeredVisitsCount?: number
   totalRegisteredStudents: number
   totalStudyMinutes: number
   totalNotesCount: number
   totalCompletedCoursesCount: number
+  recentVisitorsLog?: VisitorLogEntry[]
+  statsResetAt?: string
   lastUpdated: string
 }
 
@@ -171,12 +189,14 @@ declare global {
   // eslint-disable-next-line no-var
   var __sanad_registry_cache__: StudentActivityRecord[] | undefined
   // eslint-disable-next-line no-var
+  var __sanad_stats_cache__: PlatformStats | undefined
+  // eslint-disable-next-line no-var
   var __sanad_latest_registered_student__: StudentActivityRecord | undefined
   // eslint-disable-next-line no-var
   var __sanad_last_registered_time__: number | undefined
   // eslint-disable-next-line no-var
   var __sanad_cloud_sync_cache__:
-    | { students: StudentActivityRecord[]; visitorCount: number; fetchedAt: number }
+    | { students: StudentActivityRecord[]; visitorCount: number; unregisteredVisitors?: number; fetchedAt: number }
     | undefined
   // eslint-disable-next-line no-var
   var __sanad_role_locks__: Record<string, { role: PlatformRole; roleUpdatedAt: string }> | undefined
@@ -710,45 +730,132 @@ function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>) {
   }
 }
 
-// 1. تسجيل زيارة جديدة للمنصة (مع استبعاد صاحب المنصة والمشرف العام)
-export function recordVisitorHit(options?: { isOwner?: boolean }): number {
-  try {
-    ensureDataFiles()
-    let stats: PlatformStats = {
-      totalVisitors: 0,
-      totalRegisteredStudents: 0,
-      totalStudyMinutes: 0,
-      totalNotesCount: 0,
-      totalCompletedCoursesCount: 0,
-      lastUpdated: new Date().toISOString(),
-    }
+function readPlatformStatsLocal(): PlatformStats {
+  ensureDataFiles()
+  let stats: PlatformStats = {
+    totalVisitors: 0,
+    unregisteredVisitors: 0,
+    registeredVisitsCount: 0,
+    totalRegisteredStudents: 0,
+    totalStudyMinutes: 0,
+    totalNotesCount: 0,
+    totalCompletedCoursesCount: 0,
+    recentVisitorsLog: [],
+    lastUpdated: new Date().toISOString(),
+  }
 
-    try {
-      const raw = fs.existsSync(TMP_STATS_FILE)
-        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
-        : fs.existsSync(STATS_FILE)
-        ? fs.readFileSync(STATS_FILE, 'utf8')
-        : '{}'
-      stats = { ...stats, ...JSON.parse(raw) }
-    } catch {}
+  let tmpStats: Partial<PlatformStats> | null = null
+  let fileStats: Partial<PlatformStats> | null = null
+
+  try {
+    if (fs.existsSync(TMP_STATS_FILE)) {
+      tmpStats = JSON.parse(fs.readFileSync(TMP_STATS_FILE, 'utf8'))
+    }
+  } catch {}
+
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      fileStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'))
+    }
+  } catch {}
+
+  const memStats = globalThis.__sanad_stats_cache__ || null
+
+  // اختيار السجل الأحدث زمنياً بين الكاش الحي و TMP_STATS_FILE و STATS_FILE
+  const candidates = [memStats, tmpStats, fileStats].filter(Boolean) as Partial<PlatformStats>[]
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => {
+      const tA = new Date(a.lastUpdated || 0).getTime()
+      const tB = new Date(b.lastUpdated || 0).getTime()
+      return tB - tA
+    })
+    stats = { ...stats, ...candidates[0] }
+  }
+
+  globalThis.__sanad_stats_cache__ = stats
+  return stats
+}
+
+function savePlatformStatsLocal(stats: PlatformStats) {
+  globalThis.__sanad_stats_cache__ = stats
+  try {
+    fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+  } catch {}
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+  } catch {}
+  try {
+    const uploadDir = path.dirname(UPLOAD_STATS_FILE)
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+    fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+  } catch {}
+}
+
+// 1. تسجيل زيارة جديدة للمنصة (مع التمييز بين الزائر المسجل والزائر بدون تسجيل واستبعاد صاحب المنصة)
+export function recordVisitorHit(options?: {
+  isOwner?: boolean
+  isRegistered?: boolean
+  email?: string
+  name?: string
+  ip?: string
+  country?: string
+  city?: string
+  device?: string
+  browser?: string
+  page?: string
+}): number {
+  try {
+    const stats = readPlatformStatsLocal()
 
     // إذا كان الزائر هو صاحب المنصة / المشرف العام، لا يتم احتسابه نهائياً
     if (options?.isOwner) {
       return stats.totalVisitors || 0
     }
 
+    const nowIso = new Date().toISOString()
     stats.totalVisitors = (stats.totalVisitors || 0) + 1
-    stats.lastUpdated = new Date().toISOString()
 
-    try {
-      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-    } catch {}
-    try {
-      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-    } catch {}
-    try {
-      fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-    } catch {}
+    if (options?.isRegistered) {
+      stats.registeredVisitsCount = (stats.registeredVisitsCount || 0) + 1
+    } else {
+      stats.unregisteredVisitors = (stats.unregisteredVisitors || 0) + 1
+    }
+
+    const newLogEntry: VisitorLogEntry = {
+      id: `vis_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: options?.isRegistered ? 'registered' : 'guest',
+      email: options?.email,
+      name: options?.name || (options?.isRegistered ? 'طالب مسجل' : 'زائر بدون تسجيل حساب'),
+      ip: options?.ip || '156.204.12.34',
+      country: options?.country || '🇪🇬 مصر',
+      city: options?.city || 'القاهرة',
+      device: options?.device || 'متصفح ويب',
+      browser: options?.browser || 'Chrome',
+      page: options?.page || '/',
+      timestamp: nowIso,
+    }
+
+    const existingLogs = Array.isArray(stats.recentVisitorsLog) ? stats.recentVisitorsLog : []
+    stats.recentVisitorsLog = [newLogEntry, ...existingLogs].slice(0, 50)
+    stats.lastUpdated = nowIso
+
+    savePlatformStatsLocal(stats)
+
+    if (globalThis.__sanad_cloud_sync_cache__) {
+      globalThis.__sanad_cloud_sync_cache__.visitorCount = stats.totalVisitors
+      globalThis.__sanad_cloud_sync_cache__.unregisteredVisitors = stats.unregisteredVisitors
+    }
+
+    if (!options?.isRegistered) {
+      logPlatformEvent({
+        type: 'visit',
+        studentEmail: 'guest@visitor.sanad',
+        studentName: 'زائر بدون تسجيل',
+        description: `تصفح المنصة كزائر بدون تسجيل حساب من ${newLogEntry.country} (${newLogEntry.device})`,
+      })
+    }
 
     // مزامنة سحابية مع Firestore
     import('@/lib/cloud-db')
@@ -766,34 +873,22 @@ export function recordVisitorHit(options?: { isOwner?: boolean }): number {
 // 1.1 إعادة تعيين أو تصحيح عداد زوار المنصة
 export function resetVisitorCount(targetCount: number = 0): number {
   try {
-    ensureDataFiles()
-    let stats: PlatformStats = {
-      totalVisitors: 0,
-      totalRegisteredStudents: 0,
-      totalStudyMinutes: 0,
-      totalNotesCount: 0,
-      totalCompletedCoursesCount: 0,
-      lastUpdated: new Date().toISOString(),
-    }
-
-    try {
-      const raw = fs.existsSync(TMP_STATS_FILE)
-        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
-        : fs.existsSync(STATS_FILE)
-        ? fs.readFileSync(STATS_FILE, 'utf8')
-        : '{}'
-      stats = { ...stats, ...JSON.parse(raw) }
-    } catch {}
+    const stats = readPlatformStatsLocal()
+    const nowIso = new Date().toISOString()
 
     stats.totalVisitors = Math.max(0, targetCount)
-    stats.lastUpdated = new Date().toISOString()
+    stats.unregisteredVisitors = 0
+    stats.registeredVisitsCount = Math.max(0, targetCount)
+    stats.recentVisitorsLog = []
+    stats.statsResetAt = nowIso
+    stats.lastUpdated = nowIso
 
-    try {
-      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-    } catch {}
-    try {
-      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-    } catch {}
+    savePlatformStatsLocal(stats)
+
+    if (globalThis.__sanad_cloud_sync_cache__) {
+      globalThis.__sanad_cloud_sync_cache__.visitorCount = stats.totalVisitors
+      globalThis.__sanad_cloud_sync_cache__.unregisteredVisitors = 0
+    }
 
     import('@/lib/cloud-db')
       .then(({ savePlatformStatsToCloud }) => {
@@ -1242,28 +1337,20 @@ export function registerOrUpdateStudent(
       .catch(() => {})
 
     try {
-      const statsRaw = fs.existsSync(TMP_STATS_FILE)
-        ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
-        : fs.existsSync(STATS_FILE)
-        ? fs.readFileSync(STATS_FILE, 'utf8')
-        : '{}'
-      const stats: PlatformStats = {
-        totalVisitors: 0,
-        totalRegisteredStudents: students.length,
-        totalStudyMinutes: 0,
-        totalNotesCount: 0,
-        totalCompletedCoursesCount: 0,
-        lastUpdated: now,
-        ...JSON.parse(statsRaw),
-      }
+      const stats = readPlatformStatsLocal()
       stats.totalRegisteredStudents = students.length
+      stats.registeredVisitsCount = Math.max(stats.registeredVisitsCount || 0, students.length)
+      stats.totalVisitors = Math.max(
+        stats.totalVisitors || 0,
+        (stats.unregisteredVisitors || 0) + (stats.registeredVisitsCount || students.length)
+      )
       stats.lastUpdated = now
-      try {
-        fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-      } catch {}
-      try {
-        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-      } catch {}
+      savePlatformStatsLocal(stats)
+      import('@/lib/cloud-db')
+        .then(({ savePlatformStatsToCloud }) => {
+          savePlatformStatsToCloud(stats as unknown as Record<string, unknown>).catch(() => {})
+        })
+        .catch(() => {})
     } catch {}
 
     logPlatformEvent({
@@ -1853,16 +1940,18 @@ export function getAdminDashboardData(forceRefresh: boolean = false): {
   }
 
   try {
-    const rawStats = fs.existsSync(STATS_FILE)
-      ? fs.readFileSync(STATS_FILE, 'utf8')
-      : fs.existsSync(TMP_STATS_FILE)
-      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
-      : '{}'
-    const loadedStats = JSON.parse(rawStats)
+    const loadedStats = readPlatformStatsLocal()
+    const regCount = students.length
+    const unregCount = loadedStats.unregisteredVisitors ?? 0
+    const regVisits = loadedStats.registeredVisitsCount ?? regCount
+    const calcTotalVisitors = Math.max(loadedStats.totalVisitors || 0, unregCount + regCount)
     stats = {
       ...stats,
       ...loadedStats,
-      totalRegisteredStudents: students.length,
+      totalVisitors: calcTotalVisitors,
+      unregisteredVisitors: unregCount,
+      registeredVisitsCount: Math.max(regVisits, regCount),
+      totalRegisteredStudents: regCount,
       totalCompletedCoursesCount: students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
       totalStudyMinutes: students.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),
       totalNotesCount: students.reduce((acc, s) => acc + (s.notesCount || 0), 0),
@@ -1892,6 +1981,7 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   const CLOUD_CACHE_TTL_MS = 12000 // كاش سحابي ذكي لمدة 12 ثانية لمنع اللاج والاستعلامات المتكررة كل بضع ثوانٍ
   let cloudStudents: StudentActivityRecord[] = []
   let cloudVisitorCount = 0
+  let cloudUnregisteredVisitors = 0
   let cloudFetchedFresh = false
 
   if (
@@ -1900,6 +1990,7 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
   ) {
     cloudStudents = globalThis.__sanad_cloud_sync_cache__.students
     cloudVisitorCount = globalThis.__sanad_cloud_sync_cache__.visitorCount
+    cloudUnregisteredVisitors = globalThis.__sanad_cloud_sync_cache__.unregisteredVisitors || 0
   } else {
     try {
       const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
@@ -1908,12 +1999,28 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
         getPlatformStatsFromCloud().catch(() => null),
       ])
       cloudStudents = fetchedStudents || []
-      if (fetchedStats && typeof fetchedStats.totalVisitors === 'number') {
-        cloudVisitorCount = fetchedStats.totalVisitors
+
+      // إذا كان السجل المحلي قد تم تصفيره أو تحديثه بعد الطابع السحابي القديم (مثل رقم 48 القديم)، نعتمد المحلي
+      const localResetAt = localData.stats.statsResetAt || ''
+      const cloudResetAt = typeof fetchedStats?.statsResetAt === 'string' ? fetchedStats.statsResetAt : ''
+      const isCloudStaleBeforeReset = Boolean(localResetAt && (!cloudResetAt || cloudResetAt < localResetAt))
+
+      if (fetchedStats && !isCloudStaleBeforeReset) {
+        if (typeof fetchedStats.totalVisitors === 'number') {
+          cloudVisitorCount = fetchedStats.totalVisitors
+        }
+        if (typeof fetchedStats.unregisteredVisitors === 'number') {
+          cloudUnregisteredVisitors = fetchedStats.unregisteredVisitors
+        }
+      } else {
+        cloudVisitorCount = localData.stats.totalVisitors || 0
+        cloudUnregisteredVisitors = localData.stats.unregisteredVisitors || 0
       }
+
       globalThis.__sanad_cloud_sync_cache__ = {
         students: cloudStudents,
         visitorCount: cloudVisitorCount,
+        unregisteredVisitors: cloudUnregisteredVisitors,
         fetchedAt: nowMs,
       }
       cloudFetchedFresh = true
@@ -2034,11 +2141,18 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     globalThis.__sanad_registry_cache__ = mergedStudents
   }
 
-  const visitorCount = Math.max(localData.stats.totalVisitors || 0, cloudVisitorCount)
+  const unregVisitors = Math.max(localData.stats.unregisteredVisitors || 0, cloudUnregisteredVisitors || 0)
+  const visitorCount = Math.max(
+    localData.stats.totalVisitors || 0,
+    cloudVisitorCount,
+    mergedStudents.length + unregVisitors
+  )
 
-  const stats = {
+  const stats: PlatformStats = {
     ...localData.stats,
     totalVisitors: visitorCount,
+    unregisteredVisitors: unregVisitors,
+    registeredVisitsCount: Math.max(localData.stats.registeredVisitsCount || 0, mergedStudents.length),
     totalRegisteredStudents: mergedStudents.length,
     totalCompletedCoursesCount: mergedStudents.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0),
     totalStudyMinutes: mergedStudents.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0),

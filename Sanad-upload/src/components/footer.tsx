@@ -1,14 +1,20 @@
 import Link from 'next/link'
-import { BookOpen, Compass, Users, Sparkles, Globe, ShieldCheck, Smartphone } from 'lucide-react'
+import { BookOpen, Compass, Users, Sparkles, ShieldCheck, Smartphone } from 'lucide-react'
 import { getActiveCourses, getActiveCategories } from '@/lib/courses-store'
 import SupportPlatformCard from '@/components/support-platform-card'
+import FooterVisibilityGuard from '@/components/footer-visibility-guard'
 
-export default function Footer() {
+interface FooterProps {
+  isLoggedIn?: boolean
+}
+
+export default function Footer({ isLoggedIn = false }: FooterProps) {
   const courses = getActiveCourses()
   const categories = getActiveCategories()
 
   return (
-    <footer className="no-print border-t border-stone-200/80 bg-white/95 text-stone-600 transition-colors duration-300 dark:border-stone-800 dark:bg-stone-900/95 dark:text-stone-400">
+    <FooterVisibilityGuard initialIsLoggedIn={isLoggedIn}>
+      <footer className="no-print border-t border-stone-200/80 bg-white/95 text-stone-600 transition-colors duration-300 dark:border-stone-800 dark:bg-stone-900/95 dark:text-stone-400">
       <div className="container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 space-y-10">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
           {/* عمود التعريف بالمنصة */}
@@ -216,7 +222,8 @@ export default function Footer() {
               </Link>
             </div>
           </div>
-      </div>
-    </footer>
+        </div>
+      </footer>
+    </FooterVisibilityGuard>
   )
 }

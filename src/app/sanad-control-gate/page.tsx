@@ -384,18 +384,17 @@ export default function SanadControlGatePage() {
   useEffect(() => {
     if (!isAuthenticated) return
     const unsub = subscribeToOverviewStats((cloudOverview) => {
-      if (cloudOverview.totalVisits) {
-        setStats((prev) => ({
+      setStats((prev) => {
+        // إذا كان السجل المحلي قد تم تصفيره أو تحديثه مؤخراً، لا ندع قيمة 48 القديمة في Firestore تطغى عليه
+        if (prev.statsResetAt) {
+          return prev
+        }
+        return {
           ...prev,
-          totalVisitors: Math.max(prev.totalVisitors, cloudOverview.totalVisits),
-        }))
-      }
-      if (cloudOverview.totalUsers) {
-        setStats((prev) => ({
-          ...prev,
-          totalRegisteredStudents: Math.max(prev.totalRegisteredStudents, cloudOverview.totalUsers),
-        }))
-      }
+          totalVisitors: Math.max(prev.totalVisitors, cloudOverview.totalVisits || 0),
+          totalRegisteredStudents: Math.max(prev.totalRegisteredStudents, cloudOverview.totalUsers || 0),
+        }
+      })
     })
     return () => unsub()
   }, [isAuthenticated])
@@ -764,6 +763,9 @@ export default function SanadControlGatePage() {
           saveStudentsBackupToLocal(merged)
           return merged
         })
+        if (res.stats) {
+          setStats(res.stats)
+        }
         if (res.recentEvents) {
           setRecentEvents(res.recentEvents)
         }
@@ -1116,11 +1118,18 @@ export default function SanadControlGatePage() {
 
   // تصفير أو تصحيح عداد الزيارات
   const handleResetVisitorCount = () => {
-    if (window.confirm('هل ترغب في تصفير عداد زوار المنصة للبدء من جديد؟\n(علماً بأن زياراتك كصاحب للمنصة أصبحت مستثناة تلقائياً ولن تُحتسب مطلقاً)')) {
+    if (window.confirm('هل ترغب في تصفير عداد زوار المنصة بدون تسجيل وإعادة ضبط إجمالي الزيارات للطلاب المسجلين فقط؟\n(علماً بأن زياراتك كصاحب للمنصة مستثناة تلقائياً ولن تُحتسب مطلقاً)')) {
       startTransition(async () => {
-        const res = await resetVisitorCountAdminAction(0)
+        const res = await resetVisitorCountAdminAction(students.length)
         if (res.success) {
-          setStats((prev) => ({ ...prev, totalVisitors: res.totalVisitors ?? prev.totalVisitors ?? 0 }))
+          setStats((prev) => ({
+            ...prev,
+            totalVisitors: res.totalVisitors ?? students.length,
+            unregisteredVisitors: 0,
+            registeredVisitsCount: students.length,
+            recentVisitorsLog: [],
+            statsResetAt: new Date().toISOString(),
+          }))
         }
       })
     }
@@ -1874,6 +1883,27 @@ export default function SanadControlGatePage() {
     return (s.lastActive || s.registeredAt || '').startsWith(todayStr)
   }).length
 
+  const computedStudyMinutes = Math.max(
+    stats.totalStudyMinutes || 0,
+    students.reduce((acc, s) => acc + (s.totalStudyMinutes || 0), 0)
+  )
+  const computedCompletedCourses = Math.max(
+    stats.totalCompletedCoursesCount || 0,
+    students.reduce((acc, s) => acc + (s.completedCourses?.length || 0), 0)
+  )
+  const computedNotesCount = Math.max(
+    stats.totalNotesCount || 0,
+    students.reduce((acc, s) => acc + (s.notesCount || s.savedNotes?.length || 0), 0)
+  )
+  const unregisteredVisitorsCount = Math.max(
+    0,
+    stats.unregisteredVisitors ?? Math.max(0, (stats.totalVisitors || 0) - students.length)
+  )
+  const totalPlatformVisitors = Math.max(
+    stats.totalVisitors || 0,
+    students.length + unregisteredVisitorsCount
+  )
+
   // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز والدور
   const filteredStudents = students.filter((s) => {
     if (studentStatusFilter === 'active' && s.isBanned) return false
@@ -2474,29 +2504,29 @@ export default function SanadControlGatePage() {
           </div>
         </div>
 
-        {/* كروت الإحصائيات المركزية الستة */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 pt-6 border-t border-stone-100 dark:border-stone-800">
+        {/* كروت الإحصائيات المركزية السبعة (تفصيل شامل للزيارات الكلية، المسجلين، والزوار بدون تسجيل) */}
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 pt-6 border-t border-stone-100 dark:border-stone-800">
           <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60 group relative">
             <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
-              <span className="text-[11px] font-bold">زوار المنصة</span>
+              <span className="text-[11px] font-bold">إجمالي الزيارات الكلية</span>
               <Eye className="h-4 w-4 text-emerald-700" />
             </div>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-black text-stone-900 dark:text-white">
-                {stats.totalVisitors.toLocaleString('ar-EG')}
+                {totalPlatformVisitors.toLocaleString('ar-EG')}
               </div>
               <button
                 type="button"
                 onClick={handleResetVisitorCount}
-                title="تصفير عداد الزيارات (زيارات المشرف مستثناة تلقائياً)"
-                className="opacity-70 hover:opacity-100 transition-opacity text-[10px] text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900 cursor-pointer"
+                title="تصفير عداد الزوار بدون تسجيل وإعادة ضبط العداد للمسجلين فقط"
+                className="opacity-80 hover:opacity-100 transition-opacity text-[10px] text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900 cursor-pointer"
               >
                 تصفير
               </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-stone-400 mt-1">
-              <span>إجمالي الزيارات</span>
-              <span className="text-emerald-700 dark:text-emerald-400 font-bold">بث حي</span>
+            <div className="flex items-center justify-between text-[10px] text-stone-500 dark:text-stone-400 mt-1.5 pt-1 border-t border-stone-200/60 dark:border-stone-700/50">
+              <span>مسجلون: <strong className="text-amber-700 dark:text-amber-400">{students.length.toLocaleString('ar-EG')}</strong></span>
+              <span>زوار فقط: <strong className="text-teal-700 dark:text-teal-400">{unregisteredVisitorsCount.toLocaleString('ar-EG')}</strong></span>
             </div>
           </div>
 
@@ -2508,7 +2538,18 @@ export default function SanadControlGatePage() {
             <div className="text-2xl font-black text-amber-700 dark:text-amber-400">
               {students.length.toLocaleString('ar-EG')}
             </div>
-            <span className="text-[10px] text-stone-400">حسابات بريد معتمدة</span>
+            <span className="text-[10px] text-stone-400">حسابات مسجلة بالمنصة</span>
+          </div>
+
+          <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
+            <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1">
+              <span className="text-[11px] font-bold">زوار بدون تسجيل</span>
+              <Users className="h-4 w-4 text-teal-600" />
+            </div>
+            <div className="text-2xl font-black text-teal-700 dark:text-teal-400">
+              {unregisteredVisitorsCount.toLocaleString('ar-EG')}
+            </div>
+            <span className="text-[10px] text-stone-400">تصفحوا المنصة بدون حساب</span>
           </div>
 
           <div className="rounded-2xl bg-stone-50 p-4 dark:bg-stone-800/60 border border-stone-200/60 dark:border-stone-700/60">
@@ -2528,7 +2569,7 @@ export default function SanadControlGatePage() {
               <Clock className="h-4 w-4 text-emerald-700" />
             </div>
             <div className="text-2xl font-black text-emerald-800 dark:text-emerald-400">
-              {formatStudyTime(stats.totalStudyMinutes)}
+              {formatStudyTime(computedStudyMinutes)}
             </div>
             <span className="text-[10px] text-stone-400">إجمالي وقت الطلاب</span>
           </div>
@@ -2539,7 +2580,7 @@ export default function SanadControlGatePage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              {stats.totalCompletedCoursesCount.toLocaleString('ar-EG')}
+              {computedCompletedCourses.toLocaleString('ar-EG')}
             </div>
             <span className="text-[10px] text-stone-400">متون تمت دراستها كلياً</span>
           </div>
@@ -2550,7 +2591,7 @@ export default function SanadControlGatePage() {
               <FileText className="h-4 w-4 text-amber-700" />
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              {stats.totalNotesCount.toLocaleString('ar-EG')}
+              {computedNotesCount.toLocaleString('ar-EG')}
             </div>
             <span className="text-[10px] text-stone-400">فوائد مقيدة بالدفاتر</span>
           </div>
@@ -3464,6 +3505,81 @@ export default function SanadControlGatePage() {
             </div>
           </div>
           )}
+
+          {/* سجل تفصيلي لحركة الزيارات: المسجلون مقابل الزوار بدون تسجيل */}
+          <div className="rounded-3xl border border-stone-200/90 bg-white p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3 dark:border-stone-800">
+              <div className="flex items-center gap-2">
+                <Eye className="h-5 w-5 text-teal-600" />
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white">
+                    تحليل زيارات المنصة الحية (المسجلون والزوار بدون تسجيل)
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    رصد فوري لكل من دخل المنصة وتصفحها بدون إنشاء حساب مقابل الطلاب المسجلين بحسابات رسمية
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-1 text-[11px] font-black text-stone-800 dark:text-stone-200">
+                  إجمالي الزيارات الكلية: {totalPlatformVisitors.toLocaleString('ar-EG')}
+                </span>
+                <span className="rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3 py-1 text-[11px] font-black text-amber-900 dark:text-amber-300">
+                  الطلاب المسجلون: {students.length.toLocaleString('ar-EG')}
+                </span>
+                <span className="rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-3 py-1 text-[11px] font-black text-teal-900 dark:text-teal-300">
+                  زوار بدون تسجيل: {unregisteredVisitorsCount.toLocaleString('ar-EG')}
+                </span>
+              </div>
+            </div>
+
+            {!stats.recentVisitorsLog || stats.recentVisitorsLog.length === 0 ? (
+              <div className="rounded-2xl bg-stone-50 dark:bg-stone-800/40 p-4 text-xs text-stone-500 dark:text-stone-400 flex items-center justify-between">
+                <span>
+                  جميع الزيارات المسجلة حالياً ({students.length} طلاب) هي لحسابات مسجلة. فور دخول أي زائر جديد للمنصة بدون تسجيل حساب سيظهر هنا فوراً مع دولته ونوع جهازه والصفحة التي زارها.
+                </span>
+                <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 shrink-0 mr-2">رصد حي نشط 🟢</span>
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {stats.recentVisitorsLog.slice(0, 15).map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl bg-stone-50 p-3 text-xs dark:bg-stone-800/60 border border-stone-100 dark:border-stone-700/50"
+                  >
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-black ${
+                          v.type === 'registered'
+                            ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300'
+                            : 'bg-teal-100 text-teal-900 dark:bg-teal-950/80 dark:text-teal-300'
+                        }`}
+                      >
+                        {v.type === 'registered' ? '🎓 طالب مسجل' : '👁️ زائر بدون تسجيل'}
+                      </span>
+                      <span className="font-bold text-stone-900 dark:text-white">
+                        {v.name || (v.type === 'registered' ? v.email : 'زائر متصفح للمنصة')}
+                      </span>
+                      <span className="text-stone-500 dark:text-stone-400">
+                        {v.country || '🇪🇬 مصر'} • {v.device || 'متصفح ويب'} ({v.browser || 'Chrome'})
+                      </span>
+                      {v.page && (
+                        <span className="font-mono text-[10px] bg-white dark:bg-stone-900 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300">
+                          الصفحة: {v.page}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-mono text-stone-400 shrink-0">
+                      {new Date(v.timestamp).toLocaleTimeString('ar-EG', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* شريط الأحداث والنشاط المباشر */}
           <div className="rounded-3xl border border-stone-200/90 bg-white p-6 shadow-xs dark:border-stone-800 dark:bg-stone-900 space-y-4">

@@ -248,7 +248,7 @@ export default async function RootLayout({
         <Navbar />
         <main className="flex-1 pb-18 lg:pb-0">{children}</main>
         <BottomNav isLoggedIn={!!user} />
-        <Footer />
+        <Footer isLoggedIn={!!user} />
         <ScholarlyNotification />
         <GlobalAiTutor />
         <VisitorTracker />
