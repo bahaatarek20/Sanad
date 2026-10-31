@@ -169,10 +169,14 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
 
   // تجميع قائمة المتون المنجزة للطالب للتحقق من المتطلبات السابقة
   const completedCourseSlugs: string[] = []
+  let resolvedStudentName = user.user_metadata?.full_name || 'طالب العلم'
   if (user && user.email) {
     const studentProfile = getStudentProfileData(user.email)
     if (studentProfile?.completedCourses) {
       completedCourseSlugs.push(...studentProfile.completedCourses)
+    }
+    if (studentProfile?.name && studentProfile.name.trim()) {
+      resolvedStudentName = studentProfile.name.trim()
     }
   }
   if (initialIsCompleted && !completedCourseSlugs.includes(slug)) {
@@ -196,6 +200,7 @@ export default async function CourseDetailPage({ params, searchParams }: CourseP
         initialCompletedEpisodes={initialCompletedEpisodes}
         initialEpisodeIndex={initialEpisodeIndex}
         isLoggedIn={Boolean(user)}
+        studentName={resolvedStudentName}
       />
     </div>
   )

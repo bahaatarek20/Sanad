@@ -419,7 +419,12 @@ export async function updateStudentRoleAdminAction(
   revalidatePath('/dashboard')
   revalidatePath('/community')
   revalidatePath('/courses')
+  revalidatePath('/settings')
 
-  return result
+  return {
+    ...result,
+    auditLogs: getAuditLogs(50),
+    recentEvents: getAdminDashboardData(false).recentEvents,
+  }
 }
 

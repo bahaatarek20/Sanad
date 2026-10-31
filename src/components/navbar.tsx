@@ -14,17 +14,27 @@ import { getStudentProfileData } from '@/lib/student-tracking'
 export default async function Navbar() {
   const user = await getCurrentStudentUser()
   let scholarlyId: string | undefined
+  let liveProfileName: string | undefined
+  let liveAvatarUrl: string | undefined
+  let liveRole: 'student' | 'admin' | 'owner' | undefined
   if (user?.email) {
     const profile = getStudentProfileData(user.email)
     scholarlyId = profile?.scholarlyId
+    liveProfileName = profile?.name
+    liveAvatarUrl = profile?.avatarUrl
+    liveRole = profile?.role
   }
 
   const cleanUserEmail = (user?.email || '').toLowerCase().trim()
+  const effectiveRole = cleanUserEmail === 'bhaaljml480@gmail.com'
+    ? 'owner'
+    : liveRole || user?.role || 'student'
   const isAdmin =
-    user?.role === 'owner' ||
-    user?.role === 'admin' ||
+    effectiveRole === 'owner' ||
+    effectiveRole === 'admin' ||
     cleanUserEmail === 'bhaaljml480@gmail.com'
-  const avatarUrl = user?.avatarUrl || ''
+  const displayName = liveProfileName || user?.user_metadata?.full_name || 'طالب العلم'
+  const avatarUrl = liveAvatarUrl || user?.avatarUrl || ''
   const isImageAvatar =
     avatarUrl.startsWith('data:image/') ||
     avatarUrl.startsWith('/uploads/') ||
@@ -124,13 +134,13 @@ export default async function Navbar() {
                   {/* رابط إعدادات الحساب والملف الشخصي مع عرض الصورة الرمزية */}
                   <Link
                     href="/settings"
-                    title={`الملف الشخصي وإعدادات الحساب (${user.user_metadata?.full_name || 'طالب العلم'})`}
+                    title={`الملف الشخصي وإعدادات الحساب (${displayName})`}
                     className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-stone-200/90 bg-white/90 text-stone-500 hover:text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition dark:border-stone-800 dark:bg-stone-900 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/50"
                   >
                     {isImageAvatar ? (
                       <img
                         src={avatarUrl}
-                        alt={user.user_metadata?.full_name || 'الصورة الشخصية'}
+                        alt={displayName}
                         className="h-full w-full object-cover"
                       />
                     ) : presetEmoji ? (
@@ -173,7 +183,7 @@ export default async function Navbar() {
             <MobileMenu
               isLoggedIn={!!user}
               isAdmin={isAdmin}
-              userName={user?.user_metadata?.full_name}
+              userName={displayName}
               userEmail={user?.email}
               scholarlyId={scholarlyId}
               signOutAction={signOutAction}

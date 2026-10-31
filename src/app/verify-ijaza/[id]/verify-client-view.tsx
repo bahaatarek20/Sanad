@@ -228,8 +228,8 @@ export default function VerifyIjazaClientView({
               <QRCodeSvg
                 value={
                   typeof window !== 'undefined'
-                    ? `${window.location.origin}/verify-ijaza/${encodeURIComponent(cert.id)}`
-                    : `https://sanad-edu1.vercel.app/verify-ijaza/${encodeURIComponent(cert.id)}`
+                    ? `${window.location.origin}/verify-ijaza/${encodeURIComponent(cert.id)}${cert.signedToken ? `?token=${encodeURIComponent(cert.signedToken)}` : ''}`
+                    : `https://sanad-edu1.vercel.app/verify-ijaza/${encodeURIComponent(cert.id)}${cert.signedToken ? `?token=${encodeURIComponent(cert.signedToken)}` : ''}`
                 }
                 size={110}
               />

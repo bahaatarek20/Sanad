@@ -103,8 +103,11 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
     window.location.href = destination
   }
 
-  // مزامنة جلسة الكوكي في الخادم مع استجابة فورية فائقة السرعة
-  const syncFirebaseSession = async (idToken: string, provider: 'google' | 'email') => {
+  // مزامنة جلسة الكوكي في الخادم مع استجابة فورية فائقة السرعة وإرجاع الصلاحية الموثقة
+  const syncFirebaseSession = async (
+    idToken: string,
+    provider: 'google' | 'email'
+  ): Promise<{ role?: 'owner' | 'admin' | 'student' } | null> => {
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 5000)
@@ -118,12 +121,15 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         signal: controller.signal,
       })
       clearTimeout(timer)
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
         console.warn('Session endpoint response notice:', data)
+        return null
       }
+      return data
     } catch (e) {
       console.warn('Session endpoint notice:', e)
+      return null
     }
   }
 
@@ -169,10 +175,13 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
         console.warn('verifyUserAccount google notice:', checkErr)
       }
 
-      // 3. توثيق جلسة الكوكي المشفرة عبر السيرفر
+      // 3. توثيق جلسة الكوكي المشفرة عبر السيرفر واعتماد الصلاحية الخادمية المحدثة
       try {
         const idToken = await fbUser.getIdToken()
-        await syncFirebaseSession(idToken, 'google')
+        const serverSession = await syncFirebaseSession(idToken, 'google')
+        if (serverSession?.role) {
+          userRole = serverSession.role
+        }
       } catch {}
 
       // 4. حفظ النسخة في التخزين المحلي لضمان استجابة الواجهة فوراً
@@ -187,6 +196,11 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
           })
         )
         localStorage.setItem('sanad_student_registered', 'true')
+        if (userRole === 'owner' || userRole === 'admin') {
+          localStorage.setItem('sanad_is_platform_owner', 'true')
+        } else {
+          localStorage.removeItem('sanad_is_platform_owner')
+        }
       } catch {}
 
       // 5. التوجيه المباشر
@@ -333,10 +347,13 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
             console.warn('verifyUserAccount notice:', checkErr)
           }
 
-          // مزامنة الكوكي عبر السيرفر
+          // مزامنة الكوكي عبر السيرفر واعتماد الصلاحية الخادمية المحدثة
           try {
             const idToken = await fbUser.getIdToken()
-            await syncFirebaseSession(idToken, 'email')
+            const serverSession = await syncFirebaseSession(idToken, 'email')
+            if (serverSession?.role) {
+              userRole = serverSession.role
+            }
           } catch {}
 
           // حفظ الجلسة محلياً
@@ -351,9 +368,14 @@ function LoginFormContent({ searchParams }: LoginPageProps) {
               })
             )
             localStorage.setItem('sanad_student_registered', 'true')
+            if (userRole === 'owner' || userRole === 'admin') {
+              localStorage.setItem('sanad_is_platform_owner', 'true')
+            } else {
+              localStorage.removeItem('sanad_is_platform_owner')
+            }
           } catch {}
 
-          const dest = userRole === 'admin' ? '/admin' : targetRedirect
+          const dest = (userRole === 'admin' || userRole === 'owner') ? '/admin' : targetRedirect
           completeLoginAndRedirect(dest)
           return
         } catch (fbLoginErr: unknown) {

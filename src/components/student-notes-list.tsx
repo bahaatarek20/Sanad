@@ -32,6 +32,7 @@ export default function StudentNotesList({ initialNotes }: StudentNotesListProps
         if (typeof window !== 'undefined') {
           const merged = [...initialNotes]
           const existingIds = new Set(initialNotes.map((n) => n.id))
+          const existingContents = new Set(initialNotes.map((n) => (n.content || '').trim()))
 
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i)
@@ -42,8 +43,10 @@ export default function StudentNotesList({ initialNotes }: StudentNotesListProps
                 const parsed = JSON.parse(raw)
                 if (Array.isArray(parsed)) {
                   parsed.forEach((item) => {
-                    if (item && item.id && !existingIds.has(item.id)) {
+                    const contentKey = (item?.content || '').trim()
+                    if (item && item.id && !existingIds.has(item.id) && contentKey && !existingContents.has(contentKey)) {
                       existingIds.add(item.id)
+                      existingContents.add(contentKey)
                       merged.push({
                         id: item.id,
                         title: item.title || `فائدة في متن: ${courseSlug}`,

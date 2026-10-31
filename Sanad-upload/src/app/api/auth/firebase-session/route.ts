@@ -171,13 +171,17 @@ export async function POST(request: NextRequest) {
       phone,
       authProvider: provider,
       avatarUrl,
+      role: student?.role,
     })
+
+    const effectiveRole = student?.role || 'student'
 
     const response = NextResponse.json({
       success: true,
       studentId: student?.id || verifiedGoogleUser.localId,
       scholarlyId: student?.scholarlyId || 'SND-STU',
-      redirectUrl: '/courses',
+      role: effectiveRole,
+      redirectUrl: effectiveRole === 'owner' || effectiveRole === 'admin' ? '/admin' : '/courses',
     })
 
     // مسح علامة الخروج السابقة لضمان عدم تعليق المتصفح أو تصفير الجلسة محلياً

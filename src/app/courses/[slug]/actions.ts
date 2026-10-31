@@ -6,6 +6,7 @@ import {
   recordStudentCourseCompleted,
   saveStudentLocalNote,
   deleteStudentLocalNote,
+  getStudentLocalNotes,
   recordStudentListeningSession,
   recordStudentListeningHeartbeat,
   recordStudentEpisodeToggle,
@@ -32,11 +33,14 @@ export async function toggleCourseCompletion(courseSlug: string, isCompleted: bo
 }
 
 // 2. تدوين فائدة في كشكول الطالب لهذا المتن
+const ALLOWED_NOTE_TAGS = ['فائدة', 'قاعدة', 'مسألة', 'استشكال']
+
 export async function addCourseNote(
   courseSlug: string,
   content: string,
   tag: string,
-  title?: string
+  title?: string,
+  clientNoteId?: string
 ) {
   try {
     const studentUser = await getCurrentStudentUser()
@@ -44,17 +48,34 @@ export async function addCourseNote(
       return { success: false, isGuest: true, error: 'سجل دخولك لحفظ فوائدك في كشكولك' }
     }
 
-    const noteTitle = title?.trim() || `${tag}: فائدة في المتن`
+    const cleanContent = (content || '').trim().slice(0, 5000)
+    if (cleanContent.length < 2) {
+      return { success: false, error: 'لا يمكن حفظ فائدة فارغة' }
+    }
+    const safeTag = ALLOWED_NOTE_TAGS.includes(tag) ? tag : 'فائدة'
+    const safeSlug = String(courseSlug || '').slice(0, 200)
+    // نستخدم نفس المعرّف المُولّد في المتصفح لضمان تطابق النسخة المحلية مع الخادم (منع التكرار والحذف الوهمي)
+    const safeId =
+      typeof clientNoteId === 'string' && /^[a-zA-Z0-9_-]{6,80}$/.test(clientNoteId)
+        ? clientNoteId
+        : undefined
+
+    const noteTitle = title?.trim().slice(0, 200) || `${safeTag}: فائدة في المتن`
 
     // حفظ الفائدة في سجل الطالب المعتمد
     const savedNote = saveStudentLocalNote(studentUser.email, {
-      courseSlug,
+      id: safeId,
+      courseSlug: safeSlug,
       title: noteTitle,
-      content: content.trim(),
-      tag,
+      content: cleanContent,
+      tag: safeTag,
     })
 
-    revalidatePath(`/courses/${courseSlug}`)
+    if (!savedNote) {
+      return { success: false, error: 'تعذر حفظ الفائدة في سجلك، حُفظت على جهازك مؤقتاً' }
+    }
+
+    revalidatePath(`/courses/${safeSlug}`)
     revalidatePath('/dashboard')
     return { success: true, data: savedNote }
   } catch (err) {
@@ -64,11 +85,18 @@ export async function addCourseNote(
 }
 
 // 3. حذف فائدة من الكشكول
-export async function deleteCourseNote(noteId: string, courseSlug: string) {
+export async function deleteCourseNote(noteId: string, courseSlug: string, noteContent?: string) {
   try {
     const studentUser = await getCurrentStudentUser()
     if (studentUser?.email) {
-      deleteStudentLocalNote(studentUser.email, noteId)
+      const deleted = deleteStudentLocalNote(studentUser.email, noteId)
+      // توافق مع الفوائد القديمة التي حُفظت بمعرّف مختلف بين المتصفح والخادم
+      if (!deleted && noteContent && noteContent.trim()) {
+        const match = getStudentLocalNotes(studentUser.email, courseSlug).find(
+          (n) => n.content.trim() === noteContent.trim()
+        )
+        if (match) deleteStudentLocalNote(studentUser.email, match.id)
+      }
     }
 
     revalidatePath(`/courses/${courseSlug}`)

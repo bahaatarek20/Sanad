@@ -45,6 +45,8 @@ export interface CommunityPost {
   post_type: 'benefit' | 'question' | 'summary'
   content: string
   upvotes_count: number
+  /** بصمات مشفرة للطلاب الذين أعجبوا بالمشاركة (خادمية فقط، لا تُرسل للمتصفح) */
+  upvoter_keys?: string[]
   created_at: string
   replies?: CommunityReply[]
 }
@@ -212,10 +214,13 @@ export default function CommunityHub({
     }
   }, [])
 
-  // تزامن لحظي مستمر + استعادة الاتصال التلقائية عند عودة الشبكة أو فتح التبويب
+  // تزامن مستمر خفيف + استعادة الاتصال التلقائية عند عودة الشبكة أو فتح التبويب
   useEffect(() => {
-    syncCommunityFeed()
-    const interval = setInterval(syncCommunityFeed, 3500)
+    const initialSync = setTimeout(syncCommunityFeed, 0)
+    const interval = setInterval(() => {
+      // لا نستهلك الشبكة والخادم أثناء إخفاء التبويب
+      if (document.visibilityState === 'visible') syncCommunityFeed()
+    }, 10000)
 
     const handleOnline = () => syncCommunityFeed()
     const handleVisibility = () => {
@@ -226,11 +231,26 @@ export default function CommunityHub({
     document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
+      clearTimeout(initialSync)
       clearInterval(interval)
       window.removeEventListener('online', handleOnline)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [syncCommunityFeed])
+
+  // استرجاع المشاركات التي أعجب بها الطالب سابقاً حتى لا يظهر الزر قابلاً للتكرار بعد تحديث الصفحة
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('sanad_community_upvoted')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) setUpvotedIds(parsed.filter((x) => typeof x === 'string'))
+        }
+      } catch {}
+    }, 0)
+    return () => clearTimeout(t)
+  }, [])
 
   const filteredPosts = posts.filter((post) => {
     const matchCourse = selectedCourse === 'all' || post.course_slug === selectedCourse
@@ -321,7 +341,11 @@ export default function CommunityHub({
 
   function handleUpvote(postId: string) {
     if (upvotedIds.includes(postId)) return
-    setUpvotedIds((prev) => [...prev, postId])
+    const nextIds = [...upvotedIds, postId]
+    setUpvotedIds(nextIds)
+    try {
+      localStorage.setItem('sanad_community_upvoted', JSON.stringify(nextIds.slice(-500)))
+    } catch {}
     setPosts((prev) =>
       prev.map((post) =>
         post.id === postId ? { ...post, upvotes_count: post.upvotes_count + 1 } : post
@@ -332,7 +356,21 @@ export default function CommunityHub({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'upvote', postId }),
-    }).catch(() => {})
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // إذا كان الطالب قد أعجب بها سابقاً من جهاز آخر، نتراجع عن الزيادة المحلية
+        if (data && data.alreadyUpvoted) {
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === postId
+                ? { ...post, upvotes_count: Math.max(0, post.upvotes_count - 1) }
+                : post
+            )
+          )
+        }
+      })
+      .catch(() => {})
   }
 
   function getPostBadge(type: 'benefit' | 'question' | 'summary') {
@@ -771,9 +809,10 @@ export default function CommunityHub({
                       <button
                         type="button"
                         onClick={() => handleAddReply(post.id)}
-                        className="rounded-xl bg-emerald-900 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 transition"
+                        disabled={isPending || !replyContent.trim()}
+                        className="rounded-xl bg-emerald-900 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 transition disabled:opacity-50"
                       >
-                        إرسال
+                        {isPending ? 'جارٍ الإرسال...' : 'إرسال'}
                       </button>
                     </div>
                   )}

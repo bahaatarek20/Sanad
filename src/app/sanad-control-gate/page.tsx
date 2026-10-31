@@ -292,10 +292,57 @@ export default function SanadControlGatePage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isBanningPending, setIsBanningPending] = useState(false)
   const [roleActionLoadingId, setRoleActionLoadingId] = useState<string | null>(null)
+  const roleActionLoadingRef = useRef<string | null>(null)
+  const recentRoleChangesRef = useRef<
+    Map<string, { role: 'student' | 'admin'; roleUpdatedAt: string; expiresAt: number }>
+  >(new Map())
   const [roleFeedbackMessage, setRoleFeedbackMessage] = useState<{
     text: string
     type: 'success' | 'error'
   } | null>(null)
+
+  const applyRoleOverrides = (list: StudentActivityRecord[], prevList: StudentActivityRecord[] = []): StudentActivityRecord[] => {
+    const now = Date.now()
+    const prevMap = new Map<string, StudentActivityRecord>()
+    prevList.forEach((p) => {
+      if (p?.email) prevMap.set(p.email.toLowerCase().trim(), p)
+    })
+
+    return list.map((item) => {
+      const clean = (item.email || '').toLowerCase().trim()
+      if (clean === SUPER_ADMIN_EMAIL) {
+        return { ...item, role: 'owner' }
+      }
+      const override = recentRoleChangesRef.current.get(clean)
+      if (override) {
+        if (override.expiresAt > now) {
+          return { ...item, role: override.role, roleUpdatedAt: override.roleUpdatedAt }
+        } else {
+          recentRoleChangesRef.current.delete(clean)
+        }
+      }
+      const prevItem = prevMap.get(clean)
+      if (
+        prevItem?.roleUpdatedAt &&
+        (!item.roleUpdatedAt || prevItem.roleUpdatedAt > item.roleUpdatedAt) &&
+        prevItem.role
+      ) {
+        return { ...item, role: prevItem.role, roleUpdatedAt: prevItem.roleUpdatedAt }
+      }
+      return item
+    })
+  }
+
+  const saveStudentsBackupToLocal = (list: StudentActivityRecord[]) => {
+    if (typeof window === 'undefined' || list.length === 0) return
+    try {
+      const lightweight = list.slice(0, 120).map(({ savedNotes, ...rest }) => {
+        void savedNotes
+        return rest
+      })
+      localStorage.setItem('sanad_admin_students_backup', JSON.stringify(lightweight))
+    } catch {}
+  }
 
   const showRoleToast = (text: string, type: 'success' | 'error' = 'success') => {
     setRoleFeedbackMessage({ text, type })
@@ -304,16 +351,29 @@ export default function SanadControlGatePage() {
     }, 4000)
   }
 
-  // مزامنة حالة المشرف تلقائياً من Firebase Auth
+  // مزامنة حالة المشرف تلقائياً من Firebase Auth وتوثيق كوكي الجلسة الخادمية لمالك المنصة
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (fbUser) => {
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
         const clean = fbUser.email.toLowerCase().trim()
         if (ADMIN_EMAILS.includes(clean)) {
           setIsAuthenticated(true)
+          setCurrentActor({
+            email: SUPER_ADMIN_EMAIL,
+            role: 'owner',
+            isOwner: true,
+          })
           if (typeof window !== 'undefined') {
             localStorage.setItem('sanad_is_platform_owner', 'true')
           }
+          try {
+            const idToken = await fbUser.getIdToken()
+            await fetch('/api/auth/firebase-session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken, authProvider: 'google' }),
+            })
+          } catch {}
         }
       }
     })
@@ -695,17 +755,13 @@ export default function SanadControlGatePage() {
               map.set(email, s)
             }
           })
-          const merged = Array.from(map.values())
+          const merged = applyRoleOverrides(Array.from(map.values()), prev)
           merged.sort((a, b) => {
             const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
             const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
             return timeB - timeA
           })
-          if (typeof window !== 'undefined' && merged.length > 0) {
-            try {
-              localStorage.setItem('sanad_admin_students_backup', JSON.stringify(merged))
-            } catch {}
-          }
+          saveStudentsBackupToLocal(merged)
           return merged
         })
         if (res.recentEvents) {
@@ -822,14 +878,26 @@ export default function SanadControlGatePage() {
     } catch {}
   }
 
-  // فحص واستقبال الطلاب الجدد لحظياً (Real-Time Live Feed)
+  // فحص واستقبال الطلاب الجدد لحظياً (Real-Time Live Feed) بدون أي لاج
   const pollLiveStudents = async (isManual = false) => {
+    if (!isManual && roleActionLoadingRef.current) return
     if (isManual) setIsRefreshingLive(true)
     try {
-      const res = await fetch('/api/admin/live-students', {
+      const endpoint = isManual ? '/api/admin/live-students?force=1' : '/api/admin/live-students'
+      const res = await fetch(endpoint, {
         cache: 'no-store',
         credentials: 'include',
       })
+      if (res.status === 401) {
+        const isBusyUploading = isUploadingVideo || Boolean(batchProgress?.isUploading) || uploadingEpisodeIndex !== null
+        if (!isBusyUploading) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('sanad_is_platform_owner')
+          }
+          setIsAuthenticated(false)
+        }
+        return
+      }
       if (res.ok) {
         const json = await res.json()
         if (json.success && Array.isArray(json.students)) {
@@ -874,17 +942,13 @@ export default function SanadControlGatePage() {
                 map.set(email, s)
               }
             })
-            const merged = Array.from(map.values())
+            const merged = applyRoleOverrides(Array.from(map.values()), prev)
             merged.sort((a, b) => {
               const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
               const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
               return timeB - timeA
             })
-            if (typeof window !== 'undefined' && merged.length > 0) {
-              try {
-                localStorage.setItem('sanad_admin_students_backup', JSON.stringify(merged))
-              } catch {}
-            }
+            saveStudentsBackupToLocal(merged)
             return merged
           })
           if (json.stats) {
@@ -937,19 +1001,23 @@ export default function SanadControlGatePage() {
                 const email = s.email.toLowerCase().trim()
                 if (!map.has(email)) {
                   map.set(email, s)
+                } else {
+                  const fsItem = map.get(email)!
+                  map.set(email, {
+                    ...s,
+                    ...fsItem,
+                    role: fsItem.role || s.role,
+                    roleUpdatedAt: fsItem.roleUpdatedAt || s.roleUpdatedAt,
+                  })
                 }
               })
-              const merged = Array.from(map.values())
+              const merged = applyRoleOverrides(Array.from(map.values()), prev)
               merged.sort((a, b) => {
                 const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
                 const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
                 return timeB - timeA
               })
-              if (typeof window !== 'undefined' && merged.length > 0) {
-                try {
-                  localStorage.setItem('sanad_admin_students_backup', JSON.stringify(merged))
-                } catch {}
-              }
+              saveStudentsBackupToLocal(merged)
               return merged
             })
           }
@@ -969,7 +1037,7 @@ export default function SanadControlGatePage() {
     }
   }, [isAuthenticated])
 
-  // 3. مراقبة لحظية مستمرة لكل من يسجل في المنصة من حول العالم كل 3.5 ثانية
+  // 3. مراقبة لحظية خفيفة وسريعة كل 10 ثوانٍ بدون أي ثقل على المتصفح أو الخادم
   useEffect(() => {
     if (!isAuthenticated) return
 
@@ -981,7 +1049,7 @@ export default function SanadControlGatePage() {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         pollLiveStudents()
       }
-    }, 3500)
+    }, 10000)
 
     return () => {
       clearTimeout(t)
@@ -1976,31 +2044,40 @@ export default function SanadControlGatePage() {
     const isCurrentAdmin = isStudentAdmin(st)
     const newRole: 'student' | 'admin' = isCurrentAdmin ? 'student' : 'admin'
     const targetKey = cleanEmail || st.id
+    const nowIso = new Date().toISOString()
+
+    // قفل الرتبة محلياً لمدة 90 ثانية لمنع أي snapshot قديمة من إعادة الرتبة السابقة
+    if (cleanEmail) {
+      recentRoleChangesRef.current.set(cleanEmail, {
+        role: newRole,
+        roleUpdatedAt: nowIso,
+        expiresAt: Date.now() + 90000,
+      })
+    }
 
     // 1. تحديث تفاؤلي فوري في واجهة المستخدم (0 ثانية تأخير)
     setStudents((prev) => {
       const updated = prev.map((s) => {
         const sClean = (s.email || '').toLowerCase().trim()
         if (sClean === cleanEmail || s.id === st.id || (st.scholarlyId && s.scholarlyId === st.scholarlyId)) {
-          return { ...s, role: newRole }
+          return { ...s, role: newRole, roleUpdatedAt: nowIso, lastActive: nowIso }
         }
         return s
       })
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('sanad_admin_students_backup', JSON.stringify(updated))
-        } catch {}
-      }
+      saveStudentsBackupToLocal(updated)
       return updated
     })
 
     if (selectedStudentForDetail) {
       const modalClean = (selectedStudentForDetail.email || '').toLowerCase().trim()
       if (modalClean === cleanEmail || selectedStudentForDetail.id === st.id) {
-        setSelectedStudentForDetail((prev) => (prev ? { ...prev, role: newRole } : null))
+        setSelectedStudentForDetail((prev) =>
+          prev ? { ...prev, role: newRole, roleUpdatedAt: nowIso, lastActive: nowIso } : null
+        )
       }
     }
 
+    roleActionLoadingRef.current = targetKey
     setRoleActionLoadingId(targetKey)
 
     try {
@@ -2008,25 +2085,38 @@ export default function SanadControlGatePage() {
       const res = await updateStudentRoleAdminAction(cleanEmail || st.id, newRole)
 
       if (res && res.success) {
-        // 3. مزامنة فورية مباشرة مع Cloud Firestore من المتصفح بعد نجاح الخادم
-        try {
-          const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
-          await setDoc(doc(db, 'students', studentDocId), { role: newRole, updatedAt: new Date().toISOString() }, { merge: true })
-          if (st.id) {
-            const { updateUserRole } = await import('@/lib/user-service')
-            await updateUserRole(st.id, newRole)
-          }
-        } catch (clientErr) {
-          console.warn('Client dual-write notice:', clientErr)
+        if ('auditLogs' in res && Array.isArray(res.auditLogs)) {
+          setAuditLogs(res.auditLogs)
+        }
+        if ('recentEvents' in res && Array.isArray(res.recentEvents)) {
+          setRecentEvents(res.recentEvents)
         }
 
+        // 3. مزامنة خلفية غير حاجبة مع Cloud Firestore من المتصفح دون تعطيل الواجهة
+        void (async () => {
+          try {
+            const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+            await setDoc(
+              doc(db, 'students', studentDocId),
+              { role: newRole, roleUpdatedAt: nowIso, lastActive: nowIso, updatedAt: nowIso },
+              { merge: true }
+            )
+            const { updateCloudStudentRole } = await import('@/lib/cloud-db')
+            await updateCloudStudentRole(cleanEmail, st.id, newRole)
+          } catch (clientErr) {
+            console.warn('Client dual-write notice:', clientErr)
+          }
+        })()
+
         showRoleToast(
-          `تم تغيير رتبة [${st.name}] إلى (${newRole === 'admin' ? '🛡️ مشرف عام' : '🎓 طالب علم'}) بنجاح`,
+          `تم تغيير رتبة [${st.name}] إلى (${newRole === 'admin' ? '🛡️ مشرف عام' : '🎓 طالب علم'}) بنجاح وتطبيق صلاحياته فوراً`,
           'success'
         )
-        await refreshDashboardData()
       } else {
         // التراجع في حال حدوث خطأ خادمي
+        if (cleanEmail) {
+          recentRoleChangesRef.current.delete(cleanEmail)
+        }
         setStudents((prev) =>
           prev.map((s) => {
             const sClean = (s.email || '').toLowerCase().trim()
@@ -2045,8 +2135,12 @@ export default function SanadControlGatePage() {
         showRoleToast(res?.error || 'تعذر تعديل الصلاحية، يرجى المحاولة مجدداً', 'error')
       }
     } catch {
+      if (cleanEmail) {
+        recentRoleChangesRef.current.delete(cleanEmail)
+      }
       showRoleToast('حدث خطأ أثناء حفظ الصلاحية الجديدة', 'error')
     } finally {
+      roleActionLoadingRef.current = null
       setRoleActionLoadingId(null)
     }
   }

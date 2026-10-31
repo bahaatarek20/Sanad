@@ -44,7 +44,10 @@ export default function VerifiedDigitalIjaza({
     return () => clearTimeout(t)
   }, [])
 
-  const verifyUrl = `${currentOrigin || 'https://sanad-edu1.vercel.app'}/verify-ijaza/${encodeURIComponent(certificate.id)}`
+  const tokenQuery = certificate.signedToken
+    ? `?token=${encodeURIComponent(certificate.signedToken)}`
+    : ''
+  const verifyUrl = `${currentOrigin || 'https://sanad-edu1.vercel.app'}/verify-ijaza/${encodeURIComponent(certificate.id)}${tokenQuery}`
 
   const handleCopyLink = () => {
     if (navigator?.clipboard) {

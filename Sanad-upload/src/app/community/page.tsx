@@ -9,6 +9,7 @@ import {
   getLocalCommunityPosts,
   resolveAuthorCommunityIdentity,
   enrichCommunityPostsForPublic,
+  filterDeletedCommunityContent,
 } from '@/lib/community-store'
 import { getCommunityPostsFromCloud } from '@/lib/cloud-db'
 
@@ -161,7 +162,7 @@ export default async function CommunityPage() {
     console.warn('Could not fetch community posts from cloud DB:', cErr)
   }
 
-  let posts = Array.from(postMap.values())
+  let posts = filterDeletedCommunityContent(Array.from(postMap.values()))
   if (posts.length === 0) {
     posts = DEFAULT_SAMPLE_POSTS
   } else {

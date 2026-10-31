@@ -1,4 +1,8 @@
 import crypto from 'crypto'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { cookies } from 'next/headers'
 import { setStudentSessionCookie } from '@/lib/auth-helper'
 import { registerOrUpdateStudent, isStudentBanned } from '@/lib/student-tracking'
 import { depositOtpMessage } from '@/lib/messages-service'
@@ -10,12 +14,98 @@ interface PhoneOtpEntry {
   fullName?: string
 }
 
-// تخزين رموز التحقق الخاصة بالهاتف في الذاكرة المشتركة
-const globalForPhone = globalThis as unknown as { phoneOtpStore?: Map<string, PhoneOtpEntry> }
+const TMP_PHONE_OTP_FILE = path.join(os.tmpdir(), 'sanad_data', 'sanad_phone_otp_store.json')
+const PHONE_OTP_COOKIE_NAME = 'sanad_phone_otp_challenge'
+const PHONE_OTP_SECRET =
+  process.env.SANAD_SESSION_SECRET ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'sanad_phone_otp_stateless_hmac_secret_2026'
+
+// تخزين رموز التحقق الخاصة بالهاتف في الذاكرة المشتركة + /tmp + Signed Cookie
+const globalForPhone = globalThis as unknown as {
+  phoneOtpStore?: Map<string, PhoneOtpEntry>
+  phoneOtpIntervalInit?: boolean
+}
 const globalPhoneStore = globalForPhone.phoneOtpStore || (globalForPhone.phoneOtpStore = new Map<string, PhoneOtpEntry>())
 
+function persistPhoneOtpToTmp() {
+  try {
+    const dir = path.dirname(TMP_PHONE_OTP_FILE)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    const obj: Record<string, PhoneOtpEntry> = {}
+    const now = Date.now()
+    for (const [k, v] of globalPhoneStore.entries()) {
+      if (v.expiresAt > now) obj[k] = v
+    }
+    fs.writeFileSync(TMP_PHONE_OTP_FILE, JSON.stringify(obj), 'utf8')
+  } catch {}
+}
+
+function getPhoneOtpFromTmp(phone: string): PhoneOtpEntry | undefined {
+  try {
+    if (!fs.existsSync(TMP_PHONE_OTP_FILE)) return undefined
+    const raw = fs.readFileSync(TMP_PHONE_OTP_FILE, 'utf8')
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as Record<string, PhoneOtpEntry>
+    const item = parsed[phone]
+    if (item && item.expiresAt > Date.now()) {
+      globalPhoneStore.set(phone, item)
+      return item
+    }
+  } catch {}
+  return undefined
+}
+
+function createSignedPhoneChallenge(phone: string, code: string, expiresAt: number, fullName?: string): string {
+  const codeDigest = crypto
+    .createHmac('sha256', PHONE_OTP_SECRET)
+    .update(`${phone.trim()}:${code.trim()}:${expiresAt}`)
+    .digest('hex')
+  const payload = Buffer.from(
+    JSON.stringify({ phone: phone.trim(), expiresAt, codeDigest, fullName }),
+    'utf8'
+  ).toString('base64url')
+  const sig = crypto.createHmac('sha256', PHONE_OTP_SECRET).update(payload).digest('base64url')
+  return `${payload}.${sig}`
+}
+
+function verifySignedPhoneChallenge(
+  token: string | undefined,
+  phone: string,
+  enteredCode: string
+): { valid: boolean; expired?: boolean; fullName?: string } {
+  if (!token || !token.includes('.')) return { valid: false }
+  try {
+    const [payload, sig] = token.split('.')
+    if (!payload || !sig) return { valid: false }
+    const expectedSig = crypto.createHmac('sha256', PHONE_OTP_SECRET).update(payload).digest('base64url')
+    if (sig !== expectedSig) return { valid: false }
+
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      phone: string
+      expiresAt: number
+      codeDigest: string
+      fullName?: string
+    }
+    if (decoded.phone !== phone.trim()) return { valid: false }
+    if (Date.now() > decoded.expiresAt) return { valid: false, expired: true }
+
+    const expectedDigest = crypto
+      .createHmac('sha256', PHONE_OTP_SECRET)
+      .update(`${phone.trim()}:${enteredCode.trim()}:${decoded.expiresAt}`)
+      .digest('hex')
+
+    return { valid: decoded.codeDigest === expectedDigest, fullName: decoded.fullName }
+  } catch {
+    return { valid: false }
+  }
+}
+
 // تنظيف الرموز المنتهية دورياً
-if (!globalForPhone.phoneOtpStore) {
+if (!globalForPhone.phoneOtpIntervalInit) {
+  globalForPhone.phoneOtpIntervalInit = true
   setInterval(() => {
     const now = Date.now()
     for (const [phone, entry] of globalPhoneStore.entries()) {
@@ -85,7 +175,7 @@ export async function sendOtpToPhone(
   }
 
   const now = Date.now()
-  const existing = globalPhoneStore.get(phone)
+  const existing = globalPhoneStore.get(phone) || getPhoneOtpFromTmp(phone)
   if (existing && existing.expiresAt - now > 9.8 * 60 * 1000) {
     return {
       success: false,
@@ -104,6 +194,18 @@ export async function sendOtpToPhone(
     attempts: 0,
     fullName: fullName?.trim() || undefined,
   })
+  persistPhoneOtpToTmp()
+
+  try {
+    const cookieStore = await cookies()
+    const challengeToken = createSignedPhoneChallenge(phone, otpCode, expiresAt, fullName?.trim())
+    cookieStore.set(PHONE_OTP_COOKIE_NAME, challengeToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 600,
+    })
+  } catch {}
 
   // 1. طباعة الكود في سجل الخادم للمطور
   console.log('\n======================================================')
@@ -192,8 +294,15 @@ export async function verifyPhoneOtp(
     }
   }
 
-  const record = globalPhoneStore.get(phone)
+  const record = globalPhoneStore.get(phone) || getPhoneOtpFromTmp(phone)
   const now = Date.now()
+
+  let statelessCheck: { valid: boolean; expired?: boolean; fullName?: string } = { valid: false }
+  try {
+    const cookieStore = await cookies()
+    const challengeCookie = cookieStore.get(PHONE_OTP_COOKIE_NAME)?.value
+    statelessCheck = verifySignedPhoneChallenge(challengeCookie, phone, code)
+  } catch {}
 
   // 1. فحص عبر Twilio Verify v2 أولاً إن وُجدت مفاتيحه في البيئة
   const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID
@@ -221,7 +330,13 @@ export async function verifyPhoneOtp(
       const twData = await twRes.json()
       if (twRes.ok && twData.status === 'approved') {
         globalPhoneStore.delete(phone)
-        const studentName = record?.fullName || `طالب العلم (${phone})`
+        persistPhoneOtpToTmp()
+        try {
+          const cookieStore = await cookies()
+          cookieStore.delete(PHONE_OTP_COOKIE_NAME)
+        } catch {}
+
+        const studentName = record?.fullName || statelessCheck.fullName || `طالب العلم (${phone})`
         const cleanDigits = phone.replace(/[^0-9]/g, '')
         const syntheticEmail = `${cleanDigits}@student.sanad.edu`
         await setStudentSessionCookie(studentName, syntheticEmail, {
@@ -244,7 +359,7 @@ export async function verifyPhoneOtp(
   // 2. الفحص الداخلي الاحتياطي (معطّل قطعياً في بيئة الإنتاج لمنع أي اختراق)
   const isMasterDevCode = process.env.NODE_ENV !== 'production' && code === '123456'
 
-  if (!record && !isMasterDevCode) {
+  if (!record && !statelessCheck.valid && !isMasterDevCode) {
     return {
       success: false,
       message: 'لم يتم العثور على رمز تحقق نشط لهذا الرقم أو انتهت صلاحيته. يرجى طلب رمز جديد.',
@@ -253,8 +368,9 @@ export async function verifyPhoneOtp(
     }
   }
 
-  if (record && !isMasterDevCode && record.expiresAt < now) {
+  if (record && !statelessCheck.valid && !isMasterDevCode && record.expiresAt < now) {
     globalPhoneStore.delete(phone)
+    persistPhoneOtpToTmp()
     return {
       success: false,
       message: 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.',
@@ -263,10 +379,12 @@ export async function verifyPhoneOtp(
     }
   }
 
-  if (record && !isMasterDevCode && record.code !== code) {
+  if (record && !statelessCheck.valid && !isMasterDevCode && record.code !== code) {
     record.attempts += 1
+    persistPhoneOtpToTmp()
     if (record.attempts > 5) {
       globalPhoneStore.delete(phone)
+      persistPhoneOtpToTmp()
       return {
         success: false,
         message: 'تم تجاوز الحد الأقصى للمحاولات الخاطئة. تم إلغاء الرمز لأسباب أمنية.',
@@ -283,8 +401,13 @@ export async function verifyPhoneOtp(
   }
 
   // تم التحقق بنجاح!
-  const studentName = record?.fullName || `طالب العلم (${phone})`
+  const studentName = record?.fullName || statelessCheck.fullName || `طالب العلم (${phone})`
   globalPhoneStore.delete(phone)
+  persistPhoneOtpToTmp()
+  try {
+    const cookieStore = await cookies()
+    cookieStore.delete(PHONE_OTP_COOKIE_NAME)
+  } catch {}
 
   const cleanDigits = phone.replace(/[^0-9]/g, '')
   const syntheticEmail = `${cleanDigits}@student.sanad.edu`

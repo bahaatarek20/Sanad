@@ -1,4 +1,6 @@
 import fs from 'fs'
+import os from 'os'
+import crypto from 'crypto'
 import path from 'path'
 import type { CommunityPost, CommunityReply } from '@/components/community-hub'
 import { getStudentProfileData, SUPER_ADMIN_EMAIL } from '@/lib/student-tracking'
@@ -226,9 +228,14 @@ export function enrichCommunityPostsForPublic(posts: CommunityPost[]): Community
       replies: enrichedReplies,
     }
     delete safePost.author_email
+    delete safePost.upvoter_keys
     return safePost
   })
 }
+
+// مسار احتياطي قابل للكتابة دائماً (على Vercel نظام الملفات للقراءة فقط عدا /tmp)
+const TMP_COMMUNITY_DIR = path.join(os.tmpdir(), 'sanad_data')
+const TMP_COMMUNITY_FILE = path.join(TMP_COMMUNITY_DIR, 'sanad_community_posts.json')
 
 function ensureCommunityFile() {
   try {
@@ -238,20 +245,66 @@ function ensureCommunityFile() {
     if (!fs.existsSync(COMMUNITY_FILE)) {
       fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(INITIAL_POSTS, null, 2), 'utf8')
     }
-  } catch (err) {
-    console.error('Error initializing community store:', err)
+  } catch {
+    // نظام ملفات للقراءة فقط (Vercel) — سيتم استخدام المسار الاحتياطي /tmp
   }
+}
+
+function readPostsFile(filePath: string): CommunityPost[] | null {
+  try {
+    if (!fs.existsSync(filePath)) return null
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * كتابة آمنة: تحاول الكتابة في مجلد البيانات الأساسي وفي /tmp معاً،
+ * وتنجح إذا نجحت أي منهما (يمنع ضياع المشاركات على الخادم الحي)
+ */
+function writeCommunityPosts(posts: CommunityPost[]): boolean {
+  const payload = JSON.stringify(posts, null, 2)
+  let ok = false
+  try {
+    fs.writeFileSync(COMMUNITY_FILE, payload, 'utf8')
+    ok = true
+  } catch {}
+  try {
+    if (!fs.existsSync(TMP_COMMUNITY_DIR)) fs.mkdirSync(TMP_COMMUNITY_DIR, { recursive: true })
+    fs.writeFileSync(TMP_COMMUNITY_FILE, payload, 'utf8')
+    ok = true
+  } catch {}
+  if (!ok) console.error('Error persisting community posts: no writable storage available')
+  return ok
 }
 
 export function getRawLocalCommunityPosts(): CommunityPost[] {
   ensureCommunityFile()
+  const primary = readPostsFile(COMMUNITY_FILE)
+  const tmp = readPostsFile(TMP_COMMUNITY_FILE)
+  if (!tmp) return primary || INITIAL_POSTS
+  if (!primary) return tmp
+
+  // دمج النسختين: نسخة /tmp هي الأحدث على الخادم الحي، ونحافظ على أي مشاركة موجودة في الأساسي فقط
+  const map = new Map<string, CommunityPost>()
+  for (const p of primary) map.set(p.id, p)
+  for (const p of tmp) map.set(p.id, p)
+  const deletedInTmp = new Set(
+    primary.filter((p) => !tmp.some((t) => t.id === p.id)).map((p) => p.id)
+  )
+  // إذا كانت /tmp أحدث من الملف الأساسي فالمشاركات المحذوفة فيها تُعتبر محذوفة فعلاً
   try {
-    const raw = fs.readFileSync(COMMUNITY_FILE, 'utf8')
-    const posts = JSON.parse(raw)
-    return Array.isArray(posts) ? posts : INITIAL_POSTS
-  } catch {
-    return INITIAL_POSTS
-  }
+    const tmpTime = fs.statSync(TMP_COMMUNITY_FILE).mtimeMs
+    const primaryTime = fs.statSync(COMMUNITY_FILE).mtimeMs
+    if (tmpTime >= primaryTime) {
+      for (const id of deletedInTmp) map.delete(id)
+    }
+  } catch {}
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
 }
 
 export function getLocalCommunityPosts(): CommunityPost[] {
@@ -263,11 +316,7 @@ export function saveLocalCommunityPost(post: CommunityPost): CommunityPost[] {
   const posts = getRawLocalCommunityPosts()
   const deduplicated = posts.filter((p) => p.id !== post.id)
   const updated = [post, ...deduplicated]
-  try {
-    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(updated, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error saving community post:', err)
-  }
+  writeCommunityPosts(updated)
   return enrichCommunityPostsForPublic(updated)
 }
 
@@ -283,41 +332,90 @@ export function addLocalCommunityReply(postId: string, reply: CommunityReply): C
     }
     return p
   })
-  try {
-    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(updated, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error saving community reply:', err)
-  }
+  writeCommunityPosts(updated)
   return enrichCommunityPostsForPublic(updated)
 }
 
-export function upvoteLocalCommunityPost(postId: string): CommunityPost[] {
+function hashVoter(email: string): string {
+  return crypto.createHash('sha256').update(`sanad-vote:${email.toLowerCase().trim()}`).digest('hex').slice(0, 16)
+}
+
+/**
+ * تسجيل إعجاب مرة واحدة فقط لكل طالب على كل مشاركة (منع التلاعب بعداد «نفع الله بك»)
+ * يعيد counted=true إذا احتُسب الإعجاب لأول مرة
+ */
+export function upvoteLocalCommunityPost(
+  postId: string,
+  voterEmail?: string
+): { counted: boolean; posts: CommunityPost[] } {
   const posts = getRawLocalCommunityPosts()
+  const voterKey = voterEmail ? hashVoter(voterEmail) : null
+  let counted = false
   const updated = posts.map((p) => {
     if (p.id === postId) {
+      const voters = Array.isArray(p.upvoter_keys) ? p.upvoter_keys : []
+      if (voterKey && voters.includes(voterKey)) return p
+      counted = true
       return {
         ...p,
         upvotes_count: (p.upvotes_count || 0) + 1,
+        upvoter_keys: voterKey ? [...voters, voterKey] : voters,
       }
     }
     return p
   })
-  try {
-    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(updated, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error upvoting community post:', err)
+  if (counted) writeCommunityPosts(updated)
+  return { counted, posts: enrichCommunityPostsForPublic(updated) }
+}
+
+// سجل المحذوفات (Tombstones) لمنع عودة مشاركة محذوفة من النسخة السحابية عند الدمج
+const DELETED_FILE = path.join(DATA_DIR, 'sanad_community_deleted.json')
+const TMP_DELETED_FILE = path.join(TMP_COMMUNITY_DIR, 'sanad_community_deleted.json')
+
+export function getDeletedCommunityIds(): Set<string> {
+  const ids = new Set<string>()
+  for (const file of [DELETED_FILE, TMP_DELETED_FILE]) {
+    try {
+      if (!fs.existsSync(file)) continue
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (Array.isArray(parsed)) parsed.forEach((id) => typeof id === 'string' && ids.add(id))
+    } catch {}
   }
-  return enrichCommunityPostsForPublic(updated)
+  return ids
+}
+
+function recordDeletedCommunityId(id: string) {
+  const ids = getDeletedCommunityIds()
+  ids.add(id)
+  const payload = JSON.stringify(Array.from(ids).slice(-5000))
+  try {
+    fs.writeFileSync(DELETED_FILE, payload, 'utf8')
+  } catch {}
+  try {
+    if (!fs.existsSync(TMP_COMMUNITY_DIR)) fs.mkdirSync(TMP_COMMUNITY_DIR, { recursive: true })
+    fs.writeFileSync(TMP_DELETED_FILE, payload, 'utf8')
+  } catch {}
+}
+
+/**
+ * إزالة المشاركات والردود المحذوفة إدارياً من أي قائمة (محلية أو سحابية)
+ */
+export function filterDeletedCommunityContent(posts: CommunityPost[]): CommunityPost[] {
+  const deleted = getDeletedCommunityIds()
+  if (deleted.size === 0) return posts
+  return posts
+    .filter((p) => !deleted.has(p.id))
+    .map((p) => ({
+      ...p,
+      replies: (p.replies || []).filter((r) => !deleted.has(r.id)),
+    }))
 }
 
 export function deleteLocalCommunityPost(postId: string): CommunityPost[] {
   const posts = getRawLocalCommunityPosts()
   const updated = posts.filter((p) => p.id !== postId)
-  try {
-    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(updated, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error deleting community post:', err)
-  }
+  writeCommunityPosts(updated)
+  recordDeletedCommunityId(postId)
   return enrichCommunityPostsForPublic(updated)
 }
 
@@ -332,11 +430,8 @@ export function deleteLocalCommunityReply(postId: string, replyId: string): Comm
     }
     return p
   })
-  try {
-    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(updated, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error deleting community reply:', err)
-  }
+  writeCommunityPosts(updated)
+  recordDeletedCommunityId(replyId)
   return enrichCommunityPostsForPublic(updated)
 }
 

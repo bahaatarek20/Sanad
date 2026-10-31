@@ -3,6 +3,8 @@ import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
 import { saveStudentToCloud, getStudentsFromCloud } from '@/lib/cloud-db'
+import { sendSanadMessage, migrateRecipientMessages } from '@/lib/messages-service'
+import { migrateStudentCertificates } from '@/lib/certificate-service'
 
 export interface SessionHistoryItem {
   courseSlug: string
@@ -106,6 +108,7 @@ export interface StudentActivityRecord {
   browser?: string // متصفح الويب (مثال: Google Chrome)
   userAgent?: string // معرف المتصفح الخام
   role?: PlatformRole // رتبة الحساب في المنصة: مالك المنصة (owner) | مشرف (admin) | طالب (student)
+  roleUpdatedAt?: string // طابع زمني لآخر تعديل سيادي للرتبة لمنع طغيان البيانات السحابية القديمة
 }
 
 export interface PlatformEvent {
@@ -171,6 +174,12 @@ declare global {
   var __sanad_latest_registered_student__: StudentActivityRecord | undefined
   // eslint-disable-next-line no-var
   var __sanad_last_registered_time__: number | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_cloud_sync_cache__:
+    | { students: StudentActivityRecord[]; visitorCount: number; fetchedAt: number }
+    | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_role_locks__: Record<string, { role: PlatformRole; roleUpdatedAt: string }> | undefined
 }
 
 export function ensureStudentTelemetryDefaults(st: StudentActivityRecord) {
@@ -404,8 +413,28 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
                 map.set(key, st)
               } else {
                 const prev = map.get(key)!
+                const prevRoleTime = prev.roleUpdatedAt || ''
+                const newRoleTime = st.roleUpdatedAt || ''
+                const authoritativeRole =
+                  newRoleTime > prevRoleTime
+                    ? st.role || prev.role
+                    : prev.role || st.role
+                const authoritativeRoleTime =
+                  newRoleTime > prevRoleTime ? st.roleUpdatedAt : prev.roleUpdatedAt
+
                 if (st.lastActive && (!prev.lastActive || st.lastActive > prev.lastActive)) {
-                  map.set(key, { ...prev, ...st })
+                  map.set(key, {
+                    ...prev,
+                    ...st,
+                    role: authoritativeRole,
+                    roleUpdatedAt: authoritativeRoleTime,
+                  })
+                } else if (newRoleTime > prevRoleTime) {
+                  map.set(key, {
+                    ...prev,
+                    role: authoritativeRole,
+                    roleUpdatedAt: authoritativeRoleTime,
+                  })
                 }
               }
             }
@@ -528,8 +557,6 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   tryLoadFromEvents(UPLOAD_EVENTS_FILE)
   tryLoadFromEvents(TMP_EVENTS_FILE)
 
-
-
   // 7. ترقيم تسلسلي لمعرفات الطلاب المفقودة وضمان فرادتها التامة
   const assignedIds = new Set<string>()
   for (const s of map.values()) {
@@ -544,6 +571,7 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   }
 
   let nextIdCounter = 1001
+  const roleLocks = globalThis.__sanad_role_locks__ || {}
   for (const s of map.values()) {
     if (!s.scholarlyId) {
       while (assignedIds.has(`SND-${nextIdCounter}`)) {
@@ -556,10 +584,14 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
     if (s.isBanned === undefined) {
       s.isBanned = false
     }
-    if (s.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
+    const cleanEmail = (s.email || '').toLowerCase().trim()
+    if (cleanEmail === SUPER_ADMIN_EMAIL) {
       s.role = 'owner'
       s.isBanned = false
       s.isDeactivated = false
+    } else if (roleLocks[cleanEmail] && (!s.roleUpdatedAt || roleLocks[cleanEmail].roleUpdatedAt >= s.roleUpdatedAt)) {
+      s.role = roleLocks[cleanEmail].role
+      s.roleUpdatedAt = roleLocks[cleanEmail].roleUpdatedAt
     }
     ensureStudentTelemetryDefaults(s)
   }
@@ -978,24 +1010,49 @@ export async function updateStudentRole(
     // لا يمكن منح رتبة owner لأي حساب آخر غير bhaaljml480@gmail.com
     const effectiveRole: PlatformRole = role === 'owner' ? 'admin' : role
     const previousRole = student.role || 'student'
-    student.role = effectiveRole
+    const nowIso = new Date().toISOString()
 
-    // عند سحب الإشراف أو تغييره، نحدث نسخة الجلسة لضمان المزامنة اللحظية
-    if (previousRole !== effectiveRole) {
-      student.sessionVersion = (student.sessionVersion || 1) + 1
+    student.role = effectiveRole
+    student.roleUpdatedAt = nowIso
+    student.lastActive = nowIso
+
+    // تثبيت القفل السيادي للرتبة في الذاكرة الحية لمنع أي مزامنة قديمة من إعادة الرتبة السابقة
+    if (!globalThis.__sanad_role_locks__) {
+      globalThis.__sanad_role_locks__ = {}
+    }
+    globalThis.__sanad_role_locks__[targetEmail] = {
+      role: effectiveRole,
+      roleUpdatedAt: nowIso,
+    }
+
+    if (
+      globalThis.__sanad_latest_registered_student__ &&
+      globalThis.__sanad_latest_registered_student__.email?.toLowerCase().trim() === targetEmail
+    ) {
+      globalThis.__sanad_latest_registered_student__.role = effectiveRole
+      globalThis.__sanad_latest_registered_student__.roleUpdatedAt = nowIso
+    }
+
+    if (globalThis.__sanad_cloud_sync_cache__?.students) {
+      globalThis.__sanad_cloud_sync_cache__.students = globalThis.__sanad_cloud_sync_cache__.students.map((cs) =>
+        cs.email?.toLowerCase().trim() === targetEmail
+          ? { ...cs, role: effectiveRole, roleUpdatedAt: nowIso, lastActive: nowIso }
+          : cs
+      )
     }
 
     globalThis.__sanad_registry_cache__ = undefined
     saveAllLocalStudents(students)
 
-    // مزامنة فورية مؤكدة مع Cloud Firestore مع انتظار النتيجة قبل إنهاء الدالة لمنع فقدان البيانات عند تجميد الحاويات
-    try {
-      await saveStudentToCloud(student)
-    } catch {}
-
+    // مزامنة سحابية فورية متوازية بمهلة زمنية سريعة (1.5 ثانية كحد أقصى) لمنع أي لاج في لوحة الإدارة
     try {
       const { updateCloudStudentRole } = await import('@/lib/cloud-db')
-      await updateCloudStudentRole(student.email, student.id, effectiveRole === 'admin' ? 'admin' : 'student')
+      const cloudSyncTask = Promise.allSettled([
+        saveStudentToCloud(student),
+        updateCloudStudentRole(student.email, student.id, effectiveRole === 'admin' ? 'admin' : 'student'),
+      ])
+      const fastTimeout = new Promise((resolve) => setTimeout(resolve, 1500))
+      await Promise.race([cloudSyncTask, fastTimeout])
     } catch {}
 
     recordAuditLog({
@@ -1018,6 +1075,37 @@ export async function updateStudentRole(
           ? `ترقية العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة مشرف عام للمنصة`
           : `تعديل رتبة العضو [${student.name}] [${student.scholarlyId || student.email}] إلى رتبة طالب علم`,
     })
+
+    // إرسال إشعار فوري في صندوق رسائل العضو لإبلاغه بتحديث رتبته وصلاحياته
+    try {
+      sendSanadMessage({
+        recipient: student.email,
+        senderName: 'إدارة منصة سَنَد (المالك العام)',
+        senderEmail: 'owner@sanad.edu',
+        senderTitle: 'قرارات الصلاحيات والرتب الإدارية',
+        subject:
+          effectiveRole === 'admin'
+            ? `🛡️ قرار إداري: منحك صلاحية «مشرف» في منصة سَنَد`
+            : `📋 إشعار تحديث صلاحيات حسابك إلى «طالب علم»`,
+        snippet:
+          effectiveRole === 'admin'
+            ? `تمت ترقية حسابك إلى رتبة مشرف لمنصة سَنَد بقرار من مالك المنصة...`
+            : `تم تحديث رتبة حسابك في منصة سَنَد لتكون بصلاحيات طالب علم...`,
+        body:
+          effectiveRole === 'admin'
+            ? `السلام عليكم ورحمة الله وبركاته يا ${student.name}،
+
+نود إشعارك بأنه قد صدر قرار من مالك المنصة بمنح حسابك صلاحية «مشرف (Admin)» في منصة سَنَد للتأصيل المنهجي.
+يمكنك الآن الوصول إلى بوابة الإدارة للإشراف على المتون ومتابعة شؤون الطلاب، ونسأل الله أن يعينك على أداء الأمانة.`
+            : `السلام عليكم ورحمة الله وبركاته يا ${student.name}،
+
+نود إشعارك بأنه قد تم تحديث صلاحيات حسابك في منصة سَنَد إلى رتبة «طالب علم (Student)».
+جميع فوائدك في الكشكول وسجل متونك وإجازاتك العلمية محفوظة بالكامل، ونتمنى لك دوام التوفيق في مدارستك.`,
+        category: 'security',
+        actionUrl: '/dashboard',
+        actionLabel: 'الانتقال إلى كشكول الطالب ←',
+      })
+    } catch {}
 
     return { success: true, student }
   } catch (err: unknown) {
@@ -1798,45 +1886,139 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
 }> {
   const localData = getAdminDashboardData(forceRefresh)
   const mergedStudents = [...localData.students]
+  const roleLocks = globalThis.__sanad_role_locks__ || {}
 
-  try {
-    const cloudStudents = await getStudentsFromCloud()
-    if (cloudStudents && cloudStudents.length > 0) {
-      const existingEmails = new Set(mergedStudents.map((s) => s.email.toLowerCase()))
-      for (const cs of cloudStudents) {
-        const clean = cs.email.toLowerCase()
-        if (!existingEmails.has(clean)) {
-          ensureStudentTelemetryDefaults(cs)
-          mergedStudents.unshift(cs)
-          existingEmails.add(clean)
-        } else {
-          const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === clean)
-          if (idx >= 0 && cs.lastActive && (!mergedStudents[idx].lastActive || cs.lastActive > mergedStudents[idx].lastActive)) {
-            const currentRole = mergedStudents[idx].role
-            mergedStudents[idx] = { ...mergedStudents[idx], ...cs }
-            if (currentRole && !cs.role) {
-              mergedStudents[idx].role = currentRole
+  const nowMs = Date.now()
+  const CLOUD_CACHE_TTL_MS = 12000 // كاش سحابي ذكي لمدة 12 ثانية لمنع اللاج والاستعلامات المتكررة كل بضع ثوانٍ
+  let cloudStudents: StudentActivityRecord[] = []
+  let cloudVisitorCount = 0
+  let cloudFetchedFresh = false
+
+  if (
+    globalThis.__sanad_cloud_sync_cache__ &&
+    nowMs - globalThis.__sanad_cloud_sync_cache__.fetchedAt < CLOUD_CACHE_TTL_MS
+  ) {
+    cloudStudents = globalThis.__sanad_cloud_sync_cache__.students
+    cloudVisitorCount = globalThis.__sanad_cloud_sync_cache__.visitorCount
+  } else {
+    try {
+      const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
+      const [fetchedStudents, fetchedStats] = await Promise.all([
+        getStudentsFromCloud().catch(() => [] as StudentActivityRecord[]),
+        getPlatformStatsFromCloud().catch(() => null),
+      ])
+      cloudStudents = fetchedStudents || []
+      if (fetchedStats && typeof fetchedStats.totalVisitors === 'number') {
+        cloudVisitorCount = fetchedStats.totalVisitors
+      }
+      globalThis.__sanad_cloud_sync_cache__ = {
+        students: cloudStudents,
+        visitorCount: cloudVisitorCount,
+        fetchedAt: nowMs,
+      }
+      cloudFetchedFresh = true
+    } catch (err) {
+      console.warn('Could not fetch students from Cloud Firestore:', err)
+    }
+  }
+
+  let hasMergedChanges = false
+  if (cloudStudents && cloudStudents.length > 0) {
+    const existingEmails = new Set(mergedStudents.map((s) => s.email.toLowerCase().trim()))
+    for (const cs of cloudStudents) {
+      const clean = (cs.email || '').toLowerCase().trim()
+      if (!clean) continue
+      if (!existingEmails.has(clean)) {
+        if (roleLocks[clean]) {
+          cs.role = roleLocks[clean].role
+          cs.roleUpdatedAt = roleLocks[clean].roleUpdatedAt
+        }
+        ensureStudentTelemetryDefaults(cs)
+        mergedStudents.unshift(cs)
+        existingEmails.add(clean)
+        hasMergedChanges = true
+      } else {
+        const idx = mergedStudents.findIndex((s) => s.email.toLowerCase().trim() === clean)
+        if (idx >= 0) {
+          const localSt = mergedStudents[idx]
+          const localRoleTime = localSt.roleUpdatedAt || ''
+          const cloudRoleTime = cs.roleUpdatedAt || ''
+
+          // الاحتفاظ بالرتبة المحلية دائماً إلا إذا كان السجل السحابي يحمل طابع roleUpdatedAt أحدث صراحةً
+          let resolvedRole = localSt.role || cs.role || 'student'
+          let resolvedRoleTime = localSt.roleUpdatedAt || cs.roleUpdatedAt
+          if (cloudRoleTime && cloudRoleTime > localRoleTime && cs.role) {
+            resolvedRole = cs.role
+            resolvedRoleTime = cs.roleUpdatedAt
+          }
+          if (roleLocks[clean] && (!resolvedRoleTime || roleLocks[clean].roleUpdatedAt >= resolvedRoleTime)) {
+            resolvedRole = roleLocks[clean].role
+            resolvedRoleTime = roleLocks[clean].roleUpdatedAt
+          }
+          if (clean === SUPER_ADMIN_EMAIL) {
+            resolvedRole = 'owner'
+          }
+
+          if (cs.lastActive && (!localSt.lastActive || cs.lastActive > localSt.lastActive)) {
+            mergedStudents[idx] = {
+              ...localSt,
+              ...cs,
+              role: resolvedRole,
+              roleUpdatedAt: resolvedRoleTime,
             }
             ensureStudentTelemetryDefaults(mergedStudents[idx])
+            hasMergedChanges = true
+          } else if (mergedStudents[idx].role !== resolvedRole) {
+            mergedStudents[idx] = {
+              ...localSt,
+              role: resolvedRole,
+              roleUpdatedAt: resolvedRoleTime,
+            }
+            hasMergedChanges = true
           }
         }
       }
     }
-  } catch (err) {
-    console.warn('Could not fetch students from Cloud Firestore:', err)
   }
 
   if (globalThis.__sanad_latest_registered_student__) {
-    const latestEmail = globalThis.__sanad_latest_registered_student__.email.toLowerCase()
-    const idx = mergedStudents.findIndex((s) => s.email.toLowerCase() === latestEmail)
+    const latest = globalThis.__sanad_latest_registered_student__
+    const latestEmail = (latest.email || '').toLowerCase().trim()
+    const idx = mergedStudents.findIndex((s) => s.email.toLowerCase().trim() === latestEmail)
     if (idx === -1) {
-      mergedStudents.unshift(globalThis.__sanad_latest_registered_student__)
+      mergedStudents.unshift(latest)
+      hasMergedChanges = true
     } else {
-      mergedStudents[idx] = { ...mergedStudents[idx], ...globalThis.__sanad_latest_registered_student__ }
+      const existingRole = mergedStudents[idx].role
+      const existingRoleTime = mergedStudents[idx].roleUpdatedAt || ''
+      const latestRoleTime = latest.roleUpdatedAt || ''
+      const finalRole =
+        roleLocks[latestEmail]?.role ||
+        (existingRoleTime >= latestRoleTime ? existingRole : latest.role) ||
+        'student'
+      const finalRoleTime =
+        roleLocks[latestEmail]?.roleUpdatedAt ||
+        (existingRoleTime >= latestRoleTime ? existingRoleTime : latestRoleTime) ||
+        undefined
+      mergedStudents[idx] = {
+        ...mergedStudents[idx],
+        ...latest,
+        role: latestEmail === SUPER_ADMIN_EMAIL ? 'owner' : finalRole,
+        roleUpdatedAt: finalRoleTime,
+      }
     }
   }
 
-  mergedStudents.forEach((st) => ensureStudentTelemetryDefaults(st))
+  mergedStudents.forEach((st) => {
+    const clean = (st.email || '').toLowerCase().trim()
+    if (clean === SUPER_ADMIN_EMAIL) {
+      st.role = 'owner'
+    } else if (roleLocks[clean] && (!st.roleUpdatedAt || roleLocks[clean].roleUpdatedAt >= st.roleUpdatedAt)) {
+      st.role = roleLocks[clean].role
+      st.roleUpdatedAt = roleLocks[clean].roleUpdatedAt
+    }
+    ensureStudentTelemetryDefaults(st)
+  })
 
   // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
   mergedStudents.sort((a, b) => {
@@ -1845,17 +2027,14 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     return timeB - timeA
   })
 
-  // حفظ القائمة المدمجة المحدثة
-  saveAllLocalStudents(mergedStudents)
+  // حفظ القائمة المدمجة فقط عند وجود تحديثات فعلية لتجنب الكتابة المتكررة على القرص
+  if (cloudFetchedFresh || hasMergedChanges) {
+    saveAllLocalStudents(mergedStudents)
+  } else {
+    globalThis.__sanad_registry_cache__ = mergedStudents
+  }
 
-  let visitorCount = localData.stats.totalVisitors || 0
-  try {
-    const { getPlatformStatsFromCloud } = await import('@/lib/cloud-db')
-    const cloudStats = await getPlatformStatsFromCloud()
-    if (cloudStats && typeof cloudStats.totalVisitors === 'number' && cloudStats.totalVisitors > visitorCount) {
-      visitorCount = cloudStats.totalVisitors
-    }
-  } catch {}
+  const visitorCount = Math.max(localData.stats.totalVisitors || 0, cloudVisitorCount)
 
   const stats = {
     ...localData.stats,
@@ -2174,6 +2353,12 @@ export async function changeStudentEmailAddress(
     invalidateStudentProfileCache(cleanNew)
     saveAllLocalStudents(students)
     await saveStudentToCloud(student).catch(() => {})
+
+    // نقل رسائل الصندوق الوارد والإجازات العلمية الموثقة تلقائياً إلى البريد الجديد
+    try {
+      migrateRecipientMessages(cleanCurrent, cleanNew)
+      migrateStudentCertificates(cleanCurrent, cleanNew)
+    } catch {}
 
     recordAuditLog({
       action: 'EMAIL_CHANGE',

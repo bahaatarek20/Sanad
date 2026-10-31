@@ -169,7 +169,18 @@ export async function getAdminActor(): Promise<AdminActorInfo> {
   try {
     const cookieStore = await cookies()
 
-    // 2. التحقق المشفر من جلسة المستخدم الحالية ومطابقتها الحية مع قاعدة البيانات
+    // 2. التحقق من كوكي بوابة المالك المشفرة بـ HMAC (الرمز السري لبوابة المالك يمنح صلاحية المالك دائماً)
+    const token = cookieStore.get('sanad_admin_gate_token')?.value
+    if (validateAdminTokenString(token)) {
+      return {
+        authorized: true,
+        email: SUPER_ADMIN_EMAIL,
+        role: 'owner',
+        isOwner: true,
+      }
+    }
+
+    // 3. التحقق المشفر من جلسة المستخدم الحالية ومطابقتها الحية الفورية مع قاعدة البيانات
     const studentCookie = cookieStore.get('sanad_student_user')?.value
     let sessionEmail = ''
     if (studentCookie) {
@@ -199,7 +210,7 @@ export async function getAdminActor(): Promise<AdminActorInfo> {
 
           if (!banCheck.isBanned && !liveProfile?.isDeactivated && sessionVersionValid) {
             const envAdminEmail = (process.env.SANAD_ADMIN_EMAIL || '').toLowerCase().trim()
-            if (liveProfile?.role === 'admin' || (envAdminEmail && email === envAdminEmail)) {
+            if (liveProfile?.role === 'admin' || (envAdminEmail && email === envAdminEmail && liveProfile?.role !== 'student')) {
               return {
                 authorized: true,
                 email,
@@ -210,17 +221,6 @@ export async function getAdminActor(): Promise<AdminActorInfo> {
           }
         }
       } catch {}
-    }
-
-    // 3. التحقق من كوكي بوابة المشرف المشفرة بـ HMAC (الرمز السري لبوابة المالك)
-    const token = cookieStore.get('sanad_admin_gate_token')?.value
-    if (validateAdminTokenString(token)) {
-      return {
-        authorized: true,
-        email: SUPER_ADMIN_EMAIL,
-        role: 'owner',
-        isOwner: true,
-      }
     }
 
     return {

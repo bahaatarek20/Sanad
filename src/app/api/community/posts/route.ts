@@ -8,6 +8,7 @@ import {
   sanitizeCommunityContent,
   checkCommunityRateLimit,
   enrichCommunityPostsForPublic,
+  filterDeletedCommunityContent,
 } from '@/lib/community-store'
 import {
   getCommunityPostsFromCloud,
@@ -20,6 +21,28 @@ import type { CommunityPost } from '@/components/community-hub'
 
 export const dynamic = 'force-dynamic'
 
+// ذاكرة مؤقتة قصيرة للمنشورات السحابية: تمنع إرسال طلب Firestore مع كل نبضة تزامن من كل طالب
+const CLOUD_CACHE_TTL_MS = 5000
+let cloudPostsCache: { posts: CommunityPost[]; fetchedAt: number } | null = null
+
+async function getCachedCloudPosts(): Promise<CommunityPost[]> {
+  const now = Date.now()
+  if (cloudPostsCache && now - cloudPostsCache.fetchedAt < CLOUD_CACHE_TTL_MS) {
+    return cloudPostsCache.posts
+  }
+  try {
+    const posts = ((await getCommunityPostsFromCloud()) || []) as CommunityPost[]
+    cloudPostsCache = { posts, fetchedAt: now }
+    return posts
+  } catch {
+    return cloudPostsCache?.posts || []
+  }
+}
+
+function invalidateCloudPostsCache() {
+  cloudPostsCache = null
+}
+
 export async function GET() {
   try {
     const localPosts = getRawLocalCommunityPosts()
@@ -31,7 +54,7 @@ export async function GET() {
 
     // جلب أحدث المنشورات السحابية ودمجها لحظياً مع منع التكرار
     try {
-      const cloudPosts = await getCommunityPostsFromCloud()
+      const cloudPosts = await getCachedCloudPosts()
       if (cloudPosts && cloudPosts.length > 0) {
         for (const cp of cloudPosts) {
           const existing = postMap.get(cp.id)
@@ -57,7 +80,7 @@ export async function GET() {
       }
     } catch {}
 
-    const rawMerged = Array.from(postMap.values())
+    const rawMerged = filterDeletedCommunityContent(Array.from(postMap.values()))
     rawMerged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const posts = enrichCommunityPostsForPublic(rawMerged)
@@ -137,6 +160,7 @@ export async function POST(request: Request) {
 
       saveLocalCommunityPost(newPost)
       await saveCommunityPostToCloud(newPost).catch(() => {})
+      invalidateCloudPostsCache()
 
       const publicPost = { ...newPost }
       delete publicPost.author_email
@@ -182,6 +206,7 @@ export async function POST(request: Request) {
 
       addLocalCommunityReply(postId, newReply)
       await addReplyToCloudPost(postId, newReply).catch(() => {})
+      invalidateCloudPostsCache()
 
       const publicReply = { ...newReply }
       delete (publicReply as Record<string, unknown>).author_email
@@ -191,11 +216,15 @@ export async function POST(request: Request) {
 
     if (action === 'upvote') {
       const postId = typeof body.postId === 'string' ? body.postId.trim() : ''
-      if (postId) {
-        upvoteLocalCommunityPost(postId)
-        await upvoteCloudPost(postId).catch(() => {})
+      if (!postId) {
+        return NextResponse.json({ success: false, error: 'معرّف المشاركة مفقود.' }, { status: 400 })
       }
-      return NextResponse.json({ success: true })
+      const { counted } = upvoteLocalCommunityPost(postId, user.email)
+      if (counted) {
+        await upvoteCloudPost(postId).catch(() => {})
+        invalidateCloudPostsCache()
+      }
+      return NextResponse.json({ success: true, counted, alreadyUpvoted: !counted })
     }
 
     return NextResponse.json({ success: false, error: 'إجراء غير معروف' }, { status: 400 })

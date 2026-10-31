@@ -1,6 +1,8 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { ALL_COURSES, MatnCourse, CATEGORIES_LIST } from '@/lib/curriculum-data'
+import { savePlatformConfigToCloud } from '@/lib/cloud-db'
 
 export interface BroadcastNotice {
   active: boolean
@@ -19,6 +21,49 @@ const DATA_DIR = path.join(process.cwd(), 'data')
 const COURSES_FILE = path.join(DATA_DIR, 'sanad_custom_courses.json')
 const CATEGORIES_FILE = path.join(DATA_DIR, 'sanad_custom_categories.json')
 const BROADCAST_FILE = path.join(DATA_DIR, 'sanad_broadcast.json')
+
+// مسار احتياطي قابل للكتابة دائماً على خوادم Vercel (حيث يكون process.cwd()/data للقراءة فقط)
+const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
+const TMP_COURSES_FILE = path.join(TMP_DATA_DIR, 'sanad_custom_courses.json')
+const TMP_CATEGORIES_FILE = path.join(TMP_DATA_DIR, 'sanad_custom_categories.json')
+const TMP_BROADCAST_FILE = path.join(TMP_DATA_DIR, 'sanad_broadcast.json')
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __sanad_courses_override__: MatnCourse[] | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_categories_override__: CategoryItem[] | undefined
+  // eslint-disable-next-line no-var
+  var __sanad_broadcast_override__: BroadcastNotice | undefined
+}
+
+function writeDualFile(primaryPath: string, tmpPath: string, data: unknown) {
+  const payload = JSON.stringify(data, null, 2)
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(primaryPath, payload, 'utf8')
+  } catch {}
+  try {
+    if (!fs.existsSync(TMP_DATA_DIR)) fs.mkdirSync(TMP_DATA_DIR, { recursive: true })
+    fs.writeFileSync(tmpPath, payload, 'utf8')
+  } catch {}
+}
+
+function readNewestFile<T>(primaryPath: string, tmpPath: string): T | null {
+  try {
+    const hasPrimary = fs.existsSync(primaryPath)
+    const hasTmp = fs.existsSync(tmpPath)
+    if (hasTmp && hasPrimary) {
+      const tmpTime = fs.statSync(tmpPath).mtimeMs
+      const primaryTime = fs.statSync(primaryPath).mtimeMs
+      const chosen = tmpTime >= primaryTime ? tmpPath : primaryPath
+      return JSON.parse(fs.readFileSync(chosen, 'utf8')) as T
+    }
+    if (hasTmp) return JSON.parse(fs.readFileSync(tmpPath, 'utf8')) as T
+    if (hasPrimary) return JSON.parse(fs.readFileSync(primaryPath, 'utf8')) as T
+  } catch {}
+  return null
+}
 
 // ذاكرة كاش داخلية فائقة السرعة تمنع القراءة المتكررة من القرص في كل طلب
 let cachedCourses: MatnCourse[] | null = null
@@ -49,11 +94,9 @@ function ensureStoreFiles() {
       fs.mkdirSync(DATA_DIR, { recursive: true })
     }
     if (!fs.existsSync(COURSES_FILE)) {
-      // نبدأ بمصفوفة المتون المعتمدة الافتراضية الـ 78
       fs.writeFileSync(COURSES_FILE, JSON.stringify(ALL_COURSES, null, 2), 'utf8')
     }
     if (!fs.existsSync(CATEGORIES_FILE)) {
-      // نبدأ بمصفوفة الفنون الشرعية التسعة المعتمدة
       fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(CATEGORIES_LIST, null, 2), 'utf8')
     }
     if (!fs.existsSync(BROADCAST_FILE)) {
@@ -66,8 +109,8 @@ function ensureStoreFiles() {
       }
       fs.writeFileSync(BROADCAST_FILE, JSON.stringify(defaultBroadcast, null, 2), 'utf8')
     }
-  } catch (err) {
-    console.error('Error ensuring store files:', err)
+  } catch {
+    // على Vercel يتم استخدام المسار الاحتياطي /tmp والذاكرة الحية تلقائياً
   }
 }
 
@@ -99,16 +142,17 @@ export function normalizeArabicSpaces(str: string): string {
  * جلب كافة المتون المعتمدة والنشطة على مستوى المنصة (Server Source of Truth)
  */
 export function getActiveCourses(): MatnCourse[] {
+  if (globalThis.__sanad_courses_override__ && globalThis.__sanad_courses_override__.length > 0) {
+    return globalThis.__sanad_courses_override__
+  }
   if (cachedCourses && Date.now() - lastCoursesCacheTime < CACHE_TTL_MS) {
     return cachedCourses
   }
 
   try {
     ensureStoreFiles()
-    if (fs.existsSync(COURSES_FILE)) {
-      const content = fs.readFileSync(COURSES_FILE, 'utf8')
-      const parsed: MatnCourse[] = JSON.parse(content)
-      if (Array.isArray(parsed) && parsed.length > 0) {
+    const parsed = readNewestFile<MatnCourse[]>(COURSES_FILE, TMP_COURSES_FILE)
+    if (Array.isArray(parsed) && parsed.length > 0) {
         const fallbackMap = new Map<string, MatnCourse>()
         ALL_COURSES.forEach((c) => fallbackMap.set(c.slug, c))
 
@@ -197,9 +241,7 @@ export function getActiveCourses(): MatnCourse[] {
 
         // إذا تم إصلاح أي عناوين استُرجعت مسافاتها، حفظ التحديث في الملف فوراً
         if (hadRepairs) {
-          try {
-            fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-          } catch {}
+          writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
         }
 
         // دمج أي متون تأصيلية كبرى لم تكن موجودة في ملف التخصيص
@@ -211,7 +253,6 @@ export function getActiveCourses(): MatnCourse[] {
         cachedCourseMap = new Map(finalCourses.map((c) => [c.slug, c]))
         lastCoursesCacheTime = Date.now()
         return finalCourses
-      }
     }
   } catch (err) {
     console.error('Error reading courses from store:', err)
@@ -284,12 +325,9 @@ export function saveCourseToServer(course: MatnCourse, oldSlug?: string): MatnCo
     courses = [updatedCourseItem, ...courses]
   }
 
-  try {
-    fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error writing courses to file:', err)
-  }
+  globalThis.__sanad_courses_override__ = courses
+  writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
+  invalidateCoursesCache()
 
   return courses
 }
@@ -301,12 +339,9 @@ export function deleteCourseFromServer(slug: string): MatnCourse[] {
   ensureStoreFiles()
   const courses = getActiveCourses().filter((c) => c.slug !== slug)
 
-  try {
-    fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error deleting course from file:', err)
-  }
+  globalThis.__sanad_courses_override__ = courses
+  writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
+  invalidateCoursesCache()
 
   return courses
 }
@@ -328,12 +363,9 @@ export function moveCourseInServer(slug: string, direction: 'up' | 'down'): Matn
   courses[idx] = courses[targetIdx]
   courses[targetIdx] = temp
 
-  try {
-    fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error moving course in server:', err)
-  }
+  globalThis.__sanad_courses_override__ = courses
+  writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
+  invalidateCoursesCache()
 
   return courses
 }
@@ -359,12 +391,9 @@ export function updateCourseCategoryInServer(slug: string, newCategorySlug: stri
     return c
   })
 
-  try {
-    fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error updating course category in server:', err)
-  }
+  globalThis.__sanad_courses_override__ = courses
+  writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
+  invalidateCoursesCache()
 
   return courses
 }
@@ -374,12 +403,9 @@ export function updateCourseCategoryInServer(slug: string, newCategorySlug: stri
  */
 export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse[] {
   ensureStoreFiles()
-  try {
-    fs.writeFileSync(COURSES_FILE, JSON.stringify(orderedCourses, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error reordering courses in server:', err)
-  }
+  globalThis.__sanad_courses_override__ = orderedCourses
+  writeDualFile(COURSES_FILE, TMP_COURSES_FILE, orderedCourses)
+  invalidateCoursesCache()
   return orderedCourses
 }
 
@@ -387,25 +413,29 @@ export function reorderCoursesInServer(orderedCourses: MatnCourse[]): MatnCourse
  * جلب الإعلان الإداري النشط المعروض لجميع الطلاب مع كاش سريع
  */
 export function getBroadcastNotice(): BroadcastNotice {
+  if (globalThis.__sanad_broadcast_override__) {
+    return globalThis.__sanad_broadcast_override__
+  }
   if (cachedBroadcast && Date.now() - lastBroadcastCacheTime < CACHE_TTL_MS) {
     return cachedBroadcast
   }
 
   try {
     ensureStoreFiles()
-    const content = fs.readFileSync(BROADCAST_FILE, 'utf8')
-    const parsed = JSON.parse(content)
-    cachedBroadcast = parsed
-    lastBroadcastCacheTime = Date.now()
-    return parsed
-  } catch {
-    return {
-      active: false,
-      sender: 'المهندس بهاء طارق || إدارة سَنَد',
-      message: '',
-      subtext: 'تنبيه وإشعار عام لجميع طلاب المنصة.',
-      timestamp: new Date().toISOString(),
+    const parsed = readNewestFile<BroadcastNotice>(BROADCAST_FILE, TMP_BROADCAST_FILE)
+    if (parsed && typeof parsed.active === 'boolean') {
+      cachedBroadcast = parsed
+      lastBroadcastCacheTime = Date.now()
+      return parsed
     }
+  } catch {}
+
+  return {
+    active: false,
+    sender: 'المهندس بهاء طارق || إدارة سَنَد',
+    message: '',
+    subtext: 'تنبيه وإشعار عام لجميع طلاب المنصة.',
+    timestamp: new Date().toISOString(),
   }
 }
 
@@ -419,12 +449,10 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
     timestamp: new Date().toISOString(),
   }
 
-  try {
-    fs.writeFileSync(BROADCAST_FILE, JSON.stringify(updated, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error saving broadcast to file:', err)
-  }
+  globalThis.__sanad_broadcast_override__ = updated
+  writeDualFile(BROADCAST_FILE, TMP_BROADCAST_FILE, updated)
+  savePlatformConfigToCloud('broadcast', updated as unknown as Record<string, unknown>).catch(() => {})
+  invalidateCoursesCache()
 
   return updated
 }
@@ -433,6 +461,9 @@ export function saveBroadcastNotice(broadcast: BroadcastNotice): BroadcastNotice
  * جلب كافة الفنون والتصنيفات الشرعية النشطة على مستوى المنصة مع كاش سريع
  */
 export function getActiveCategories(): CategoryItem[] {
+  if (globalThis.__sanad_categories_override__ && globalThis.__sanad_categories_override__.length > 0) {
+    return globalThis.__sanad_categories_override__
+  }
   if (cachedCategories && Date.now() - lastCategoriesCacheTime < CACHE_TTL_MS) {
     return cachedCategories
   }
@@ -440,12 +471,9 @@ export function getActiveCategories(): CategoryItem[] {
   try {
     ensureStoreFiles()
     let categories: CategoryItem[] = []
-    if (fs.existsSync(CATEGORIES_FILE)) {
-      const content = fs.readFileSync(CATEGORIES_FILE, 'utf8')
-      const parsed = JSON.parse(content)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        categories = parsed
-      }
+    const parsed = readNewestFile<CategoryItem[]>(CATEGORIES_FILE, TMP_CATEGORIES_FILE)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      categories = parsed
     }
     if (categories.length === 0) {
       categories = [...CATEGORIES_LIST]
@@ -485,7 +513,7 @@ export function saveCategoryToServer({
   oldTitle?: string
 }): { categories: CategoryItem[]; courses: MatnCourse[] } {
   ensureStoreFiles()
-  const categories = getActiveCategories()
+  const categories = [...getActiveCategories()]
   const cleanSlug = slug.trim().toLowerCase().replace(/\s+/g, '-')
   const cleanTitle = title.trim()
   const targetOldSlug = (oldSlug || cleanSlug).trim().toLowerCase()
@@ -501,11 +529,9 @@ export function saveCategoryToServer({
     categories.push({ slug: cleanSlug, title: cleanTitle })
   }
 
-  try {
-    fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(categories, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Error saving category to file:', err)
-  }
+  globalThis.__sanad_categories_override__ = categories
+  writeDualFile(CATEGORIES_FILE, TMP_CATEGORIES_FILE, categories)
+  savePlatformConfigToCloud('categories', { items: categories }).catch(() => {})
 
   // 2. تحديث وتعميم الاسم الجديد على جميع المتون التابعة لهذا الفن في كامل أرجاء المنصة
   let courses = getActiveCourses()
@@ -528,11 +554,8 @@ export function saveCategoryToServer({
   })
 
   if (coursesUpdated) {
-    try {
-      fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8')
-    } catch (err) {
-      console.error('Error updating courses with new category:', err)
-    }
+    globalThis.__sanad_courses_override__ = courses
+    writeDualFile(COURSES_FILE, TMP_COURSES_FILE, courses)
   }
 
   invalidateCoursesCache()
@@ -546,12 +569,10 @@ export function deleteCategoryFromServer(slug: string): CategoryItem[] {
   ensureStoreFiles()
   const categories = getActiveCategories().filter((c) => c.slug !== slug)
 
-  try {
-    fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(categories, null, 2), 'utf8')
-    invalidateCoursesCache()
-  } catch (err) {
-    console.error('Error deleting category from file:', err)
-  }
+  globalThis.__sanad_categories_override__ = categories
+  writeDualFile(CATEGORIES_FILE, TMP_CATEGORIES_FILE, categories)
+  savePlatformConfigToCloud('categories', { items: categories }).catch(() => {})
+  invalidateCoursesCache()
 
   return categories
 }

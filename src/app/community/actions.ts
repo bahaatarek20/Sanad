@@ -121,7 +121,9 @@ export async function upvoteCommunityPost(postId: string) {
   if (!user || !user.email) {
     throw new Error('غير مصرح بالوصول.')
   }
-  upvoteLocalCommunityPost(postId)
-  await upvoteCloudPost(postId).catch(() => {})
+  const { counted } = upvoteLocalCommunityPost(postId, user.email)
+  if (counted) {
+    await upvoteCloudPost(postId).catch(() => {})
+  }
   revalidatePath('/community')
 }

@@ -1,32 +1,22 @@
 import React from 'react'
 import { Metadata } from 'next'
 import Link from 'next/link'
-import {
-  ShieldCheck,
-  Award,
-  BookOpen,
-  Calendar,
-  CheckCircle2,
-  AlertTriangle,
-  Copy,
-  Printer,
-  ChevronRight,
-  Sparkles,
-  ExternalLink,
-  Search,
-} from 'lucide-react'
-import { getCertificateById, verifyCertificateIntegrity } from '@/lib/certificate-service'
-import QRCodeSvg from '@/components/ui/qr-code'
+import { ChevronRight } from 'lucide-react'
+import { getCertificateByIdAsync, verifyCertificateIntegrity } from '@/lib/certificate-service'
 import VerifyIjazaClientView from './verify-client-view'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ id: string }>
+  searchParams?: Promise<{ token?: string }>
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { id } = await params
+  const resolvedSearch = searchParams ? await searchParams : undefined
   const decodedId = decodeURIComponent(id)
-  const cert = getCertificateById(decodedId)
+  const cert = await getCertificateByIdAsync(decodedId, resolvedSearch?.token)
 
   if (!cert) {
     return {
@@ -41,10 +31,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-export default async function VerifyIjazaPage({ params }: PageProps) {
+export default async function VerifyIjazaPage({ params, searchParams }: PageProps) {
   const { id } = await params
+  const resolvedSearch = searchParams ? await searchParams : undefined
   const decodedId = decodeURIComponent(id)
-  const cert = getCertificateById(decodedId)
+  const cert = await getCertificateByIdAsync(decodedId, resolvedSearch?.token)
   const integrity = cert ? verifyCertificateIntegrity(cert) : { isValid: false, matchedHash: false }
 
   return (

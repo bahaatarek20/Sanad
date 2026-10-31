@@ -179,7 +179,7 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
           resolvedRole = 'owner'
         } else if (liveProfile) {
           resolvedRole = liveProfile.role === 'owner' ? 'owner' : liveProfile.role === 'admin' ? 'admin' : 'student'
-        } else if (cookieStore.has('sanad_admin_gate_token') || parsed.role === 'admin' || parsed.role === 'owner') {
+        } else if (parsed.role === 'admin' || parsed.role === 'owner') {
           resolvedRole = parsed.role === 'owner' ? 'owner' : 'admin'
         }
 
@@ -253,10 +253,17 @@ export async function setStudentSessionCookie(
   let resolvedRole: PlatformRole = 'student'
   if (email === SUPER_ADMIN_EMAIL) {
     resolvedRole = 'owner'
-  } else if (options?.role) {
-    resolvedRole = options.role
   } else if (liveProfile?.role) {
     resolvedRole = liveProfile.role
+  } else if (options?.role) {
+    resolvedRole = options.role
+  }
+
+  // عند تسجيل الدخول بحساب غير مالك المنصة، نحذف كوكي بوابة المالك السابقة لضمان عزل الصلاحيات تماماً
+  if (email !== SUPER_ADMIN_EMAIL) {
+    try {
+      cookieStore.delete('sanad_admin_gate_token')
+    } catch {}
   }
 
   const effectiveAvatar =

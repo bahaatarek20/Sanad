@@ -97,6 +97,7 @@ interface ClassroomViewProps {
   initialCompletedEpisodes?: number[]
   initialEpisodeIndex?: number
   isLoggedIn?: boolean
+  studentName?: string
 }
 
 export default function ClassroomView({
@@ -109,6 +110,7 @@ export default function ClassroomView({
   initialCompletedEpisodes = [],
   initialEpisodeIndex = 0,
   isLoggedIn = false,
+  studentName = 'طالب العلم',
 }: ClassroomViewProps) {
   const [currentCourse, setCurrentCourse] = useState<MatnCourse>(course)
   const [activeTab, setActiveTab] = useState<'notes' | 'ai' | 'spaced' | 'sources'>('notes')
@@ -250,9 +252,17 @@ export default function ClassroomView({
           const localNotes: NoteItem[] = JSON.parse(storedNotes)
           setNotes((prev) => {
             const existingIds = new Set(prev.map((n) => n.id))
-            const newUnique = localNotes.filter((n) => !existingIds.has(n.id))
+            const existingContents = new Set(prev.map((n) => (n.content || '').trim()))
+            const newUnique = localNotes.filter(
+              (n) => n && !existingIds.has(n.id) && !existingContents.has((n.content || '').trim())
+            )
             return [...prev, ...newUnique]
           })
+        }
+
+        const storedDraft = localStorage.getItem(`sanad_note_draft_${currentCourse.slug}`)
+        if (storedDraft && storedDraft.trim()) {
+          setNoteContent((prev) => prev || storedDraft)
         }
       } catch {
         // LocalStorage fallback
@@ -535,10 +545,17 @@ export default function ClassroomView({
   const performSave = useCallback(
     async (text: string, tag: 'فائدة' | 'قاعدة' | 'مسألة' | 'استشكال') => {
       if (!text.trim()) return
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+        autoSaveTimerRef.current = null
+      }
 
       setSaveStatus('saving')
       const newNote: NoteItem = {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        id:
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         title: `${tag}: فائدة في المجلس ${currentEpisodeIndex + 1}`,
         content: text.trim(),
         tag: tag,
@@ -550,6 +567,7 @@ export default function ClassroomView({
         const existing = localStorage.getItem(localKey)
         const currentNotes: NoteItem[] = existing ? JSON.parse(existing) : []
         localStorage.setItem(localKey, JSON.stringify([newNote, ...currentNotes]))
+        localStorage.removeItem(`sanad_note_draft_${course.slug}`)
       } catch {
         // Fallback
       }
@@ -558,7 +576,12 @@ export default function ClassroomView({
       setNoteContent('')
 
       if (isLoggedIn) {
-        await addCourseNote(course.slug, text.trim(), tag)
+        try {
+          // نرسل نفس المعرّف للخادم حتى تتطابق النسختان ولا تتكرر الفائدة أو تعود بعد حذفها
+          await addCourseNote(course.slug, newNote.content, tag, newNote.title, newNote.id)
+        } catch {
+          // محفوظة محلياً على الجهاز وستظهر في الكشكول
+        }
       }
 
       setSaveStatus('saved')
@@ -567,17 +590,23 @@ export default function ClassroomView({
     [course.slug, currentEpisodeIndex, isLoggedIn]
   )
 
+  // الحفظ التلقائي يحفظ «مسودة» فقط ولا يقطع كتابة الطالب أو يقسم الفائدة إلى أجزاء
   const handleNoteTextChange = (val: string) => {
     setNoteContent(val)
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current)
     }
 
-    if (val.trim().length > 10) {
-      autoSaveTimerRef.current = setTimeout(() => {
-        performSave(val, noteTag)
-      }, 1500)
-    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      try {
+        const draftKey = `sanad_note_draft_${course.slug}`
+        if (val.trim()) {
+          localStorage.setItem(draftKey, val)
+        } else {
+          localStorage.removeItem(draftKey)
+        }
+      } catch {}
+    }, 800)
   }
 
   const handleToggleCompletion = async () => {
@@ -653,20 +682,27 @@ export default function ClassroomView({
   }
 
   const handleDeleteNote = async (noteId: string) => {
-    setNotes(notes.filter((n) => n.id !== noteId))
+    const target = notes.find((n) => n.id === noteId)
+    const targetContent = (target?.content || '').trim()
+    const shouldRemove = (n: NoteItem) =>
+      n.id === noteId || (targetContent !== '' && (n.content || '').trim() === targetContent)
+
+    setNotes((prev) => prev.filter((n) => !shouldRemove(n)))
     try {
       const localKey = `sanad_notes_${course.slug}`
       const existing = localStorage.getItem(localKey)
       if (existing) {
         const currentNotes: NoteItem[] = JSON.parse(existing)
-        localStorage.setItem(localKey, JSON.stringify(currentNotes.filter((n) => n.id !== noteId)))
+        localStorage.setItem(localKey, JSON.stringify(currentNotes.filter((n) => !shouldRemove(n))))
       }
     } catch {
       // Fallback
     }
 
     if (isLoggedIn) {
-      await deleteCourseNote(noteId, course.slug)
+      try {
+        await deleteCourseNote(noteId, course.slug, targetContent)
+      } catch {}
     }
   }
 
@@ -814,6 +850,20 @@ export default function ClassroomView({
           >
             <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             <span>خلاصة سريعة ⚡</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleCompletion}
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-xl sm:rounded-2xl border px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black transition cursor-pointer ${
+              isCompleted
+                ? 'border-emerald-700 bg-emerald-900 text-white shadow-xs dark:bg-emerald-800 dark:border-emerald-600'
+                : 'border-stone-300 bg-white text-stone-700 hover:border-emerald-700 hover:text-emerald-900 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200'
+            }`}
+            title={isCompleted ? 'تم إتمام ضبط هذا المتن وتسجيله في كشكولك وخارطة الطريق' : 'وسم هذا المتن كمنجز في كشكولك وخارطة الطريق'}
+          >
+            <CheckCircle className={`h-3.5 w-3.5 ${isCompleted ? 'text-amber-300' : 'text-emerald-700 dark:text-emerald-400'}`} />
+            <span>{isCompleted ? 'مُنجز في السند ✓' : 'إتمام المتن'}</span>
           </button>
 
           <button
@@ -1726,7 +1776,13 @@ export default function ClassroomView({
                     <textarea
                       value={noteContent}
                       onChange={(e) => handleNoteTextChange(e.target.value)}
-                      placeholder="اكتب الفائدة المقيدة هنا.. (تُحفظ تلقائياً في حسابك سحابياً)..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault()
+                          performSave(noteContent, noteTag)
+                        }
+                      }}
+                      placeholder="اكتب الفائدة المقيدة هنا.. (تُحفظ مسودتك تلقائياً، واضغط «حفظ الفائدة» أو Ctrl+Enter لتقييدها)"
                       rows={3}
                       className="w-full rounded-2xl border border-stone-200 bg-[#fbf9f4] p-3 text-xs text-stone-900 placeholder-stone-400 focus:border-emerald-800 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-50 dark:placeholder-stone-400 dark:focus:bg-stone-900 dark:focus:text-white"
                     />
@@ -1975,12 +2031,19 @@ export default function ClassroomView({
       {/* نافذة اختبار التحقق والضبط المنهجي (حد الاجتياز 80%) */}
       <CourseQuizModal
         course={currentCourse}
-        studentName="طالب العلم"
+        studentName={studentName}
         isOpen={isQuizOpen}
         onClose={() => setIsQuizOpen(false)}
         onCertificationIssued={(cert) => {
           setDirectIjazaCert(cert)
+          setIsCompleted(true)
           try {
+            const stored = localStorage.getItem('sanad_completed_courses')
+            const currentList: string[] = stored ? JSON.parse(stored) : []
+            localStorage.setItem(
+              'sanad_completed_courses',
+              JSON.stringify(Array.from(new Set([...currentList, currentCourse.slug])))
+            )
             const localCerts = localStorage.getItem('sanad_my_certificates')
             const certsList = localCerts ? JSON.parse(localCerts) : []
             if (!certsList.some((c: { id?: string }) => c?.id === cert.id)) {

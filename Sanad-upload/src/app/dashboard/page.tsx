@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { CheckCircle, Flame, Bookmark, ArrowLeft, Sparkles, BookOpen, Layers, Mail, Phone, ShieldCheck, Compass } from 'lucide-react'
+import { CheckCircle, Flame, Bookmark, ArrowLeft, Sparkles, BookOpen, Layers, Mail, Phone, ShieldCheck, Compass, Award } from 'lucide-react'
 import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-list'
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
 import StudentAnalytics from '@/components/student-analytics'
@@ -10,6 +10,7 @@ import { getUnreadCount } from '@/lib/messages-service'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getRecommendedCoursesForStudent } from '@/lib/curriculum-intelligence'
+import { getStudentCertificates, VerifiedCertificate } from '@/lib/certificate-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,16 +33,25 @@ export default async function DashboardPage() {
   let dailyStudyLog: Record<string, number> = {}
   let completedSlugs: string[] = []
   let scholarlyId: string | undefined = undefined
+  let profileDisplayName: string | undefined = undefined
+  let studentCertificates: VerifiedCertificate[] = []
 
   if (user.email) {
     const studentProfile = getStudentProfileData(user.email)
     if (studentProfile) {
       scholarlyId = studentProfile.scholarlyId
+      profileDisplayName = studentProfile.name
       currentStreak = studentProfile.streak || 0
       totalStudyMinutes = studentProfile.totalStudyMinutes || 0
       dailyStudyLog = studentProfile.dailyStudyLog || {}
       completedSlugs = Array.isArray(studentProfile.completedCourses) ? studentProfile.completedCourses : []
     }
+    try {
+      studentCertificates = getStudentCertificates(
+        user.email,
+        studentProfile?.name || user.user_metadata?.full_name
+      )
+    } catch {}
   }
 
   const allCourses = getActiveCourses()
@@ -155,7 +165,7 @@ export default async function DashboardPage() {
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
-              مرحباً بك، {user.user_metadata?.full_name || 'طالب العلم المبارك'}
+              مرحباً بك، {profileDisplayName || user.user_metadata?.full_name || 'طالب العلم المبارك'}
             </h1>
             <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 leading-relaxed max-w-xl">
               هنا تجتمع حصيلة مذاكرتك؛ فوائدك المقيدة في الكشكول، والمتون التي ضبطتها، وخريطة تدرجك العلمي.
@@ -220,7 +230,56 @@ export default async function DashboardPage() {
       {/* 4. ميدان التنافس وسباق أهل الهمم (وفي ذلك فليتنافس المتنافسون) */}
       {leaderboardData && <ScholarlyLeaderboard data={leaderboardData} />}
 
-      {/* 3. المتون المنجزة مؤخراً */}
+      {/* 5. الإجازات العلمية الموثقة الصادرة للطالب */}
+      {studentCertificates.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
+              <Award className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <span>إجازاتك العلمية الموثقة بالسند ({studentCertificates.length})</span>
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {studentCertificates.map((cert) => {
+              const verifyHref = cert.signedToken
+                ? `/verify-ijaza/${encodeURIComponent(cert.id)}?token=${encodeURIComponent(cert.signedToken)}`
+                : `/verify-ijaza/${encodeURIComponent(cert.id)}`
+              return (
+                <Link
+                  key={cert.id}
+                  href={verifyHref}
+                  className="group relative flex flex-col justify-between rounded-2xl border border-amber-300/80 bg-linear-to-b from-amber-50/60 via-white to-stone-50/40 p-4 shadow-xs hover:border-amber-500 hover:shadow-md transition dark:border-amber-800/70 dark:from-amber-950/30 dark:via-stone-900 dark:to-stone-900"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100/90 px-2 py-0.5 text-[10px] font-black text-emerald-950 dark:bg-emerald-950 dark:text-emerald-300">
+                        <ShieldCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                        <span>إجازة موثقة بـ SHA-256</span>
+                      </span>
+                      <span className="font-mono text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                        {cert.serialNumber}
+                      </span>
+                    </div>
+                    <h4 className="font-black text-sm text-stone-900 group-hover:text-emerald-900 dark:text-white dark:group-hover:text-amber-300">
+                      «{cert.courseTitle}»
+                    </h4>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                      المُجاز له: <strong className="text-stone-700 dark:text-stone-200">{cert.studentName}</strong> • {cert.formattedDate}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2.5 border-t border-amber-200/60 dark:border-stone-800 flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-300">
+                    <span>استعراض وطباعة صك الإجازة</span>
+                    <ArrowLeft className="h-3.5 w-3.5 transition group-hover:-translate-x-1" />
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 6. المتون المنجزة مؤخراً */}
       {completedCourses.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">

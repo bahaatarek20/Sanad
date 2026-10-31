@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
 
@@ -22,39 +23,88 @@ export interface SanadMessage {
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data')
+const TMP_DATA_DIR = path.join(os.tmpdir(), 'sanad_data')
 const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
+const TMP_MESSAGES_FILE = path.join(TMP_DATA_DIR, 'sanad_messages_registry.json')
 
-function ensureMessagesFile() {
+declare global {
+  var __sanad_messages_cache__: SanadMessage[] | undefined
+  var __sanad_welcomed_recipients__: Set<string> | undefined
+}
+
+function getWelcomedSet(): Set<string> {
+  if (!globalThis.__sanad_welcomed_recipients__) {
+    globalThis.__sanad_welcomed_recipients__ = new Set<string>()
+  }
+  return globalThis.__sanad_welcomed_recipients__
+}
+
+function readAllMessages(): SanadMessage[] {
+  if (globalThis.__sanad_messages_cache__) {
+    return globalThis.__sanad_messages_cache__
+  }
+
+  let primaryList: SanadMessage[] = []
+  let tmpList: SanadMessage[] = []
+
+  try {
+    if (fs.existsSync(MESSAGES_FILE)) {
+      const content = fs.readFileSync(MESSAGES_FILE, 'utf8')
+      if (content && content.trim()) {
+        const parsed = JSON.parse(content)
+        if (Array.isArray(parsed)) primaryList = parsed
+      }
+    }
+  } catch {}
+
+  try {
+    if (fs.existsSync(TMP_MESSAGES_FILE)) {
+      const content = fs.readFileSync(TMP_MESSAGES_FILE, 'utf8')
+      if (content && content.trim()) {
+        const parsed = JSON.parse(content)
+        if (Array.isArray(parsed)) tmpList = parsed
+      }
+    }
+  } catch {}
+
+  // إذا كان ملف /tmp أحدث أو موجوداً، نعتمد قائمته كمرجع أساسي مع دمج أي رسائل غير موجودة
+  const mergedMap = new Map<string, SanadMessage>()
+  for (const m of primaryList) {
+    if (m && m.id) mergedMap.set(m.id, m)
+  }
+  if (tmpList.length > 0) {
+    // إذا حُذفت رسالة في /tmp، نحترم الحذف عبر الاعتماد على /tmp أولاً إن كان مهيأً
+    mergedMap.clear()
+    for (const m of tmpList) {
+      if (m && m.id) mergedMap.set(m.id, m)
+    }
+  }
+
+  const list = Array.from(mergedMap.values())
+  globalThis.__sanad_messages_cache__ = list
+  return list
+}
+
+function writeAllMessages(messages: SanadMessage[]) {
+  globalThis.__sanad_messages_cache__ = messages
+  const serialized = JSON.stringify(messages, null, 2)
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true })
     }
-    if (!fs.existsSync(MESSAGES_FILE)) {
-      fs.writeFileSync(MESSAGES_FILE, JSON.stringify([], null, 2), 'utf8')
-    }
-  } catch (err) {
-    console.error('Error ensuring messages file:', err)
-  }
-}
-
-function readAllMessages(): SanadMessage[] {
-  try {
-    ensureMessagesFile()
-    if (!fs.existsSync(MESSAGES_FILE)) return []
-    const content = fs.readFileSync(MESSAGES_FILE, 'utf8')
-    if (!content || !content.trim()) return []
-    return JSON.parse(content) as SanadMessage[]
+    fs.writeFileSync(MESSAGES_FILE, serialized, 'utf8')
   } catch {
-    return []
+    // بيئة السحابة للقراءة فقط في المسار الأصلي
   }
-}
 
-function writeAllMessages(messages: SanadMessage[]) {
   try {
-    ensureMessagesFile()
-    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2), 'utf8')
+    if (!fs.existsSync(TMP_DATA_DIR)) {
+      fs.mkdirSync(TMP_DATA_DIR, { recursive: true })
+    }
+    fs.writeFileSync(TMP_MESSAGES_FILE, serialized, 'utf8')
   } catch (err) {
-    console.error('Error writing messages:', err)
+    console.error('Error writing messages to tmp:', err)
   }
 }
 
@@ -67,7 +117,7 @@ function normalizeRecipient(raw: string): string {
 }
 
 /**
- * جلب جميع رسائل الطالب مع إضافة رسائل الترحيب التلقائية إن كان حسابه جديداً
+ * جلب جميع رسائل الطالب مع إضافة رسائل الترحيب التلقائية إن كان حسابه جديداً (لمرة واحدة فقط)
  */
 export function getStudentMessages(recipientRaw: string): SanadMessage[] {
   const recipient = normalizeRecipient(recipientRaw)
@@ -75,12 +125,15 @@ export function getStudentMessages(recipientRaw: string): SanadMessage[] {
 
   const all = readAllMessages()
   let userMessages = all.filter((m) => normalizeRecipient(m.recipient) === recipient)
+  const welcomed = getWelcomedSet()
 
-  // إذا لم يكن لديه رسائل بعد، نودع له باقة الرسائل التأسيسية الترحيبية الشبيهة بـ Gmail
-  if (userMessages.length === 0) {
+  // إذا لم يكن لديه رسائل بعد ولم يسبق تهيئة ترحيبه، نودع له باقة الرسائل التأسيسية الترحيبية بمعرفات حتمية لا تتكرر
+  if (userMessages.length === 0 && !welcomed.has(recipient)) {
+    welcomed.add(recipient)
+    const recipientHash = crypto.createHash('sha256').update(recipient).digest('hex').slice(0, 10)
     const welcomeMessages: SanadMessage[] = [
       {
-        id: `msg_welcome_${Date.now()}_1`,
+        id: `msg_welcome_${recipientHash}_1`,
         recipient,
         senderName: 'إدارة منصة سَنَد',
         senderEmail: 'admin@sanad.edu',
@@ -105,7 +158,7 @@ export function getStudentMessages(recipientRaw: string): SanadMessage[] {
         actionLabel: 'ابدأ تصفح فهرس المتون الآن ←',
       },
       {
-        id: `msg_tips_${Date.now()}_2`,
+        id: `msg_tips_${recipientHash}_2`,
         recipient,
         senderName: 'الشيخ الشارح (توجيهات المدارسة)',
         senderEmail: 'guidance@sanad.edu',
@@ -129,9 +182,13 @@ export function getStudentMessages(recipientRaw: string): SanadMessage[] {
     const updated = [...welcomeMessages, ...all]
     writeAllMessages(updated)
     userMessages = welcomeMessages
+  } else if (userMessages.length > 0) {
+    welcomed.add(recipient)
   }
 
-  return userMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return [...userMessages].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  )
 }
 
 /**
@@ -204,7 +261,6 @@ export function markMessageAsRead(idOrRecipient: string, recipientOrId?: string)
   let targetId = idOrRecipient
   let targetRecipient = recipientOrId ? normalizeRecipient(recipientOrId) : ''
 
-  // في حال تم تمرير البريد كمعامل أول والمعرف كمعامل ثانٍ
   if (idOrRecipient.includes('@') && recipientOrId && !recipientOrId.includes('@')) {
     targetRecipient = normalizeRecipient(idOrRecipient)
     targetId = recipientOrId
@@ -272,10 +328,15 @@ export function deleteSanadMessage(idOrRecipient: string, recipientOrId?: string
     targetId = idOrRecipient
   }
 
+  if (targetRecipient) {
+    getWelcomedSet().add(targetRecipient)
+  }
+
   const all = readAllMessages()
   const filtered = all.filter((m) => {
     if (m.id === targetId) {
       if (!targetRecipient || normalizeRecipient(m.recipient) === targetRecipient) {
+        getWelcomedSet().add(normalizeRecipient(m.recipient))
         return false
       }
     }
@@ -287,6 +348,29 @@ export function deleteSanadMessage(idOrRecipient: string, recipientOrId?: string
     return true
   }
   return false
+}
+
+/**
+ * نقل رسائل الطالب عند تغيير عنوان بريده الإلكتروني
+ */
+export function migrateRecipientMessages(oldRecipientRaw: string, newRecipientRaw: string): number {
+  const cleanOld = normalizeRecipient(oldRecipientRaw)
+  const cleanNew = normalizeRecipient(newRecipientRaw)
+  if (!cleanOld || !cleanNew || cleanOld === cleanNew) return 0
+
+  const all = readAllMessages()
+  let count = 0
+  for (const m of all) {
+    if (normalizeRecipient(m.recipient) === cleanOld) {
+      m.recipient = cleanNew
+      count += 1
+    }
+  }
+  if (count > 0) {
+    getWelcomedSet().add(cleanNew)
+    writeAllMessages(all)
+  }
+  return count
 }
 
 /**
