@@ -9,7 +9,7 @@ import MobileMenu from '@/components/mobile-menu'
 import AiTriggerButton from '@/components/ai-trigger-button'
 import InboxDropdown from '@/components/inbox-dropdown'
 import PwaInstallButton from '@/components/pwa-install-button'
-import { getStudentProfileData } from '@/lib/student-tracking'
+import { getStudentProfileDataAsync } from '@/lib/student-tracking'
 
 export default async function Navbar() {
   const user = await getCurrentStudentUser()
@@ -18,7 +18,7 @@ export default async function Navbar() {
   let liveAvatarUrl: string | undefined
   let liveRole: 'student' | 'admin' | 'owner' | undefined
   if (user?.email) {
-    const profile = getStudentProfileData(user.email)
+    const profile = await getStudentProfileDataAsync(user.email)
     scholarlyId = profile?.scholarlyId
     liveProfileName = profile?.name
     liveAvatarUrl = profile?.avatarUrl
@@ -33,7 +33,7 @@ export default async function Navbar() {
     effectiveRole === 'owner' ||
     effectiveRole === 'admin' ||
     cleanUserEmail === 'bhaaljml480@gmail.com'
-  const displayName = liveProfileName || user?.user_metadata?.full_name || 'طالب العلم'
+  const displayName = user?.user_metadata?.full_name || liveProfileName || 'طالب العلم'
   const avatarUrl = liveAvatarUrl || user?.avatarUrl || ''
   const isImageAvatar =
     avatarUrl.startsWith('data:image/') ||

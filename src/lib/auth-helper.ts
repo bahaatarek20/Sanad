@@ -19,13 +19,18 @@ export interface StudentUser {
   email: string
   role?: PlatformRole
   username?: string
+  bio?: string
+  educationLevel?: string
   phone?: string
   authProvider?: 'email' | 'google' | 'phone'
   avatarUrl?: string
   sessionVersion?: number
+  profileUpdatedAt?: string
   user_metadata: {
     full_name: string
     username?: string
+    bio?: string
+    educationLevel?: string
     phone?: string
     authProvider?: string
     avatar_url?: string
@@ -196,19 +201,49 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
           resolvedRole = parsed.role === 'owner' ? 'owner' : 'admin'
         }
 
+        const cookieUpdatedAt = typeof parsed.profileUpdatedAt === 'string' ? parsed.profileUpdatedAt : ''
+        const localUpdatedAt = liveProfile?.lastActive || ''
+        const isCookieNewer = Boolean(cookieUpdatedAt && (!liveProfile || cookieUpdatedAt >= localUpdatedAt))
+
         const resolvedName = String(
-          liveProfile?.name || parsed.full_name || parsed.fullName || 'طالب العلم'
+          (isCookieNewer && (parsed.full_name || parsed.fullName)) ||
+            liveProfile?.name ||
+            parsed.full_name ||
+            parsed.fullName ||
+            'طالب العلم'
         )
-        const resolvedAvatar = liveProfile?.avatarUrl || (parsed.avatarUrl ? String(parsed.avatarUrl) : undefined)
-        const resolvedPhone = liveProfile?.phone || (parsed.phone ? String(parsed.phone) : undefined)
-        const resolvedUsername = liveProfile?.username || (parsed.username ? String(parsed.username) : undefined)
+        const resolvedAvatar =
+          isCookieNewer && parsed.avatarUrl === null
+            ? undefined
+            : (isCookieNewer && typeof parsed.avatarUrl === 'string' && parsed.avatarUrl) ||
+              liveProfile?.avatarUrl ||
+              (parsed.avatarUrl ? String(parsed.avatarUrl) : undefined)
+        const resolvedPhone =
+          (isCookieNewer && typeof parsed.phone === 'string' ? parsed.phone : undefined) ??
+          liveProfile?.phone ??
+          (parsed.phone ? String(parsed.phone) : undefined)
+        const resolvedUsername =
+          (isCookieNewer && typeof parsed.username === 'string' ? parsed.username : undefined) ??
+          liveProfile?.username ??
+          (parsed.username ? String(parsed.username) : undefined)
+        const resolvedBio =
+          (isCookieNewer && typeof parsed.bio === 'string' ? parsed.bio : undefined) ??
+          liveProfile?.bio ??
+          (typeof parsed.bio === 'string' ? parsed.bio : undefined)
+        const resolvedEducationLevel =
+          (isCookieNewer && typeof parsed.educationLevel === 'string' ? parsed.educationLevel : undefined) ??
+          liveProfile?.educationLevel ??
+          (typeof parsed.educationLevel === 'string' ? parsed.educationLevel : undefined)
 
         return {
           id: String(liveProfile?.id || parsed.id || `student-${Buffer.from(email).toString('hex').slice(0, 16)}`),
           email,
           role: resolvedRole,
           username: resolvedUsername,
+          bio: resolvedBio,
+          educationLevel: resolvedEducationLevel,
           phone: resolvedPhone,
+          profileUpdatedAt: cookieUpdatedAt || localUpdatedAt || undefined,
           sessionVersion: liveProfile?.sessionVersion || Number(parsed.sessionVersion || 1),
           authProvider:
             parsed.authProvider === 'google' || parsed.authProvider === 'phone'
@@ -218,6 +253,8 @@ export const getCurrentStudentUser = cache(async function getCurrentStudentUser(
           user_metadata: {
             full_name: resolvedName,
             username: resolvedUsername,
+            bio: resolvedBio,
+            educationLevel: resolvedEducationLevel,
             phone: resolvedPhone,
             authProvider: typeof parsed.authProvider === 'string' ? parsed.authProvider : 'email',
             avatar_url: resolvedAvatar,
@@ -245,6 +282,9 @@ export async function setStudentSessionCookie(
   fullName: string,
   emailOrPhone: string,
   options?: {
+    username?: string
+    bio?: string
+    educationLevel?: string
     phone?: string
     authProvider?: 'email' | 'google' | 'phone'
     avatarUrl?: string | null
@@ -258,7 +298,7 @@ export async function setStudentSessionCookie(
   const email = isEmail
     ? rawIdentifier.toLowerCase()
     : `${rawIdentifier.replace(/[^0-9]/g, '') || 'user'}@phone.sanad.edu`
-  const phone = options?.phone || (!isEmail ? rawIdentifier : undefined)
+  const phone = options?.phone !== undefined ? options.phone : !isEmail ? rawIdentifier : undefined
 
   const liveProfile = getStudentProfileData(email)
   const cleanName = fullName.trim() || liveProfile?.name || 'طالب العلم'
@@ -279,26 +319,39 @@ export async function setStudentSessionCookie(
     } catch {}
   }
 
-  const effectiveAvatar =
+  const rawAvatar =
     options?.avatarUrl === null
-      ? undefined
+      ? null
       : options?.avatarUrl !== undefined
       ? options.avatarUrl
       : liveProfile?.avatarUrl
 
+  // حماية الكوكي من تجاوز الحد الأقصى للمتصفح (4 كيلوبايت): لا نخزن صور Base64 كبيرة داخل الكوكي بل نخزن الأوسمة والروابط فقط
+  const cookieSafeAvatar =
+    rawAvatar === null
+      ? null
+      : typeof rawAvatar === 'string' && rawAvatar.length <= 1200
+      ? rawAvatar
+      : undefined
+
   const sessionVersion = options?.sessionVersion ?? liveProfile?.sessionVersion ?? 1
+  const nowIso = new Date().toISOString()
 
   const studentData: Record<string, unknown> = {
     id: liveProfile?.id || `student-${Buffer.from(rawIdentifier.toLowerCase()).toString('hex').slice(0, 16)}`,
     email,
     role: resolvedRole,
     full_name: cleanName,
-    username: liveProfile?.username,
-    phone: phone || liveProfile?.phone,
+    username: options?.username !== undefined ? options.username : liveProfile?.username,
+    bio: options?.bio !== undefined ? options.bio : liveProfile?.bio,
+    educationLevel:
+      options?.educationLevel !== undefined ? options.educationLevel : liveProfile?.educationLevel,
+    phone: phone !== undefined ? phone : liveProfile?.phone,
     authProvider: options?.authProvider || liveProfile?.authProvider || (phone ? 'phone' : 'email'),
-    avatarUrl: effectiveAvatar,
+    avatarUrl: cookieSafeAvatar,
     sessionVersion,
-    created_at: new Date().toISOString(),
+    profileUpdatedAt: nowIso,
+    created_at: nowIso,
   }
 
   // 1. التوقيع الرقمي الصارم للكوكي الأمني الأساسي
@@ -318,7 +371,7 @@ export async function setStudentSessionCookie(
     JSON.stringify({
       name: cleanName,
       email,
-      avatarUrl: effectiveAvatar,
+      avatarUrl: cookieSafeAvatar || undefined,
     }),
     {
       path: '/',

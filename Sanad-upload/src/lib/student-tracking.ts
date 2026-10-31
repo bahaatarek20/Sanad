@@ -1934,6 +1934,53 @@ export function getStudentProfileData(email: string): StudentActivityRecord | nu
   return null
 }
 
+// 2.5.1 جلب بيانات الحساب العلمي للطالب مع دمج أحدث التعديلات السحابية من Cloud Firestore
+export async function getStudentProfileDataAsync(email: string): Promise<StudentActivityRecord | null> {
+  const cleanEmail = (email || '').toLowerCase().trim()
+  if (!cleanEmail || isStudentDeleted(cleanEmail)) return null
+
+  const localProfile = getStudentProfileData(cleanEmail)
+  try {
+    const { getSingleStudentFromCloud } = await import('@/lib/cloud-db')
+    const cloudProfile = await getSingleStudentFromCloud(cleanEmail)
+    if (cloudProfile) {
+      if (!localProfile) {
+        ensureStudentTelemetryDefaults(cloudProfile)
+        profileCacheMap.set(cleanEmail, { data: cloudProfile, time: Date.now() })
+        return cloudProfile
+      }
+
+      const cloudTime = new Date(
+        (cloudProfile as unknown as { updatedAt?: string }).updatedAt || cloudProfile.lastActive || 0
+      ).getTime()
+      const localTime = new Date(localProfile.lastActive || 0).getTime()
+
+      if (cloudTime >= localTime) {
+        const merged: StudentActivityRecord = {
+          ...localProfile,
+          ...cloudProfile,
+          name: cloudProfile.name || localProfile.name,
+          username: cloudProfile.username || localProfile.username,
+          bio: cloudProfile.bio !== undefined && cloudProfile.bio !== null ? cloudProfile.bio : localProfile.bio,
+          educationLevel: cloudProfile.educationLevel || localProfile.educationLevel,
+          phone: cloudProfile.phone || localProfile.phone,
+          avatarUrl:
+            (cloudProfile as unknown as { avatarUrl?: string | null }).avatarUrl === null
+              ? undefined
+              : cloudProfile.avatarUrl || localProfile.avatarUrl,
+          privacySettings: cloudProfile.privacySettings || localProfile.privacySettings,
+          notificationSettings: cloudProfile.notificationSettings || localProfile.notificationSettings,
+        }
+        ensureStudentTelemetryDefaults(merged)
+        profileCacheMap.set(cleanEmail, { data: merged, time: Date.now() })
+        return merged
+      }
+    }
+  } catch {}
+
+  return localProfile
+}
+
 // 2.6 نبض المدارسة التلقائي اللحظي (يحسب الوقت الفعلي بالدقيقة ويزيد الـ Streak والمنحنى اليومي)
 export function recordStudentListeningHeartbeat(
   email: string,
@@ -2925,8 +2972,18 @@ export function updateStudentExtendedProfile(
       }
     }
 
-    student.lastActive = new Date().toISOString()
+    const nowIso = new Date().toISOString()
+    student.lastActive = nowIso
+    student.lastAction = `حدّث بيانات ملفه الشخصي وإعدادات حسابه`
     ensureStudentTelemetryDefaults(student)
+
+    if (globalThis.__sanad_cloud_sync_cache__?.students) {
+      globalThis.__sanad_cloud_sync_cache__.students =
+        globalThis.__sanad_cloud_sync_cache__.students.map((cs) =>
+          cs.email?.toLowerCase().trim() === cleanEmail ? { ...student } : cs
+        )
+    }
+
     saveAllLocalStudents(students)
     saveStudentToCloud(student).catch(() => {})
 
@@ -2938,6 +2995,18 @@ export function updateStudentExtendedProfile(
       details: `تحديث بيانات الملف الشخصي وإعدادات الحساب (${student.name})`,
     })
 
+    logPlatformEvent({
+      type: 'navigation',
+      studentEmail: cleanEmail,
+      studentName: student.name,
+      description:
+        updates.avatarUrl !== undefined
+          ? updates.avatarUrl
+            ? `قام بتحديث صورته الشخصية / وسامه الرمزي في المنصة [${student.scholarlyId || cleanEmail}]`
+            : `قام بحذف صورته الشخصية والعودة للصورة الافتراضية [${student.scholarlyId || cleanEmail}]`
+          : `قام بتحديث بيانات ملفه الشخصي وإعدادات حسابه [${student.scholarlyId || cleanEmail}]`,
+    })
+
     return { success: true, student }
   } catch (err: unknown) {
     return {
@@ -2945,6 +3014,22 @@ export function updateStudentExtendedProfile(
       error: err instanceof Error ? err.message : 'تعذر تحديث الملف الشخصي',
     }
   }
+}
+
+// 8.2.1 تحديث الملف الشخصي مع الانتظار الإلزامي للمزامنة السحابية (لحماية التعديلات والصور في Vercel Serverless)
+export async function updateStudentExtendedProfileAsync(
+  email: string,
+  updates: Parameters<typeof updateStudentExtendedProfile>[1]
+): Promise<{ success: boolean; student?: StudentActivityRecord; error?: string }> {
+  const res = updateStudentExtendedProfile(email, updates)
+  if (res.success && res.student) {
+    try {
+      const cloudTask = saveStudentToCloud(res.student)
+      const timeoutTask = new Promise((r) => setTimeout(r, 2200))
+      await Promise.race([cloudTask, timeoutTask])
+    } catch {}
+  }
+  return res
 }
 
 // 8.3 تغيير البريد الإلكتروني للحساب بعد التحقق من الملكية

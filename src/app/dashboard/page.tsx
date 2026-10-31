@@ -5,7 +5,7 @@ import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
 import StudentAnalytics from '@/components/student-analytics'
 import { getActiveCourses } from '@/lib/courses-store'
-import { getStudentProfileData, getScholarlyLeaderboardData, getStudentLocalNotes } from '@/lib/student-tracking'
+import { getStudentProfileDataAsync, getScholarlyLeaderboardData, getStudentLocalNotes } from '@/lib/student-tracking'
 import { getUnreadCount } from '@/lib/messages-service'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
@@ -37,10 +37,10 @@ export default async function DashboardPage() {
   let studentCertificates: VerifiedCertificate[] = []
 
   if (user.email) {
-    const studentProfile = getStudentProfileData(user.email)
+    const studentProfile = await getStudentProfileDataAsync(user.email)
     if (studentProfile) {
       scholarlyId = studentProfile.scholarlyId
-      profileDisplayName = studentProfile.name
+      profileDisplayName = user.user_metadata?.full_name || studentProfile.name
       currentStreak = studentProfile.streak || 0
       totalStudyMinutes = studentProfile.totalStudyMinutes || 0
       dailyStudyLog = studentProfile.dailyStudyLog || {}
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     try {
       studentCertificates = getStudentCertificates(
         user.email,
-        studentProfile?.name || user.user_metadata?.full_name
+        profileDisplayName || user.user_metadata?.full_name
       )
     } catch {}
   }
@@ -96,12 +96,7 @@ export default async function DashboardPage() {
   } catch {}
 
   const isGoogleVerified = user.authProvider === 'google' || Boolean(user.email?.toLowerCase().endsWith('@gmail.com'))
-  let verifiedPhone = user.phone
-  try {
-    if (!verifiedPhone && user.email) {
-      verifiedPhone = getStudentProfileData(user.email)?.phone
-    }
-  } catch {}
+  const verifiedPhone = user.phone
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">

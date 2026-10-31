@@ -25,19 +25,20 @@ import {
 } from 'lucide-react'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import {
-  getStudentProfileData,
+  getStudentProfileDataAsync,
   hasStudentLocalPassword,
   SUPER_ADMIN_EMAIL,
 } from '@/lib/student-tracking'
 import {
-  updateProfileAction,
   changePasswordAction,
-  updatePhoneAction,
   updateAvatarAction,
 } from './actions'
 import { signOutAction } from '@/app/login/actions'
 import AvatarSelector from '@/components/avatar-selector'
+import PersonalProfileForm from '@/components/personal-profile-form'
 import SettingsInteractivePanel from '@/components/settings-interactive-panel'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'الملف الشخصي وإعدادات الحساب | سَنَد',
@@ -54,16 +55,16 @@ export default async function SettingsPage(props: {
     redirect('/login')
   }
 
-  const profile = getStudentProfileData(user.email)
-  const displayName = profile?.name || user.user_metadata?.full_name || 'طالب العلم'
+  const profile = await getStudentProfileDataAsync(user.email)
+  const displayName = user.user_metadata?.full_name || profile?.name || 'طالب العلم'
   const username =
-    profile?.username ||
     user.username ||
+    profile?.username ||
     user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
-  const bio = profile?.bio || ''
-  const educationLevel = profile?.educationLevel || 'طالب تأصيل منهجي'
+  const bio = user.bio !== undefined ? user.bio : profile?.bio || ''
+  const educationLevel = user.educationLevel || profile?.educationLevel || 'طالب تأصيل منهجي'
   const scholarlyId = profile?.scholarlyId || 'SND-1001'
-  const currentPhone = profile?.phone || user.phone || ''
+  const currentPhone = user.phone !== undefined ? user.phone : profile?.phone || ''
   const currentAvatar = profile?.avatarUrl || user.avatarUrl || ''
   const registeredAtFormatted = profile?.registeredAt
     ? new Date(profile.registeredAt).toLocaleDateString('ar-EG', {
@@ -285,158 +286,15 @@ export default async function SettingsPage(props: {
               updateAvatarAction={updateAvatarAction}
             />
 
-            <form action={updateProfileAction} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300">
-                    البريد الإلكتروني الأساسي (موثق ✓)
-                  </label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <input
-                      type="email"
-                      value={user.email}
-                      disabled
-                      dir="ltr"
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-100 py-3 pr-11 pl-4 text-left text-sm font-medium text-stone-500 cursor-not-allowed dark:border-stone-800 dark:bg-stone-800/60 dark:text-stone-400"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="fullName"
-                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
-                  >
-                    الاسم الكامل / اسم العرض في المنصة والوثائق
-                  </label>
-                  <div className="relative">
-                    <User className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <input
-                      id="fullName"
-                      name="fullName"
-                      type="text"
-                      required
-                      minLength={2}
-                      maxLength={80}
-                      defaultValue={displayName}
-                      placeholder="اكتب اسمك الثلاثي أو الكامل..."
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="username"
-                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
-                  >
-                    اسم المستخدم الفريد (@username)
-                  </label>
-                  <div className="relative">
-                    <AtSign className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <input
-                      id="username"
-                      name="username"
-                      type="text"
-                      required
-                      minLength={3}
-                      maxLength={30}
-                      defaultValue={username}
-                      dir="ltr"
-                      placeholder="username"
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-left font-mono text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="educationLevel"
-                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
-                  >
-                    المرحلة التعليمية / المستوى التأصيلي
-                  </label>
-                  <div className="relative">
-                    <GraduationCap className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <select
-                      id="educationLevel"
-                      name="educationLevel"
-                      defaultValue={educationLevel}
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                    >
-                      <option value="طالب تأصيل منهجي">طالب تأصيل منهجي</option>
-                      <option value="مبتدئ في طلب العلم">مبتدئ في طلب العلم</option>
-                      <option value="متوسط في المتون العلمية">متوسط في المتون العلمية</option>
-                      <option value="متقدم في الفنون الشرعية">متقدم في الفنون الشرعية</option>
-                      <option value="طالب إجازة وسند متصل">طالب إجازة وسند متصل</option>
-                      <option value="باحث أكاديمي شرعي">باحث أكاديمي شرعي</option>
-                      {isOwner && (
-                        <option value="المشرف العام ومؤسس المنصة">المشرف العام ومؤسس المنصة</option>
-                      )}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label
-                    htmlFor="phone"
-                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
-                  >
-                    رقم الجوال المربوط بالحساب (اختياري)
-                  </label>
-                  <div className="relative">
-                    <Smartphone className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      dir="ltr"
-                      defaultValue={currentPhone}
-                      placeholder="+20 101 234 5678"
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 py-3 pr-11 pl-4 text-left font-mono text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="bio"
-                    className="mb-2 block text-xs font-bold text-stone-700 dark:text-stone-300"
-                  >
-                    النبذة التعريفية والاهتمامات العلمية (حتى 350 حرفاً)
-                  </label>
-                  <textarea
-                    id="bio"
-                    name="bio"
-                    rows={2}
-                    maxLength={350}
-                    defaultValue={bio}
-                    placeholder="اكتب نبذة مختصرة عن اهتماماتك العلمية أو المتون التي تعكف على دراستها..."
-                    className="w-full rounded-2xl border border-stone-200 bg-stone-50/50 px-4 py-2.5 text-sm text-stone-900 focus:border-emerald-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/15 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-                <button
-                  type="reset"
-                  className="inline-flex items-center gap-1.5 rounded-2xl border border-stone-200 bg-stone-100 px-5 py-3 text-xs font-bold text-stone-700 hover:bg-stone-200 transition dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>إلغاء التعديلات</span>
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-900 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 transition"
-                >
-                  <Save className="h-4 w-4 text-amber-300" />
-                  <span>حفظ وتوثيق البيانات الشخصية</span>
-                </button>
-              </div>
-            </form>
+            <PersonalProfileForm
+              email={user.email}
+              initialFullName={displayName}
+              initialUsername={username}
+              initialEducationLevel={educationLevel}
+              initialPhone={currentPhone}
+              initialBio={bio}
+              isOwner={isOwner}
+            />
           </div>
 
           {/* القسم الثاني: حماية الحساب وتعيين كلمة المرور */}

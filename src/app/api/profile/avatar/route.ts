@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import fs from 'fs'
 import path from 'path'
 import { getCurrentStudentUser, setStudentSessionCookie } from '@/lib/auth-helper'
-import { updateStudentExtendedProfile } from '@/lib/student-tracking'
+import { updateStudentExtendedProfileAsync } from '@/lib/student-tracking'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -124,15 +125,29 @@ export async function POST(request: NextRequest) {
       const body = await request.json().catch(() => ({}))
       const dataUrl = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : ''
       if (dataUrl.startsWith('preset:')) {
-        const updateRes = updateStudentExtendedProfile(user.email, { avatarUrl: dataUrl })
+        const updateRes = await updateStudentExtendedProfileAsync(user.email, { avatarUrl: dataUrl })
         if (!updateRes.success) {
           return NextResponse.json({ success: false, error: updateRes.error }, { status: 400 })
         }
-        await setStudentSessionCookie(user.user_metadata?.full_name || 'طالب العلم', user.email, {
-          avatarUrl: dataUrl,
-          role: user.role,
-          sessionVersion: updateRes.student?.sessionVersion,
-        })
+        await setStudentSessionCookie(
+          updateRes.student?.name || user.user_metadata?.full_name || 'طالب العلم',
+          user.email,
+          {
+            username: updateRes.student?.username,
+            bio: updateRes.student?.bio,
+            educationLevel: updateRes.student?.educationLevel,
+            phone: updateRes.student?.phone,
+            avatarUrl: dataUrl,
+            role: updateRes.student?.role || user.role,
+            sessionVersion: updateRes.student?.sessionVersion,
+          }
+        )
+        try {
+          revalidatePath('/', 'layout')
+          revalidatePath('/settings')
+          revalidatePath('/dashboard')
+          revalidatePath('/community')
+        } catch {}
         return NextResponse.json({ success: true, avatarUrl: dataUrl })
       }
 
@@ -187,7 +202,7 @@ export async function POST(request: NextRequest) {
         ? `data:${detectedMime};base64,${imageBuffer.toString('base64')}`
         : `/uploads/avatars/${fileName}`)
 
-    const updateRes = updateStudentExtendedProfile(user.email, {
+    const updateRes = await updateStudentExtendedProfileAsync(user.email, {
       avatarUrl: finalAvatarUrl,
     })
 
@@ -202,11 +217,22 @@ export async function POST(request: NextRequest) {
       updateRes.student?.name || user.user_metadata?.full_name || 'طالب العلم',
       user.email,
       {
+        username: updateRes.student?.username,
+        bio: updateRes.student?.bio,
+        educationLevel: updateRes.student?.educationLevel,
+        phone: updateRes.student?.phone,
         avatarUrl: finalAvatarUrl,
         role: updateRes.student?.role || user.role,
         sessionVersion: updateRes.student?.sessionVersion,
       }
     )
+
+    try {
+      revalidatePath('/', 'layout')
+      revalidatePath('/settings')
+      revalidatePath('/dashboard')
+      revalidatePath('/community')
+    } catch {}
 
     return NextResponse.json({
       success: true,
@@ -234,7 +260,7 @@ export async function DELETE() {
       )
     }
 
-    const updateRes = updateStudentExtendedProfile(user.email, {
+    const updateRes = await updateStudentExtendedProfileAsync(user.email, {
       avatarUrl: null,
     })
 
@@ -249,11 +275,22 @@ export async function DELETE() {
       updateRes.student?.name || user.user_metadata?.full_name || 'طالب العلم',
       user.email,
       {
+        username: updateRes.student?.username,
+        bio: updateRes.student?.bio,
+        educationLevel: updateRes.student?.educationLevel,
+        phone: updateRes.student?.phone,
         avatarUrl: null,
         role: updateRes.student?.role || user.role,
         sessionVersion: updateRes.student?.sessionVersion,
       }
     )
+
+    try {
+      revalidatePath('/', 'layout')
+      revalidatePath('/settings')
+      revalidatePath('/dashboard')
+      revalidatePath('/community')
+    } catch {}
 
     return NextResponse.json({
       success: true,

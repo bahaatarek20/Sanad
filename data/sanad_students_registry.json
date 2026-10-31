@@ -253,48 +253,6 @@
     "roleUpdatedAt": "2026-10-23T22:36:21.228Z"
   },
   {
-    "id": "student_1790694776796_phone",
-    "scholarlyId": "SND-1003",
-    "email": "201012728516@student.sanad.edu",
-    "name": "طالب العلم (+201012728516)",
-    "phone": "+201012728516",
-    "authProvider": "phone",
-    "ip": "156.204.12.34",
-    "country": "🇪🇬 مصر",
-    "countryCode": "EG",
-    "city": "القاهرة",
-    "device": "هاتف ذكي (Android)",
-    "browser": "Google Chrome Mobile",
-    "userAgent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.39 Mobile Safari/537.36",
-    "registeredAt": "2026-09-29T13:18:29.718Z",
-    "lastActive": "2026-09-29T15:12:56.811Z",
-    "totalStudyMinutes": 0,
-    "streak": 0,
-    "completedCourses": [],
-    "completedEpisodesMap": {},
-    "dailyStudyLog": {},
-    "listenedSessions": [],
-    "notesCount": 0,
-    "isBanned": false,
-    "role": "student",
-    "username": "201012728516",
-    "educationLevel": "طالب تأصيل منهجي",
-    "emailVerified": true,
-    "sessionVersion": 1,
-    "privacySettings": {
-      "showRealNameInCommunity": true,
-      "showAvatarInCommunity": true,
-      "showStudyStatsPublicly": true,
-      "showBioPublicly": true
-    },
-    "notificationSettings": {
-      "lessons": true,
-      "community": true,
-      "spacedRepetition": true,
-      "security": true
-    }
-  },
-  {
     "id": "student_1790473248076_cpkmr",
     "scholarlyId": "SND-1002",
     "email": "bhaaljml48@gmail.com",

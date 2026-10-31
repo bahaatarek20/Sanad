@@ -120,7 +120,7 @@ export default function AvatarSelector({
     const reader = new FileReader()
     reader.onload = (event) => {
       const img = new Image()
-      img.onload = () => {
+      img.onload = async () => {
         // ضغط ذكي للصورة في Canvas بحجم 256×256 عالية النقاء
         const canvas = document.createElement('canvas')
         const SIZE = 256
@@ -132,14 +132,42 @@ export default function AvatarSelector({
           const sx = (img.width - minDim) / 2
           const sy = (img.height - minDim) / 2
           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, SIZE, SIZE)
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.86)
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85)
+          const fileSizeKB = Math.max(1, Math.round(file.size / 1024))
+
+          // حفظ مباشر وفوري للصورة فور اختيارها من الجهاز دون الحاجة لخطوة ثانية
           setPreviewPending({
             dataUrl: compressedDataUrl,
             file,
             fileName: file.name,
-            fileSizeKB: Math.max(1, Math.round(file.size / 1024)),
+            fileSizeKB,
           })
           setImgError(false)
+
+          try {
+            const res = await fetch('/api/profile/avatar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ avatarUrl: compressedDataUrl }),
+            })
+            const data = await res.json()
+            if (res.ok && data.success) {
+              setSelected(data.avatarUrl || compressedDataUrl)
+              setPreviewPending(null)
+              setStatusMsg({
+                text: 'تم رفع واعتماد صورتك الشخصية الجديدة بنجاح وتحديثها في كافة أنحاء المنصة!',
+                type: 'success',
+              })
+              router.refresh()
+            } else {
+              setStatusMsg({
+                text: data.error || 'يرجى النقر على «اعتماد وحفظ الصورة» لإتمام الحفظ.',
+                type: 'error',
+              })
+            }
+          } catch {
+            // في حال تعذر الحفظ التلقائي، تبقى المعاينة مفتوحة لزر الاعتماد اليدوي
+          }
         }
         setIsUploading(false)
       }
@@ -162,15 +190,10 @@ export default function AvatarSelector({
     setStatusMsg(null)
 
     try {
-      const formData = new FormData()
-      if (previewPending.file) {
-        formData.append('avatar', previewPending.file)
-      }
-      formData.append('compressedDataUrl', previewPending.dataUrl)
-
       const res = await fetch('/api/profile/avatar', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarUrl: previewPending.dataUrl }),
       })
       const data = await res.json()
 

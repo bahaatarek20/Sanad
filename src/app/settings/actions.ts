@@ -14,6 +14,7 @@ import {
   hasStudentLocalPassword,
   getStudentProfileData,
   updateStudentExtendedProfile,
+  updateStudentExtendedProfileAsync,
   changeStudentEmailAddress,
   revokeOtherStudentSessions,
   deactivateStudentAccount,
@@ -71,7 +72,7 @@ export async function updateProfileAction(formData: FormData) {
     redirect('/settings?error=الاسم الكامل مطلوب ولا يقل عن حرفين')
   }
 
-  const updateRes = updateStudentExtendedProfile(email, {
+  const updateRes = await updateStudentExtendedProfileAsync(email, {
     name: fullName,
     username: username || undefined,
     bio: bio !== undefined ? bio : undefined,
@@ -85,6 +86,9 @@ export async function updateProfileAction(formData: FormData) {
 
   const student = updateRes.student
   await setStudentSessionCookie(student.name, email, {
+    username: student.username,
+    bio: student.bio,
+    educationLevel: student.educationLevel,
     phone: student.phone,
     authProvider: student.authProvider,
     avatarUrl: student.avatarUrl,
@@ -97,6 +101,85 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath('/dashboard')
   revalidatePath('/community')
   redirect('/settings?message=تم حفظ وتوثيق بيانات ملفك الشخصي بنجاح')
+}
+
+// 1.1 تحديث الملف الشخصي عبر استدعاء مباشر من العميل بدون إعادة تحميل الصفحة (Instant Profile Save)
+export async function savePersonalProfileDirectAction(payload: {
+  fullName: string
+  username?: string
+  educationLevel?: string
+  phone?: string
+  bio?: string
+}): Promise<{
+  success: boolean
+  message?: string
+  error?: string
+  student?: {
+    name: string
+    username?: string
+    educationLevel?: string
+    phone?: string
+    bio?: string
+    avatarUrl?: string
+  }
+}> {
+  const authCheck = await requireAuthenticatedStudent()
+  if (!authCheck.authorized) {
+    return { success: false, error: authCheck.error }
+  }
+
+  const email = authCheck.email
+  const fullName = (payload.fullName || '').trim()
+  const username = (payload.username || '').trim()
+  const bio = payload.bio !== undefined ? payload.bio.trim() : undefined
+  const educationLevel = (payload.educationLevel || '').trim()
+  const phone = payload.phone !== undefined ? payload.phone.trim() : undefined
+
+  if (!fullName || fullName.length < 2) {
+    return { success: false, error: 'الاسم الكامل مطلوب ولا يقل عن حرفين.' }
+  }
+
+  const updateRes = await updateStudentExtendedProfileAsync(email, {
+    name: fullName,
+    username: username || undefined,
+    bio,
+    educationLevel: educationLevel || undefined,
+    phone,
+  })
+
+  if (!updateRes.success || !updateRes.student) {
+    return { success: false, error: updateRes.error || 'تعذر حفظ التعديلات على الخادم.' }
+  }
+
+  const student = updateRes.student
+  await setStudentSessionCookie(student.name, email, {
+    username: student.username,
+    bio: student.bio,
+    educationLevel: student.educationLevel,
+    phone: student.phone,
+    authProvider: student.authProvider,
+    avatarUrl: student.avatarUrl,
+    role: student.role,
+    sessionVersion: student.sessionVersion,
+  })
+
+  revalidatePath('/', 'layout')
+  revalidatePath('/settings')
+  revalidatePath('/dashboard')
+  revalidatePath('/community')
+
+  return {
+    success: true,
+    message: 'تم حفظ وتوثيق بيانات ملفك الشخصي ومزامنتها في كافة أنحاء المنصة بنجاح!',
+    student: {
+      name: student.name,
+      username: student.username,
+      educationLevel: student.educationLevel,
+      phone: student.phone,
+      bio: student.bio,
+      avatarUrl: student.avatarUrl,
+    },
+  }
 }
 
 // 2. تحديث رقم الهاتف المربوط بالحساب
@@ -114,13 +197,16 @@ export async function updatePhoneAction(formData: FormData) {
     redirect('/settings?error=يرجى إدخال رقم هاتف صحيح مع مفتاح الدولة')
   }
 
-  const updateRes = updateStudentExtendedProfile(email, { phone })
+  const updateRes = await updateStudentExtendedProfileAsync(email, { phone })
   if (!updateRes.success || !updateRes.student) {
     redirect(`/settings?error=${encodeURIComponent(updateRes.error || 'تعذر تحديث رقم الهاتف')}`)
   }
 
   const student = updateRes.student
   await setStudentSessionCookie(student.name, email, {
+    username: student.username,
+    bio: student.bio,
+    educationLevel: student.educationLevel,
     phone: student.phone,
     authProvider: student.authProvider,
     avatarUrl: student.avatarUrl,
@@ -146,9 +232,12 @@ export async function updateAvatarAction(formData: FormData) {
 
   // السماح بحذف الصورة عند إرسال قيمة فارغة أو 'default'
   if (!avatarUrl || avatarUrl === 'default' || avatarUrl === 'delete') {
-    const delRes = updateStudentExtendedProfile(email, { avatarUrl: null })
+    const delRes = await updateStudentExtendedProfileAsync(email, { avatarUrl: null })
     const student = delRes.student || getStudentProfileData(email)
     await setStudentSessionCookie(student?.name || 'طالب العلم', email, {
+      username: student?.username,
+      bio: student?.bio,
+      educationLevel: student?.educationLevel,
       phone: student?.phone,
       authProvider: student?.authProvider,
       avatarUrl: null,
@@ -165,13 +254,16 @@ export async function updateAvatarAction(formData: FormData) {
     redirect('/settings?error=حجم الصورة كبير جداً، يرجى اختيار صورة أصغر حجماً')
   }
 
-  const updateRes = updateStudentExtendedProfile(email, { avatarUrl })
+  const updateRes = await updateStudentExtendedProfileAsync(email, { avatarUrl })
   if (!updateRes.success || !updateRes.student) {
     redirect(`/settings?error=${encodeURIComponent(updateRes.error || 'تعذر تحديث الصورة الشخصية')}`)
   }
 
   const student = updateRes.student
   await setStudentSessionCookie(student.name, email, {
+    username: student.username,
+    bio: student.bio,
+    educationLevel: student.educationLevel,
     phone: student.phone,
     authProvider: student.authProvider,
     avatarUrl: student.avatarUrl,
@@ -269,7 +361,7 @@ export async function updatePrivacyAndNotificationsAction(data: {
     return { success: false, error: authCheck.error }
   }
 
-  const res = updateStudentExtendedProfile(authCheck.email, {
+  const res = await updateStudentExtendedProfileAsync(authCheck.email, {
     privacySettings: data.privacySettings,
     notificationSettings: data.notificationSettings,
   })

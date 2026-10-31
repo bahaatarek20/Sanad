@@ -72,6 +72,20 @@ function logFirestoreNotice(err: unknown) {
   }
 }
 
+function sanitizeForFirestore(obj: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === undefined) {
+      cleaned[key] = null
+    } else if (val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+      cleaned[key] = sanitizeForFirestore(val as Record<string, unknown>)
+    } else {
+      cleaned[key] = val
+    }
+  }
+  return cleaned
+}
+
 /**
  * 1. حفظ أو تحديث طالب في Cloud Firestore مع المزامنة المزدوجة (students + users)
  */
@@ -82,16 +96,19 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
       const cleanEmail = student.email.toLowerCase().trim()
       const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
       const docRef = doc(db, STUDENTS_COLLECTION, studentDocId)
+      const safeStudentPayload = sanitizeForFirestore({
+        ...(student as unknown as Record<string, unknown>),
+        email: cleanEmail,
+        avatarUrl: student.avatarUrl || null,
+        bio: student.bio ?? '',
+        username: student.username || null,
+        educationLevel: student.educationLevel || null,
+        phone: student.phone || null,
+        updatedAt: new Date().toISOString(),
+      })
+
       const writes: Promise<unknown>[] = [
-        setDoc(
-          docRef,
-          {
-            ...student,
-            email: cleanEmail,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        ),
+        setDoc(docRef, safeStudentPayload, { merge: true }),
       ]
 
       if (student.id) {
@@ -99,25 +116,28 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
         writes.push(
           setDoc(
             userDocRef,
-            {
+            sanitizeForFirestore({
               uid: student.id,
               email: cleanEmail,
               fullName: student.name,
+              username: student.username || null,
+              bio: student.bio ?? '',
+              educationLevel: student.educationLevel || null,
               phoneNumber: student.phone || null,
               avatarUrl: student.avatarUrl || null,
               status: student.isBanned ? 'banned' : 'active',
               role: student.role || 'student',
               roleUpdatedAt: student.roleUpdatedAt || new Date().toISOString(),
-              scholarlyId: student.scholarlyId,
-              ip: student.ip,
-              country: student.country,
-              city: student.city,
-              device: student.device,
-              browser: student.browser,
+              scholarlyId: student.scholarlyId || null,
+              ip: student.ip || null,
+              country: student.country || null,
+              city: student.city || null,
+              device: student.device || null,
+              browser: student.browser || null,
               currentPage: student.currentPage || null,
               lastAction: student.lastAction || null,
               lastLoginAt: student.lastActive || new Date().toISOString(),
-            },
+            }),
             { merge: true }
           )
         )
@@ -126,6 +146,30 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
       return true
     })(),
     false,
+    2000
+  )
+}
+
+/**
+ * 1.5 جلب بيانات طالب واحد من Cloud Firestore مباشرة عبر بريده الإلكتروني
+ */
+export async function getSingleStudentFromCloud(email: string): Promise<StudentActivityRecord | null> {
+  if (isFirestoreCoolingDown()) return null
+  const cleanEmail = (email || '').toLowerCase().trim()
+  if (!cleanEmail) return null
+  return withCloudTimeout(
+    (async () => {
+      const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
+      const snap = await getDoc(doc(db, STUDENTS_COLLECTION, studentDocId))
+      if (snap.exists()) {
+        const data = snap.data() as StudentActivityRecord
+        if (data && data.email) {
+          return data
+        }
+      }
+      return null
+    })(),
+    null,
     1500
   )
 }
