@@ -24,7 +24,7 @@ if (typeof window !== 'undefined') {
 }
 
 // قاعدة بيانات Cloud Firestore الرسمية المعتمدة
-export const db: Firestore = getFirestore(app)
+export const db: Firestore = getFirestore(app, 'default')
 
 // موفّر تسجيل الدخول المباشر بحساب Google
 export const googleProvider = new GoogleAuthProvider()
