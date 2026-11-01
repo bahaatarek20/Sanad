@@ -1866,6 +1866,13 @@ export function registerOrUpdateStudent(
       })
       .catch(() => {})
 
+    // مزامنة تلقائية فورية مع مستودع GitHub لعمل Push تلقائي وتثبيت الطالب في المنصة للأبد
+    import('@/lib/github-sync')
+      .then(({ syncNewStudentToGitHub }) => {
+        syncNewStudentToGitHub(newStudent).catch(() => {})
+      })
+      .catch(() => {})
+
     try {
       const stats = readPlatformStatsLocal()
       stats.totalRegisteredStudents = students.length
@@ -1908,6 +1915,14 @@ export async function registerOrUpdateStudentAsync(
   } catch (err) {
     console.warn('[registerOrUpdateStudentAsync] Cloud sync notice:', err)
   }
+
+  // مزامنة تلقائية مع GitHub لضمان push فوري وتثبيت دائم للطلاب الجدد
+  import('@/lib/github-sync')
+    .then(({ syncNewStudentToGitHub }) => {
+      syncNewStudentToGitHub(student).catch(() => {})
+    })
+    .catch(() => {})
+
   return student
 }
 
