@@ -125,9 +125,11 @@ export function extractClientTelemetry(headersSource: Headers | Record<string, s
     ip = realIp.trim()
   }
 
-  // تنظيف الـ IP المحلي في بيئة التطوير
-  if (ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.0.0.1')) {
-    ip = '156.204.12.34' // IP افتراضي للبيئة المحلية
+  // فحص ما إذا كان الـ IP محلياً أو غير متوفر
+  const isLocalIp = !ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.0.0.1')
+  if (isLocalIp) {
+    // في بيئة الإنتاج على Vercel إن لم يتوفر IP حقيقي يوضع 'غير مسجل'
+    ip = process.env.NODE_ENV === 'production' ? 'غير مسجل' : '127.0.0.1'
   }
 
   // استخراج كود الدولة والمدينة

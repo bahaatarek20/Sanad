@@ -2020,6 +2020,18 @@ export default function SanadControlGatePage() {
     return `منذ ${diffDays} يوماً`
   }
 
+  // صياغة تاريخ الانضمام بالعربية بأمان ضد أي قيمة غير صالحة
+  const formatJoinDateAr = (iso?: string): string => {
+    if (!iso) return 'غير محدد'
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return 'غير محدد'
+    return d.toLocaleDateString('ar-EG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
   // صياغة التاريخ والوقت الدقيق بالعربية (اليوم + الشهر + السنة + الساعة والدقيقة صباحاً/مساءً)
   const formatExactDateTimeAr = (iso?: string): string => {
     if (!iso) return '—'
@@ -3588,7 +3600,7 @@ export default function SanadControlGatePage() {
                               )}
                             </span>
                             <span className="text-stone-400 dark:text-stone-500">
-                              انضم: {new Date(st.registeredAt).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              انضم: {formatJoinDateAr(st.registeredAt || (st as any).createdAt)}
                             </span>
                           </div>
 
@@ -3918,11 +3930,7 @@ export default function SanadControlGatePage() {
 
                         {/* 8. تاريخ الانضمام */}
                         <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap">
-                          {new Date(st.registeredAt).toLocaleDateString('ar-EG', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {formatJoinDateAr(st.registeredAt || (st as any).createdAt)}
                         </td>
 
                         {/* 9. آخر تواجد ونشاط + حالة الاتصال الحي */}
