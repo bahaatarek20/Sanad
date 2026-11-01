@@ -71,17 +71,29 @@ export default function ScholarlyLeaderboard({
     }, 4500)
   }
 
-  // ترتيب اللائحة بناءً على التبويب المختار لحظياً
+  // ترتيب اللائحة بناءً على التبويب المختار لحظياً مع الحفاظ على نقاط السباق وأسبقية التسجيل كمعيار فاصل
   const sortedStudents = useMemo(() => {
     const list = [...data.allRankedStudents]
     if (activeTab === 'hours') {
-      list.sort((a, b) => b.totalStudyMinutes - a.totalStudyMinutes)
+      list.sort((a, b) => {
+        if (b.totalStudyMinutes !== a.totalStudyMinutes) return b.totalStudyMinutes - a.totalStudyMinutes
+        return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+      })
     } else if (activeTab === 'streak') {
-      list.sort((a, b) => b.streak - a.streak || b.totalStudyMinutes - a.totalStudyMinutes)
+      list.sort((a, b) => {
+        if (b.streak !== a.streak) return b.streak - a.streak
+        return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+      })
     } else if (activeTab === 'courses') {
-      list.sort((a, b) => b.completedCoursesCount - a.completedCoursesCount || b.totalStudyMinutes - a.totalStudyMinutes)
+      list.sort((a, b) => {
+        if (b.completedCoursesCount !== a.completedCoursesCount) return b.completedCoursesCount - a.completedCoursesCount
+        return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+      })
     } else if (activeTab === 'notes') {
-      list.sort((a, b) => b.notesCount - a.notesCount || b.totalStudyMinutes - a.totalStudyMinutes)
+      list.sort((a, b) => {
+        if (b.notesCount !== a.notesCount) return b.notesCount - a.notesCount
+        return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+      })
     }
     return list
   }, [data.allRankedStudents, activeTab])
@@ -518,6 +530,11 @@ export default function ScholarlyLeaderboard({
                             {isCurrent && (
                               <span className="rounded-md bg-amber-500 text-white px-1.5 py-0.2 text-[10px] font-black animate-pulse">
                                 (أنت)
+                              </span>
+                            )}
+                            {entry.scholarlyId && (
+                              <span className="font-mono text-[10px] font-bold text-stone-500 bg-stone-100 dark:bg-stone-800 dark:text-stone-400 px-1.5 py-0.5 rounded-md border border-stone-200 dark:border-stone-700">
+                                {entry.scholarlyId}
                               </span>
                             )}
                             {entry.specialHonor && (

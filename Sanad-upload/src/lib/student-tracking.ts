@@ -489,12 +489,19 @@ function ensureDataFiles() {
 export function readAllLocalStudents(forceRefresh: boolean = false): StudentActivityRecord[] {
   const deletedSet = getDeletedStudentEmails()
   if (!forceRefresh && globalThis.__sanad_registry_cache__ && globalThis.__sanad_registry_cache__.length > 0) {
-    return globalThis.__sanad_registry_cache__.filter(
+    const cached = globalThis.__sanad_registry_cache__.filter(
       (s) =>
         !deletedSet.has((s.email || '').toLowerCase().trim()) &&
         !deletedSet.has((s.id || '').toLowerCase().trim()) &&
         !(s.scholarlyId && deletedSet.has(s.scholarlyId.toLowerCase().trim()))
     )
+    if (globalThis.__sanad_latest_registered_student__) {
+      const latestEmail = (globalThis.__sanad_latest_registered_student__.email || '').toLowerCase().trim()
+      if (latestEmail && !deletedSet.has(latestEmail) && !cached.some((s) => (s.email || '').toLowerCase().trim() === latestEmail)) {
+        cached.unshift(globalThis.__sanad_latest_registered_student__)
+      }
+    }
+    return cached
   }
 
   const map = new Map<string, StudentActivityRecord>()
@@ -665,6 +672,40 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   tryLoadFromEvents(EVENTS_FILE)
   tryLoadFromEvents(UPLOAD_EVENTS_FILE)
   tryLoadFromEvents(TMP_EVENTS_FILE)
+
+  // 4. دمج الطلاب من الكاش السحابي الحقيقي إن وجد (Firestore Cloud Sync)
+  if (globalThis.__sanad_cloud_sync_cache__?.students?.length) {
+    for (const cs of globalThis.__sanad_cloud_sync_cache__.students) {
+      if (!cs || (!cs.email && !cs.id)) continue
+      const key = (cs.email || cs.id).toLowerCase().trim()
+      const idLower = (cs.id || '').toLowerCase().trim()
+      const schLower = (cs.scholarlyId || '').toLowerCase().trim()
+      if (deletedSet.has(key) || (idLower && deletedSet.has(idLower)) || (schLower && deletedSet.has(schLower))) {
+        continue
+      }
+      if (!map.has(key)) {
+        ensureStudentTelemetryDefaults(cs)
+        map.set(key, cs)
+      } else {
+        const prev = map.get(key)!
+        map.set(key, { ...prev, ...cs })
+      }
+    }
+  }
+
+  // 5. دمج أحدث طالب تم تسجيله في هذه الجلسة فوراً لضمان الظهور في 0 جزء من الثانية
+  if (globalThis.__sanad_latest_registered_student__) {
+    const latest = globalThis.__sanad_latest_registered_student__
+    const key = (latest.email || latest.id).toLowerCase().trim()
+    if (!deletedSet.has(key)) {
+      if (!map.has(key)) {
+        ensureStudentTelemetryDefaults(latest)
+        map.set(key, latest)
+      } else {
+        map.set(key, { ...map.get(key)!, ...latest })
+      }
+    }
+  }
 
   // 7. ترقيم تسلسلي لمعرفات الطلاب المفقودة وضمان فرادتها التامة
   const assignedIds = new Set<string>()
@@ -885,6 +926,7 @@ function readPlatformStatsLocal(): PlatformStats {
 
   let tmpStats: Partial<PlatformStats> | null = null
   let fileStats: Partial<PlatformStats> | null = null
+  let uploadStats: Partial<PlatformStats> | null = null
 
   try {
     if (fs.existsSync(TMP_STATS_FILE)) {
@@ -898,17 +940,94 @@ function readPlatformStatsLocal(): PlatformStats {
     }
   } catch {}
 
-  const memStats = globalThis.__sanad_stats_cache__ || null
+  try {
+    if (fs.existsSync(UPLOAD_STATS_FILE)) {
+      uploadStats = JSON.parse(fs.readFileSync(UPLOAD_STATS_FILE, 'utf8'))
+    }
+  } catch {}
 
-  // اختيار السجل الأحدث زمنياً بين الكاش الحي و TMP_STATS_FILE و STATS_FILE
-  const candidates = [memStats, tmpStats, fileStats].filter(Boolean) as Partial<PlatformStats>[]
-  if (candidates.length > 0) {
-    candidates.sort((a, b) => {
-      const tA = new Date(a.lastUpdated || 0).getTime()
-      const tB = new Date(b.lastUpdated || 0).getTime()
-      return tB - tA
-    })
-    stats = { ...stats, ...candidates[0] }
+  const memStats = globalThis.__sanad_stats_cache__ || null
+  const cloudSync = globalThis.__sanad_cloud_sync_cache__ || null
+
+  const candidates = [memStats, tmpStats, fileStats, uploadStats].filter(Boolean) as Partial<PlatformStats>[]
+
+  // محرك التراكم التصاعدي الصارم (Monotonic Engine): لا يمكن لأي عداد أن ينقص أو يتراجع نهائياً
+  const maxVisitors = Math.max(
+    0,
+    ...candidates.map((c) => c.totalVisitors || 0),
+    cloudSync?.visitorCount || 0
+  )
+  const maxUnreg = Math.max(
+    0,
+    ...candidates.map((c) => c.unregisteredVisitors || 0),
+    cloudSync?.unregisteredVisitors || 0
+  )
+  const maxRegVisits = Math.max(
+    0,
+    ...candidates.map((c) => c.registeredVisitsCount || 0)
+  )
+  const maxRegStudents = Math.max(
+    0,
+    ...candidates.map((c) => c.totalRegisteredStudents || 0),
+    cloudSync?.students?.length || 0,
+    globalThis.__sanad_registry_cache__?.length || 0
+  )
+  const maxStudyMins = Math.max(
+    0,
+    ...candidates.map((c) => c.totalStudyMinutes || 0)
+  )
+  const maxNotes = Math.max(
+    0,
+    ...candidates.map((c) => c.totalNotesCount || 0)
+  )
+  const maxCompletedCourses = Math.max(
+    0,
+    ...candidates.map((c) => c.totalCompletedCoursesCount || 0)
+  )
+
+  // دمج سجلات الزوار الفريدة مع منع التكرار
+  const logMap = new Map<string, VisitorLogEntry>()
+  candidates.forEach((c) => {
+    if (Array.isArray(c.recentVisitorsLog)) {
+      c.recentVisitorsLog.forEach((entry) => {
+        if (entry && entry.id && !logMap.has(entry.id)) {
+          logMap.set(entry.id, entry)
+        }
+      })
+    }
+  })
+  const mergedLogs = Array.from(logMap.values())
+    .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+    .slice(0, 50)
+
+  // العثور على أحدث طابع زمني
+  let latestTimestamp = new Date().toISOString()
+  candidates.forEach((c) => {
+    if (c.lastUpdated && c.lastUpdated > latestTimestamp) {
+      latestTimestamp = c.lastUpdated
+    }
+  })
+
+  // ضبط العلاقات المنطقية الصارمة بين العدادات:
+  // 1. عدد الطلاب المسجلين يجب أن يعكس على الأقل العدد الحقيقي
+  // 2. زيارات المسجلين يجب ألا تقل عن عدد الطلاب المسجلين
+  // 3. إجمالي الزيارات الكلية = مجموع زيارات المسجلين + زوار بدون تسجيل كحد أدنى
+  const finalRegStudents = maxRegStudents
+  const finalRegVisits = Math.max(maxRegVisits, finalRegStudents)
+  const finalUnreg = maxUnreg
+  const finalVisitors = Math.max(maxVisitors, finalRegVisits + finalUnreg)
+
+  stats = {
+    totalVisitors: finalVisitors,
+    unregisteredVisitors: finalUnreg,
+    registeredVisitsCount: finalRegVisits,
+    totalRegisteredStudents: finalRegStudents,
+    totalStudyMinutes: maxStudyMins,
+    totalNotesCount: maxNotes,
+    totalCompletedCoursesCount: maxCompletedCourses,
+    recentVisitorsLog: mergedLogs,
+    lastUpdated: latestTimestamp,
+    statsResetAt: candidates.find((c) => c.statsResetAt)?.statsResetAt,
   }
 
   globalThis.__sanad_stats_cache__ = stats
@@ -916,6 +1035,16 @@ function readPlatformStatsLocal(): PlatformStats {
 }
 
 function savePlatformStatsLocal(stats: PlatformStats) {
+  const prev = globalThis.__sanad_stats_cache__
+  if (prev) {
+    stats.totalVisitors = Math.max(stats.totalVisitors || 0, prev.totalVisitors || 0)
+    stats.unregisteredVisitors = Math.max(stats.unregisteredVisitors || 0, prev.unregisteredVisitors || 0)
+    stats.registeredVisitsCount = Math.max(stats.registeredVisitsCount || 0, prev.registeredVisitsCount || 0)
+    stats.totalRegisteredStudents = Math.max(stats.totalRegisteredStudents || 0, prev.totalRegisteredStudents || 0)
+    stats.totalStudyMinutes = Math.max(stats.totalStudyMinutes || 0, prev.totalStudyMinutes || 0)
+    stats.totalNotesCount = Math.max(stats.totalNotesCount || 0, prev.totalNotesCount || 0)
+    stats.totalCompletedCoursesCount = Math.max(stats.totalCompletedCoursesCount || 0, prev.totalCompletedCoursesCount || 0)
+  }
   globalThis.__sanad_stats_cache__ = stats
   try {
     fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
@@ -3191,6 +3320,7 @@ export function deactivateStudentAccount(
 export interface LeaderboardStudentEntry {
   rank: number
   id: string
+  scholarlyId?: string
   name: string
   maskedEmail: string
   totalStudyMinutes: number
@@ -3200,6 +3330,8 @@ export interface LeaderboardStudentEntry {
   isCurrentStudent: boolean
   specialHonor?: string
   levelTitle: string
+  studyScore?: number
+  registeredAt?: string
 }
 
 export interface ScholarlyLeaderboardData {
@@ -3227,83 +3359,37 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
 
   const registeredStudents = readAllLocalStudents(false)
 
-  // نماذج محفزة ورفقاء مدارسة ملهمون لتكون المنافسة حية وميسرة دائماً
-  const inspiringPeers: Array<{
-    id: string
-    name: string
-    email: string
-    totalStudyMinutes: number
-    streak: number
-    completedCourses: string[]
-    notesCount: number
-  }> = [
-    {
-      id: 'peer_1',
-      name: 'أحمد بن عبد الرحمن',
-      email: 'ahmed.taseel@sanad.edu',
-      totalStudyMinutes: 45,
-      streak: 3,
-      completedCourses: ['bidayat-al-mutafaqqih'],
-      notesCount: 5,
-    },
-    {
-      id: 'peer_2',
-      name: 'أبو عبد الله الأندلسي',
-      email: 'andalusi@sanad.edu',
-      totalStudyMinutes: 30,
-      streak: 2,
-      completedCourses: ['three-principles'],
-      notesCount: 4,
-    },
-    {
-      id: 'peer_3',
-      name: 'أم سلمة البغدادية',
-      email: 'ummsalamah@sanad.edu',
-      totalStudyMinutes: 20,
-      streak: 2,
-      completedCourses: ['al-ajrumiyyah'],
-      notesCount: 3,
-    },
-    {
-      id: 'peer_4',
-      name: 'أنس بن مالك البصري',
-      email: 'anas.basri@sanad.edu',
-      totalStudyMinutes: 15,
-      streak: 1,
-      completedCourses: [],
-      notesCount: 2,
-    },
-  ]
-
-  // دمج الطلاب الحقيقيين مع رفقاء المدارسة
+  // 1. جمع الطلاب الحقيقيين فقط من قاعدة البيانات والتسجيل المعتمد (استبعاد تام ومطلق لأي حساب وهمي)
   const allMergedMap = new Map<string, {
     id: string
+    scholarlyId?: string
     name: string
     email: string
+    registeredAt?: string
     totalStudyMinutes: number
     streak: number
     completedCoursesCount: number
     notesCount: number
+    studyScore: number
     isRealStudent: boolean
   }>()
 
-  // 1. إضافة الرفقاء الملهمين
-  inspiringPeers.forEach((p) => {
-    allMergedMap.set(p.email, {
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      totalStudyMinutes: p.totalStudyMinutes,
-      streak: p.streak,
-      completedCoursesCount: p.completedCourses.length,
-      notesCount: p.notesCount,
-      isRealStudent: false,
-    })
-  })
+  // دمج الطلاب المحليين والمحدثين سحابياً
+  const sourceStudents = [...registeredStudents]
+  if (globalThis.__sanad_cloud_sync_cache__?.students?.length) {
+    const existingEmails = new Set(sourceStudents.map((s) => (s.email || '').toLowerCase().trim()))
+    for (const cs of globalThis.__sanad_cloud_sync_cache__.students) {
+      const clean = (cs.email || '').toLowerCase().trim()
+      if (clean && !existingEmails.has(clean)) {
+        sourceStudents.push(cs)
+        existingEmails.add(clean)
+      }
+    }
+  }
 
-  // 2. دمج الطلاب الحقيقيين وتحديث إحصاءاتهم الحية مع احترام إعدادات الخصوصية
-  registeredStudents.forEach((s) => {
-    if (s.isBanned || s.isDeactivated) return // استبعاد أي حساب محظور إدارياً أو معطل من لوحة الصدارة العامة
+  // 2. دمج الطلاب الحقيقيين وتحديث إحصاءاتهم الحية وحساب نقاط السباق العلمي
+  sourceStudents.forEach((s) => {
+    if (s.isBanned || s.isDeactivated) return // استبعاد أي حساب محظور إدارياً أو معطل
 
     const sEmail = (s.email || '').trim()
     const isMe = Boolean(cleanCurrentEmail && sEmail.toLowerCase() === cleanCurrentEmail)
@@ -3322,29 +3408,46 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
 
     const studentKey = sEmail ? sEmail.toLowerCase() : `student_${s.id}`
 
+    const minutes = Math.max(0, s.totalStudyMinutes || 0)
+    const streak = Math.max(0, s.streak || 0)
+    const coursesCount = Array.isArray(s.completedCourses) ? s.completedCourses.length : 0
+    const notes = Math.max(0, s.notesCount || 0)
+
+    // معادلة السباق العلمي المحمود («واللي يتسابق في شيء مركزه يفوق الآخرين»):
+    // كل دقيقة مدارسة = 10 نقاط | كل يوم مواظبة = 25 نقطة | كل متن منجز = 100 نقطة | كل فائدة مقيدة = 15 نقطة
+    const studyScore = (minutes * 10) + (streak * 25) + (coursesCount * 100) + (notes * 15)
+
     allMergedMap.set(studentKey, {
       id: s.id,
+      scholarlyId: s.scholarlyId,
       name: studentName,
       email: sEmail,
-      totalStudyMinutes: s.totalStudyMinutes || 0,
-      streak: s.streak || 0,
-      completedCoursesCount: Array.isArray(s.completedCourses) ? s.completedCourses.length : 0,
-      notesCount: s.notesCount || 0,
+      registeredAt: s.registeredAt,
+      totalStudyMinutes: minutes,
+      streak,
+      completedCoursesCount: coursesCount,
+      notesCount: notes,
+      studyScore,
       isRealStudent: true,
     })
   })
 
   const mergedList = Array.from(allMergedMap.values())
 
-  // حساب ترتيب المتصدرين الإجمالي (حسب دقائق المدارسة والمواظبة)
+  // حساب ترتيب المتصدرين (منظومة الأسبقية والتفوق الذكية):
+  // 1. التفوق الإنجازي والعلمي في المدارسة والمواظبة والمتون (من يتسابق في شيء يفوق الآخرين)
+  // 2. عند التساوي في الإنجاز والنقاط (أو في بداية التسجيل): أسبقية التسجيل في المنصة (من سجل أولاً له الأسبقية)
+  // 3. كسر التعادل الإضافي برقم المعرف الأكاديمي (SND-1001 قبل SND-1002)
   mergedList.sort((a, b) => {
-    if (b.totalStudyMinutes !== a.totalStudyMinutes) {
-      return b.totalStudyMinutes - a.totalStudyMinutes
+    if (b.studyScore !== a.studyScore) {
+      return b.studyScore - a.studyScore
     }
-    if (b.streak !== a.streak) {
-      return b.streak - a.streak
+    const timeA = new Date(a.registeredAt || 0).getTime()
+    const timeB = new Date(b.registeredAt || 0).getTime()
+    if (timeA > 0 && timeB > 0 && timeA !== timeB) {
+      return timeA - timeB // الأقدم تسجيلاً يسبق الأحدث تسجيلاً
     }
-    return b.notesCount - a.notesCount
+    return (a.scholarlyId || '').localeCompare(b.scholarlyId || '', undefined, { numeric: true })
   })
 
   // صياغة اللائحة المرتبة بالأوسمة
@@ -3359,11 +3462,14 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     else if (rank === 3) honor = '🥉 أهل الرسوخ'
     else if (item.streak >= 10) honor = '🔥 وتد المواظبة'
     else if (item.totalStudyMinutes >= 300) honor = '⏱️ عميد المدارسة'
+    else if (item.completedCoursesCount >= 3) honor = '📜 محرر المتون'
+    else if (item.notesCount >= 5) honor = '🖋️ قيّد الأوابد'
+    else if (idx < 5 && item.registeredAt) honor = '🌟 من السابقين الأولين'
 
     let levelTitle = 'طالب علم سائر'
-    if (item.totalStudyMinutes >= 600 || item.streak >= 12) levelTitle = 'سابق بالخيرات'
-    else if (item.totalStudyMinutes >= 300 || item.streak >= 7) levelTitle = 'مواظب متقدم'
-    else if (item.totalStudyMinutes >= 100 || item.streak >= 3) levelTitle = 'طالب مبادر بهمة'
+    if (item.studyScore >= 1000 || item.streak >= 12) levelTitle = 'سابق بالخيرات'
+    else if (item.studyScore >= 500 || item.streak >= 7) levelTitle = 'مواظب متقدم'
+    else if (item.studyScore >= 100 || item.streak >= 3) levelTitle = 'طالب مبادر بهمة'
 
     // تمويه البريد الإلكتروني أو رقم الهاتف لحماية الخصوصية
     let masked = 'طالب مؤصل'
@@ -3379,34 +3485,66 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     return {
       rank,
       id: item.id,
+      scholarlyId: item.scholarlyId,
       name: item.name,
       maskedEmail: masked,
       totalStudyMinutes: item.totalStudyMinutes,
       streak: item.streak,
       completedCoursesCount: item.completedCoursesCount,
       notesCount: item.notesCount,
+      studyScore: item.studyScore,
+      registeredAt: item.registeredAt,
       isCurrentStudent: isCurrent,
       specialHonor: honor,
       levelTitle,
     }
   })
 
-  // فرسان الصدارة في الفئات الأربع الرئيسية:
+  // ركيزة أمان افتراضية للفرسان الأربعة لضمان عدم حدوث أي خطأ في واجهة المستخدم
+  const defaultLeader: LeaderboardStudentEntry = rankedEntries[0] || {
+    rank: 1,
+    id: 'first_student',
+    scholarlyId: 'SND-1001',
+    name: 'طالب العلم',
+    maskedEmail: 'student@sanad.edu',
+    totalStudyMinutes: 0,
+    streak: 0,
+    completedCoursesCount: 0,
+    notesCount: 0,
+    studyScore: 0,
+    isCurrentStudent: false,
+    specialHonor: 'مبادر بالخيرات',
+    levelTitle: 'طالب علم سائر',
+  }
+
+  // فرسان الصدارة في الفئات الأربع الرئيسية مع كسر التعادل بنقاط السباق وأسبقية التسجيل:
   // 1. فارس المواظبة (أطول سلسلة أيام متتالية)
-  const streakSorted = [...rankedEntries].sort((a, b) => b.streak - a.streak)
-  const topStreakLeader = streakSorted[0]
+  const streakSorted = [...rankedEntries].sort((a, b) => {
+    if (b.streak !== a.streak) return b.streak - a.streak
+    return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+  })
+  const topStreakLeader = streakSorted[0] || defaultLeader
 
   // 2. عميد ساعات المدارسة (أكبر وقت استماع للمجالس)
-  const hoursSorted = [...rankedEntries].sort((a, b) => b.totalStudyMinutes - a.totalStudyMinutes)
-  const topHoursLeader = hoursSorted[0]
+  const hoursSorted = [...rankedEntries].sort((a, b) => {
+    if (b.totalStudyMinutes !== a.totalStudyMinutes) return b.totalStudyMinutes - a.totalStudyMinutes
+    return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+  })
+  const topHoursLeader = hoursSorted[0] || defaultLeader
 
   // 3. سابق المتون (أكبر عدد متون منجزة)
-  const coursesSorted = [...rankedEntries].sort((a, b) => b.completedCoursesCount - a.completedCoursesCount)
-  const topCoursesLeader = coursesSorted[0]
+  const coursesSorted = [...rankedEntries].sort((a, b) => {
+    if (b.completedCoursesCount !== a.completedCoursesCount) return b.completedCoursesCount - a.completedCoursesCount
+    return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+  })
+  const topCoursesLeader = coursesSorted[0] || defaultLeader
 
   // 4. قيّد الأوابد (أكثر من قيد فوائد بالكشكول)
-  const notesSorted = [...rankedEntries].sort((a, b) => b.notesCount - a.notesCount)
-  const topNotesLeader = notesSorted[0]
+  const notesSorted = [...rankedEntries].sort((a, b) => {
+    if (b.notesCount !== a.notesCount) return b.notesCount - a.notesCount
+    return (b.studyScore || 0) - (a.studyScore || 0) || a.rank - b.rank
+  })
+  const topNotesLeader = notesSorted[0] || defaultLeader
 
   // معلومات الطالب الحالي وموقعه في السباق
   let currentStudentInfo: ScholarlyLeaderboardData['currentStudent'] = undefined
@@ -3456,5 +3594,29 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
     allRankedStudents: rankedEntries,
     currentStudent: currentStudentInfo,
   }
+}
+
+/**
+ * دالة جلب لوحة الصدارة غير المتزامنة مع مزامنة سحابية حية من Firestore
+ */
+export async function getScholarlyLeaderboardDataAsync(currentStudentEmail?: string): Promise<ScholarlyLeaderboardData> {
+  try {
+    const { getStudentsFromCloud } = await import('@/lib/cloud-db')
+    const cloudStudents = await getStudentsFromCloud()
+    if (cloudStudents && cloudStudents.length > 0) {
+      if (!globalThis.__sanad_cloud_sync_cache__) {
+        globalThis.__sanad_cloud_sync_cache__ = {
+          students: cloudStudents,
+          visitorCount: 0,
+          unregisteredVisitors: 0,
+          fetchedAt: Date.now(),
+        }
+      } else {
+        globalThis.__sanad_cloud_sync_cache__.students = cloudStudents
+        globalThis.__sanad_cloud_sync_cache__.fetchedAt = Date.now()
+      }
+    }
+  } catch {}
+  return getScholarlyLeaderboardData(currentStudentEmail)
 }
 

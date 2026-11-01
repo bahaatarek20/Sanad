@@ -5,7 +5,7 @@ import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
 import StudentAnalytics from '@/components/student-analytics'
 import { getActiveCourses } from '@/lib/courses-store'
-import { getStudentProfileDataAsync, getScholarlyLeaderboardData, getStudentLocalNotes } from '@/lib/student-tracking'
+import { getStudentProfileDataAsync, getScholarlyLeaderboardDataAsync, getStudentLocalNotes } from '@/lib/student-tracking'
 import { getUnreadCount } from '@/lib/messages-service'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
 
   let leaderboardData
   try {
-    leaderboardData = getScholarlyLeaderboardData(user.email || undefined)
+    leaderboardData = await getScholarlyLeaderboardDataAsync(user.email || undefined)
   } catch (err) {
     console.error('Error getting leaderboard data:', err)
   }

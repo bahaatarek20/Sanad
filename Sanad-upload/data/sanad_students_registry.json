@@ -1,5 +1,45 @@
 [
   {
+    "id": "student_1793488455635_mody",
+    "scholarlyId": "SND-1013",
+    "email": "modykingisj@gmail.com",
+    "name": "Ahmed Mody",
+    "authProvider": "google",
+    "ip": "156.223.31.43",
+    "country": "🇪🇬 مصر",
+    "countryCode": "EG",
+    "city": "Cairo",
+    "device": "جهاز هاتف ذكي (Android)",
+    "browser": "Chrome Mobile",
+    "registeredAt": "2026-10-31T22:51:02.000Z",
+    "lastActive": "2026-10-31T22:51:02.000Z",
+    "totalStudyMinutes": 0,
+    "streak": 0,
+    "completedCourses": [],
+    "completedEpisodesMap": {},
+    "dailyStudyLog": {},
+    "listenedSessions": [],
+    "notesCount": 0,
+    "isBanned": false,
+    "role": "student",
+    "username": "modykingisj",
+    "educationLevel": "طالب علم مبتدئ",
+    "emailVerified": true,
+    "sessionVersion": 1,
+    "privacySettings": {
+      "showRealNameInCommunity": true,
+      "showAvatarInCommunity": true,
+      "showStudyStatsPublicly": true,
+      "showBioPublicly": true
+    },
+    "notificationSettings": {
+      "lessons": true,
+      "community": true,
+      "spacedRepetition": true,
+      "security": true
+    }
+  },
+  {
     "id": "student_1792009888127_fatma",
     "scholarlyId": "SND-1007",
     "email": "fatmamohamed01009034136@gmail.com",

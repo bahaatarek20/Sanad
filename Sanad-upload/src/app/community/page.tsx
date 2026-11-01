@@ -1,5 +1,5 @@
 import { getActiveCourses } from '@/lib/courses-store'
-import { getScholarlyLeaderboardData } from '@/lib/student-tracking'
+import { getScholarlyLeaderboardDataAsync } from '@/lib/student-tracking'
 import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import CommunityHub, { CommunityPost } from '@/components/community-hub'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
@@ -169,7 +169,7 @@ export default async function CommunityPage() {
     posts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }
 
-  const leaderboardData = getScholarlyLeaderboardData(currentUser?.email || undefined)
+  const leaderboardData = await getScholarlyLeaderboardDataAsync(currentUser?.email || undefined)
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">
