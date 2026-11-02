@@ -458,18 +458,101 @@ export default function ScholarlyLeaderboard({
           </div>
         </div>
 
-        {/* جدول لائحة الشرف والمنافسة */}
-        <div className="overflow-x-auto rounded-2xl border border-stone-200/80 bg-stone-50/50 dark:border-stone-800 dark:bg-stone-900/60">
+        {/* قائمة وترتيب طلاب العلم: نمط متجاوب بالكامل (بطاقات للشاشات الضيقة وجدول للشاشات المتوسطة والكبيرة) */}
+        
+        {/* أ. نمط البطاقات المريحة للهواتف والشاشات الضيقة (sm:hidden) */}
+        <div className="block sm:hidden space-y-3">
+          {sortedStudents.map((entry, idx) => {
+            const displayRank = idx + 1
+            const isCurrent = entry.isCurrentStudent
+
+            return (
+              <div
+                key={`mobile-entry-${entry.id}`}
+                className={`p-3.5 rounded-2xl border transition ${
+                  isCurrent
+                    ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/80 dark:bg-amber-950/40 dark:border-amber-700/80'
+                    : 'bg-white border-stone-200/90 dark:bg-stone-800 dark:border-stone-700'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 flex items-center justify-center font-black text-xs">
+                      {displayRank === 1 ? '🥇 1' : displayRank === 2 ? '🥈 2' : displayRank === 3 ? '🥉 3' : `#${displayRank}`}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-extrabold text-stone-900 dark:text-white text-xs truncate">
+                          {entry.name}
+                        </span>
+                        {isCurrent && (
+                          <span className="rounded-md bg-amber-500 text-white px-1 py-0.2 text-[9px] font-black">
+                            (أنت)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-stone-400 block truncate">
+                        {entry.levelTitle}
+                      </span>
+                    </div>
+                  </div>
+
+                  {entry.scholarlyId && (
+                    <span className="font-mono text-[10px] font-bold text-stone-600 bg-stone-100 dark:bg-stone-700 dark:text-stone-300 px-2 py-0.5 rounded-md shrink-0">
+                      {entry.scholarlyId}
+                    </span>
+                  )}
+                </div>
+
+                {/* مقاييس الإنجاز في الموبايل */}
+                <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-stone-50 dark:bg-stone-900/60 text-center text-[10px]">
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">المدارسة</span>
+                    <span className="font-bold font-mono text-stone-800 dark:text-stone-200">{formatHoursAndMinutes(entry.totalStudyMinutes)}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">المواظبة</span>
+                    <span className="font-bold text-rose-600 font-mono">🔥 {entry.streak}ي</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">المتون</span>
+                    <span className="font-bold text-emerald-700 font-mono">{entry.completedCoursesCount}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">الفوائد</span>
+                    <span className="font-bold text-indigo-700 font-mono">{entry.notesCount}</span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-stone-700 flex items-center justify-between">
+                  <span className="text-[10px] text-stone-400">
+                    {entry.specialHonor || 'مجتهد في التحصيل'}
+                  </span>
+                  <button
+                    onClick={() => handleBlessStudent(entry.id, entry.name)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[10px] font-bold text-stone-600 hover:text-rose-600 transition dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+                  >
+                    <Heart className="h-3 w-3 text-rose-500" />
+                    <span>دعاء {blessedStudents[entry.id] ? `(+${blessedStudents[entry.id]})` : ''}</span>
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* ب. جدول لائحة الشرف والمنافسة للشاشات المتوسطة والكبيرة (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto rounded-2xl border border-stone-200/80 bg-stone-50/50 dark:border-stone-800 dark:bg-stone-900/60">
           <table className="w-full text-right text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-stone-200 bg-stone-100/70 text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:border-stone-800 dark:bg-stone-800/80 dark:text-stone-400">
-                <th className="py-3 px-4 w-14 text-center">الرتبة</th>
-                <th className="py-3 px-4">طالب العلم</th>
-                <th className="py-3 px-4 text-center">ساعات المدارسة</th>
-                <th className="py-3 px-4 text-center">المواظبة</th>
-                <th className="py-3 px-4 text-center">المتون</th>
-                <th className="py-3 px-4 text-center">الفوائد</th>
-                <th className="py-3 px-4 text-center w-28">دعاء بظهر الغيب</th>
+                <th className="py-3 px-3 w-12 text-center">الرتبة</th>
+                <th className="py-3 px-3">طالب العلم</th>
+                <th className="py-3 px-3 text-center">ساعات المدارسة</th>
+                <th className="py-3 px-3 text-center">المواظبة</th>
+                <th className="py-3 px-3 text-center hidden md:table-cell">المتون</th>
+                <th className="py-3 px-3 text-center hidden lg:table-cell">الفوائد</th>
+                <th className="py-3 px-3 text-center w-28">دعاء بظهر الغيب</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
@@ -564,12 +647,12 @@ export default function ScholarlyLeaderboard({
                     </td>
 
                     {/* المتون */}
-                    <td className="py-3 px-4 text-center font-mono font-bold text-emerald-900 dark:text-emerald-400">
+                    <td className="py-3 px-3 text-center font-mono font-bold text-emerald-900 dark:text-emerald-400 hidden md:table-cell">
                       {entry.completedCoursesCount} متون
                     </td>
 
                     {/* الفوائد */}
-                    <td className="py-3 px-4 text-center font-mono font-bold text-indigo-900 dark:text-indigo-400">
+                    <td className="py-3 px-3 text-center font-mono font-bold text-indigo-900 dark:text-indigo-400 hidden lg:table-cell">
                       {entry.notesCount} فائدة
                     </td>
 

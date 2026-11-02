@@ -791,6 +791,12 @@ export default function SanadControlGatePage() {
           })
           const merged = applyRoleOverrides(Array.from(map.values()), prev)
           merged.sort((a, b) => {
+            // فرز تنازلي: الأحدث تسجيلاً أو الأكبر في المعرف الأكاديمي يظهر في الأعلى افتراضياً
+            const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+            const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+            if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
+              return idNumB - idNumA
+            }
             const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
             const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
             return timeB - timeA
@@ -990,6 +996,11 @@ export default function SanadControlGatePage() {
             })
             const merged = applyRoleOverrides(Array.from(map.values()), prev)
             merged.sort((a, b) => {
+              const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+              const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+              if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
+                return idNumB - idNumA
+              }
               const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
               const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
               return timeB - timeA
@@ -1088,6 +1099,11 @@ export default function SanadControlGatePage() {
               })
               const merged = applyRoleOverrides(Array.from(map.values()), prev)
               merged.sort((a, b) => {
+                const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+                const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+                if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
+                  return idNumB - idNumA
+                }
                 const timeA = new Date(a.lastActive || a.registeredAt || 0).getTime()
                 const timeB = new Date(b.lastActive || b.registeredAt || 0).getTime()
                 return timeB - timeA
@@ -3695,23 +3711,139 @@ export default function SanadControlGatePage() {
           {/* 2. نمط العرض الثاني: جدول سجل حسابات الطلاب وتفاصيل مدارستهم مع المعرف الأكاديمي والتحكم الإداري */}
           {studentViewMode === 'table' && (
           <div className="overflow-hidden rounded-3xl border border-stone-200/90 bg-white shadow-xs dark:border-stone-800 dark:bg-stone-900">
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
+            {/* في الشاشات الصغيرة والمتوسطة: عرض بديل بطاقات ذكي مريح بدون تمرير أفقي حاد */}
+            <div className="block lg:hidden p-4 space-y-4 bg-stone-50/50 dark:bg-stone-900/50">
+              {filteredStudents.length === 0 ? (
+                <div className="p-8 text-center text-stone-400 dark:text-stone-500 font-bold text-xs">
+                  {studentSearch || studentStatusFilter !== 'all' || studentRoleFilter !== 'all'
+                    ? 'لم يتم العثور على طالب يطابق معايير التصفية والبحث.'
+                    : 'لا يوجد طلاب مسجلون بعد.'}
+                </div>
+              ) : (
+                filteredStudents.map((st) => {
+                  const isNewlyJoined = newlyRegisteredIds.has(st.id)
+                  return (
+                    <div
+                      key={`card-mobile-${st.id}`}
+                      className={`p-4 rounded-2xl border transition bg-white dark:bg-stone-800 shadow-2xs space-y-3 ${
+                        st.isBanned
+                          ? 'border-rose-300/80 bg-rose-50/20'
+                          : isNewlyJoined
+                          ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                          : 'border-stone-200 dark:border-stone-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-950 font-black text-xs dark:bg-emerald-950 dark:text-emerald-300">
+                            {st.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-extrabold text-stone-900 dark:text-white text-xs truncate flex items-center gap-1">
+                              <span>{st.name}</span>
+                              {isNewlyJoined && <span className="text-[9px] bg-emerald-500/20 text-emerald-700 px-1.5 py-0.2 rounded-full font-black">⚡ جديد</span>}
+                            </h4>
+                            <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400 truncate">{st.email}</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyId(st.scholarlyId || st.id, e)}
+                          className="shrink-0 px-2 py-1 rounded-lg border border-stone-200 bg-stone-50 font-mono text-[11px] font-black text-stone-800 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 flex items-center gap-1"
+                        >
+                          <Hash className="h-3 w-3 text-stone-400" />
+                          <span>{st.scholarlyId || `#${st.id.slice(-6)}`}</span>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-stone-100 dark:border-stone-700">
+                        <div className="text-stone-600 dark:text-stone-300">
+                          <span className="text-stone-400 text-[10px] block">الموقع والـ IP</span>
+                          <span className="font-bold">{st.country || 'مصر'}</span> • <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">{st.ip || 'غير مسجل'}</span>
+                        </div>
+                        <div className="text-stone-600 dark:text-stone-300">
+                          <span className="text-stone-400 text-[10px] block">الحالة والتواجد</span>
+                          {isStudentOnlineNow(st) ? (
+                            <span className="text-emerald-700 font-black text-[10px] flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                              متصل الآن
+                            </span>
+                          ) : (
+                            <span className="text-stone-500 text-[10px] font-bold">غير متصل ({formatRelativeTimeAr(st.lastActive || st.registeredAt)})</span>
+                          )}
+                        </div>
+                        <div className="text-stone-600 dark:text-stone-300">
+                          <span className="text-stone-400 text-[10px] block">إجمالي المدارسة</span>
+                          <span className="font-black text-emerald-800 dark:text-emerald-400">{formatStudyTime(st.totalStudyMinutes)}</span>
+                        </div>
+                        <div className="text-stone-600 dark:text-stone-300">
+                          <span className="text-stone-400 text-[10px] block">تاريخ الانضمام</span>
+                          <span className="font-bold text-[10px]">{formatJoinDateAr(st.registeredAt || (st as any).createdAt)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-stone-100 dark:border-stone-700">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentForDetail(st)}
+                          className="px-2.5 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-bold text-stone-700 hover:bg-stone-100 flex items-center gap-1 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                        >
+                          <History className="h-3 w-3 text-emerald-700" />
+                          <span>السجل</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSendPasswordReset(st.email, e)}
+                          className="px-2.5 py-1 rounded-xl border border-amber-200 bg-amber-50 text-[11px] font-bold text-amber-800 hover:bg-amber-100 flex items-center gap-1 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+                        >
+                          <KeyRound className="h-3 w-3 text-amber-600" />
+                          <span>تعيين المرور</span>
+                        </button>
+                        {!isStudentOwner(st) && (
+                          st.isBanned ? (
+                            <button
+                              type="button"
+                              onClick={(e) => handleUnbanStudent(st, e)}
+                              className="px-2.5 py-1 rounded-xl bg-emerald-800 text-white text-[11px] font-bold hover:bg-emerald-900"
+                            >
+                              فك الحظر
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenBanModal(st, e)}
+                              className="px-2.5 py-1 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-[11px] font-bold hover:bg-rose-100"
+                            >
+                              حظر
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* في الشاشات الكبيرة: جدول متجاوب بنسب مرنة مع إخفاء الأعمدة الثانوية */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-right text-xs table-auto">
                 <thead className="border-b border-stone-200 bg-stone-50 text-stone-500 dark:border-stone-800 dark:bg-stone-800/70 dark:text-stone-400">
                   <tr>
-                    <th className="p-4 font-bold">المعرّف الأكاديمي (ID)</th>
-                    <th className="p-4 font-bold">الطالب والبريد (Gmail)</th>
-                    <th className="p-4 font-bold">الصلاحية والرتبة</th>
-                    <th className="p-4 font-bold">الدولة والمدينة</th>
-                    <th className="p-4 font-bold">عنوان الـ IP</th>
-                    <th className="p-4 font-bold">الجهاز والمتصفح</th>
-                    <th className="p-4 font-bold">الحالة الإدارية</th>
-                    <th className="p-4 font-bold">تاريخ الانضمام</th>
-                    <th className="p-4 font-bold">آخر تواجد ونشاط</th>
-                    <th className="p-4 font-bold">وقت المدارسة</th>
-                    <th className="p-4 font-bold">المتون المكتملة</th>
-                    <th className="p-4 font-bold">المجالس</th>
-                    <th className="p-4 font-bold text-center">الإجراءات وتفاصيل المدارسة</th>
+                    <th className="p-3.5 font-bold">المعرّف الأكاديمي (ID)</th>
+                    <th className="p-3.5 font-bold">الطالب والبريد (Gmail)</th>
+                    <th className="p-3.5 font-bold">الصلاحية والرتبة</th>
+                    <th className="p-3.5 font-bold hidden xl:table-cell">الدولة والمدينة</th>
+                    <th className="p-3.5 font-bold hidden 2xl:table-cell">عنوان الـ IP</th>
+                    <th className="p-3.5 font-bold hidden 2xl:table-cell">الجهاز والمتصفح</th>
+                    <th className="p-3.5 font-bold">الحالة الإدارية</th>
+                    <th className="p-3.5 font-bold hidden xl:table-cell">تاريخ الانضمام</th>
+                    <th className="p-3.5 font-bold">آخر تواجد ونشاط</th>
+                    <th className="p-3.5 font-bold">وقت المدارسة</th>
+                    <th className="p-3.5 font-bold hidden 2xl:table-cell">المتون</th>
+                    <th className="p-3.5 font-bold hidden 2xl:table-cell">المجالس</th>
+                    <th className="p-3.5 font-bold text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -3865,7 +3997,7 @@ export default function SanadControlGatePage() {
                           </td>
 
                         {/* 4. الدولة والمدينة مع العلم */}
-                        <td className="p-4 whitespace-nowrap">
+                        <td className="p-4 whitespace-nowrap hidden xl:table-cell">
                           <div className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200/80 bg-stone-50/90 px-2.5 py-1 text-xs dark:border-stone-800 dark:bg-stone-800/60 shadow-2xs">
                             <span className="font-extrabold text-stone-900 dark:text-stone-100">
                               {st.country || '🇪🇬 مصر'}
@@ -3877,7 +4009,7 @@ export default function SanadControlGatePage() {
                         </td>
 
                         {/* 5. عنوان الـ IP الحقيقي مع زر النسخ */}
-                        <td className="p-4 whitespace-nowrap">
+                        <td className="p-4 whitespace-nowrap hidden 2xl:table-cell">
                           <button
                             type="button"
                             onClick={(e) => handleCopyId(st.ip || '156.204.12.34', e)}
@@ -3895,7 +4027,7 @@ export default function SanadControlGatePage() {
                         </td>
 
                         {/* 6. نوع الجهاز والمتصفح */}
-                        <td className="p-4 whitespace-nowrap">
+                        <td className="p-4 whitespace-nowrap hidden 2xl:table-cell">
                           <div className="space-y-0.5">
                             <div className="font-bold text-stone-800 dark:text-stone-200 text-[11px] flex items-center gap-1">
                               <span>{st.device || 'كمبيوتر محمول (Windows)'}</span>
@@ -3929,7 +4061,7 @@ export default function SanadControlGatePage() {
                         </td>
 
                         {/* 8. تاريخ الانضمام */}
-                        <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap">
+                        <td className="p-4 text-stone-600 dark:text-stone-300 whitespace-nowrap hidden xl:table-cell">
                           {formatJoinDateAr(st.registeredAt || (st as any).createdAt)}
                         </td>
 
@@ -3967,7 +4099,7 @@ export default function SanadControlGatePage() {
                         </td>
 
                         {/* 11. المتون المكتملة */}
-                        <td className="p-4 whitespace-nowrap">
+                        <td className="p-4 whitespace-nowrap hidden 2xl:table-cell">
                           {st.completedCourses && st.completedCourses.length > 0 ? (
                             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                               <CheckCircle2 className="h-3 w-3" />
@@ -3979,7 +4111,7 @@ export default function SanadControlGatePage() {
                         </td>
 
                         {/* 12. المجالس المستمع إليها */}
-                        <td className="p-4 font-bold text-stone-700 dark:text-stone-300 whitespace-nowrap">
+                        <td className="p-4 font-bold text-stone-700 dark:text-stone-300 whitespace-nowrap hidden 2xl:table-cell">
                           {st.listenedSessions ? `${st.listenedSessions.length} مجلس` : '0 مجلس'}
                         </td>
 

@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  runTransaction,
 } from 'firebase/firestore'
 import type { StudentActivityRecord, PlatformEvent } from '@/lib/student-tracking'
 import type { CommunityPost, CommunityReply } from '@/components/community-hub'
@@ -104,6 +105,11 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
         username: student.username || null,
         educationLevel: student.educationLevel || null,
         phone: student.phone || null,
+        academic_id: student.scholarlyId || null,
+        scholarlyId: student.scholarlyId || null,
+        streak_count: student.streak_count ?? student.streak ?? 1,
+        last_streak_cycle: student.last_streak_cycle ?? null,
+        last_active_at: student.last_active_at || student.lastActive || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
 
@@ -129,6 +135,10 @@ export async function saveStudentToCloud(student: StudentActivityRecord): Promis
               role: student.role || 'student',
               roleUpdatedAt: student.roleUpdatedAt || new Date().toISOString(),
               scholarlyId: student.scholarlyId || null,
+              academic_id: student.scholarlyId || null,
+              streak_count: student.streak_count ?? student.streak ?? 1,
+              last_streak_cycle: student.last_streak_cycle ?? null,
+              last_active_at: student.last_active_at || student.lastActive || new Date().toISOString(),
               ip: student.ip || null,
               country: student.country || null,
               city: student.city || null,
@@ -208,10 +218,25 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
 
       if (snapshotRes.status === 'fulfilled') {
         snapshotRes.value.forEach((d) => {
-          const data = d.data() as StudentActivityRecord
-          if (data && data.email) {
-            const cleanEm = data.email.toLowerCase().trim()
+          const raw = d.data() as Record<string, unknown>
+          if (raw && raw.email && typeof raw.email === 'string') {
+            const cleanEm = raw.email.toLowerCase().trim()
             if (!deletedEmailsSet.has(cleanEm)) {
+              const data = raw as unknown as StudentActivityRecord
+              // ضمان قراءة academic_id وحقول الحماسة
+              if (!data.scholarlyId && typeof raw.academic_id === 'string') {
+                data.scholarlyId = raw.academic_id
+              }
+              if (typeof raw.streak_count === 'number') {
+                data.streak_count = raw.streak_count
+                data.streak = raw.streak_count
+              }
+              if (typeof raw.last_streak_cycle === 'number') {
+                data.last_streak_cycle = raw.last_streak_cycle
+              }
+              if (typeof raw.last_active_at === 'string') {
+                data.last_active_at = raw.last_active_at
+              }
               studentsMap.set(cleanEm, data)
             }
           }
@@ -829,6 +854,34 @@ export async function getPlatformEventsFromCloud(maxLimit = 40): Promise<Platfor
     1500
   )
 }
+
+/**
+ * 19. العداد الذري (Atomic Counter) لتوليد المعرف الأكاديمي المتسلسل (SND-XXXX)
+ * يضمن منع أي تضارب تزامن (Race Condition) عند تسجيل طالب جديد في نفس اللحظة
+ */
+export async function getNextAtomicScholarlyId(): Promise<string> {
+  const counterRef = doc(db, 'counters', 'students')
+  try {
+    const nextNum = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(counterRef)
+      let currentVal = 1089
+      if (snap.exists()) {
+        const data = snap.data()
+        if (typeof data.last_id === 'number') {
+          currentVal = data.last_id
+        }
+      }
+      const newVal = currentVal + 1
+      transaction.set(counterRef, { last_id: newVal, updatedAt: new Date().toISOString() }, { merge: true })
+      return newVal
+    })
+    return `SND-${nextNum}`
+  } catch (err) {
+    console.warn('Atomic counter transaction warning, falling back to local counter:', err)
+    return ''
+  }
+}
+
 
 
 

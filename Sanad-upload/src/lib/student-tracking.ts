@@ -80,6 +80,9 @@ export interface StudentActivityRecord {
   lastActive: string
   totalStudyMinutes: number
   streak: number
+  streak_count?: number // عدد أيام الحماسة (محرك الحماسة الذكي)
+  last_streak_cycle?: number // رقم آخر دورة نشطة بمحرك الحماسة (3:00 فجراً بتوقيت مصر)
+  last_active_at?: string // تاريخ وتوقيت آخر تفاعل
   lastStudiedDate?: string // YYYY-MM-DD
   completedCourses: string[]
   completedEpisodesMap?: Record<string, number[]> // courseSlug -> array of completed episode numbers
@@ -1732,6 +1735,7 @@ export function registerOrUpdateStudent(
     device?: string
     browser?: string
     userAgent?: string
+    scholarlyId?: string
   }
 ): StudentActivityRecord {
   ensureDataFiles()
@@ -1783,7 +1787,7 @@ export function registerOrUpdateStudent(
       students[existingIdx].userAgent = meta.userAgent
     }
     if (!students[existingIdx].scholarlyId) {
-      students[existingIdx].scholarlyId = generateScholarlyId(students)
+      students[existingIdx].scholarlyId = meta?.scholarlyId || generateScholarlyId(students)
     }
     if (students[existingIdx].isBanned === undefined) {
       students[existingIdx].isBanned = false
@@ -1794,7 +1798,8 @@ export function registerOrUpdateStudent(
     const isFreshLoginSession = Date.now() - prevLastActiveMs > 3 * 60 * 1000
 
     students[existingIdx].lastActive = now
-    students[existingIdx].streak = students[existingIdx].streak || 0
+    // تحديث محرك الحماسة (Streak System Engine)
+    applyStreakEngine(students[existingIdx], Date.now())
     students[existingIdx].completedEpisodesMap = students[existingIdx].completedEpisodesMap || {}
     students[existingIdx].dailyStudyLog = students[existingIdx].dailyStudyLog || {}
     if (!students[existingIdx].lastAction) {
@@ -1820,7 +1825,7 @@ export function registerOrUpdateStudent(
 
     return students[existingIdx]
   } else {
-    const scholarlyId = generateScholarlyId(students)
+    const scholarlyId = meta?.scholarlyId || generateScholarlyId(students)
     const newStudent: StudentActivityRecord = {
       id: meta?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       scholarlyId,
@@ -1841,7 +1846,10 @@ export function registerOrUpdateStudent(
       currentPage: 'فهرس المتون والمقررات',
       lastAction: 'انضم وسجّل حساباً جديداً في المنصة',
       totalStudyMinutes: 0,
-      streak: 0,
+      streak: 1,
+      streak_count: 1,
+      last_streak_cycle: calculateAcademicCycleId(Date.now()),
+      last_active_at: now,
       completedCourses: [],
       completedEpisodesMap: {},
       dailyStudyLog: {},
@@ -1901,13 +1909,32 @@ export function registerOrUpdateStudent(
   }
 }
 
-// 2.1 تسجيل أو تحديث حساب طالب مسجل مع الانتظار الإلزامي للمزامنة السحابية (للحماية من تجميد حاويات السيرفرلس)
+// 2.1 تسجيل أو تحديث حساب طالب مسجل مع الانتظار الإلزامي للمزامنة السحابية والعداد الذري
 export async function registerOrUpdateStudentAsync(
   email: string,
   name?: string,
   meta?: Parameters<typeof registerOrUpdateStudent>[2]
 ): Promise<StudentActivityRecord> {
-  const student = registerOrUpdateStudent(email, name, meta)
+  const cleanEmail = email.toLowerCase().trim()
+  const currentStudents = readAllLocalStudents(false)
+  const isExisting = currentStudents.some((s) => s.email?.toLowerCase().trim() === cleanEmail && s.scholarlyId)
+
+  // إذا كان طالباً جديداً ولم يتم تحديد المعرف مسبقاً، نجلبه عبر العداد الذري من Firestore
+  let atomicId = meta?.scholarlyId
+  if (!isExisting && !atomicId) {
+    try {
+      const { getNextAtomicScholarlyId } = await import('@/lib/cloud-db')
+      const fetchedId = await getNextAtomicScholarlyId()
+      if (fetchedId) {
+        atomicId = fetchedId
+      }
+    } catch {}
+  }
+
+  const student = registerOrUpdateStudent(email, name, {
+    ...meta,
+    scholarlyId: atomicId || meta?.scholarlyId,
+  })
   try {
     const cloudPromise = saveStudentToCloud(student)
     const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(false), 2500))
@@ -1961,6 +1988,7 @@ export async function recordStudentPresenceHeartbeat(params: {
     device?: string
     browser?: string
     userAgent?: string
+    scholarlyId?: string
   }
 }): Promise<StudentActivityRecord | null> {
   try {
@@ -1985,6 +2013,7 @@ export async function recordStudentPresenceHeartbeat(params: {
     const wasOffline = Date.now() - prevActiveMs > 3 * 60 * 1000
 
     student.lastActive = nowIso
+    applyStreakEngine(student, Date.now())
     student.currentPage = resolvedPage
     student.lastAction =
       params.actionDescription?.trim() ||
@@ -2125,6 +2154,64 @@ export async function getStudentProfileDataAsync(email: string): Promise<Student
   return localProfile
 }
 
+/**
+ * دالة حساب رقم الدورة الزمنية الأكاديمية (Egypt Academic Cycle)
+ * اليوم يبدأ من الساعة 3:00 فجراً حتى 3:00 فجر اليوم التالي بتوقيت مصر
+ * CycleID = floor((Timestamp_Egypt - 3_hours) / 24_hours)
+ */
+export function calculateAcademicCycleId(dateOrTimestamp: Date | string | number = new Date()): number {
+  const ts = typeof dateOrTimestamp === 'number'
+    ? dateOrTimestamp
+    : new Date(dateOrTimestamp).getTime()
+  // مصر بتوقيت UTC+2 (إزاحة +2 ساعات للوصول لتوقيت القاهرة)
+  const EGYPT_OFFSET_MS = 2 * 60 * 60 * 1000
+  const THREE_HOURS_MS = 3 * 60 * 60 * 1000
+  const DAY_MS = 24 * 60 * 60 * 1000
+  return Math.floor((ts + EGYPT_OFFSET_MS - THREE_HOURS_MS) / DAY_MS)
+}
+
+/**
+ * محرك الحماسة (Streak System Engine) الذكي
+ * يطبق قواعد دورة اليوم الأكاديمي وفترة السماح (3 أيام)
+ */
+export function applyStreakEngine(student: StudentActivityRecord, nowTimestamp: number = Date.now()): void {
+  const currentCycle = calculateAcademicCycleId(nowTimestamp)
+  const lastActiveCycle = typeof student.last_streak_cycle === 'number' && student.last_streak_cycle > 0
+    ? student.last_streak_cycle
+    : student.lastActive
+    ? calculateAcademicCycleId(student.lastActive)
+    : 0
+
+  let currentStreak = typeof student.streak_count === 'number' && student.streak_count > 0
+    ? student.streak_count
+    : (student.streak || 0)
+
+  if (lastActiveCycle === 0) {
+    // نشاط لأول مرة
+    currentStreak = 1
+  } else {
+    const cycleDiff = currentCycle - lastActiveCycle
+    if (cycleDiff === 0) {
+      // نفس الدورة (بين 3 فجراً و 3 فجر اليوم التالي) -> لا زيادة وتظل ثابتة (Idempotent)
+      currentStreak = Math.max(currentStreak, 1)
+    } else if (cycleDiff === 1) {
+      // الدورة التالية مباشرة -> زيادة الحماسة بمقدار +1
+      currentStreak = currentStreak + 1
+    } else if (cycleDiff <= 3) {
+      // فترة السماح (Grace Period حتى 3 دورات كاملة) -> تظل الحماسة محفوظة ومجمدة
+      currentStreak = Math.max(currentStreak, 1)
+    } else {
+      // تجاوز غياب الطالب أكثر من 3 دورات كاملة -> تسقط الحماسة وتعود لـ 1 مع عودته
+      currentStreak = 1
+    }
+  }
+
+  student.streak = currentStreak
+  student.streak_count = currentStreak
+  student.last_streak_cycle = currentCycle
+  student.last_active_at = new Date(nowTimestamp).toISOString()
+}
+
 // 2.6 نبض المدارسة التلقائي اللحظي (يحسب الوقت الفعلي بالدقيقة ويزيد الـ Streak والمنحنى اليومي)
 export function recordStudentListeningHeartbeat(
   email: string,
@@ -2156,16 +2243,8 @@ export function recordStudentListeningHeartbeat(
   student.dailyStudyLog = student.dailyStudyLog || {}
   student.dailyStudyLog[todayStr] = (student.dailyStudyLog[todayStr] || 0) + addedMinutes
 
-  // حساب سلسلة الهمة (Streak) الحقيقية بدقة
-  if (!student.lastStudiedDate) {
-    student.streak = 1
-  } else if (student.lastStudiedDate === todayStr) {
-    student.streak = Math.max(student.streak || 1, 1)
-  } else if (student.lastStudiedDate === yesterdayStr) {
-    student.streak = (student.streak || 0) + 1
-  } else {
-    student.streak = 1
-  }
+  // حساب سلسلة الهمة (Streak) عبر محرك الحماسة الذكي (Streak System Engine)
+  applyStreakEngine(student, now.getTime())
   student.lastStudiedDate = todayStr
 
   // حفظ السجل في كافة المخازن المحلية والسحابية
