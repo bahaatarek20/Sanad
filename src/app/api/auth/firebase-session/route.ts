@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
       studentId: student?.id || verifiedGoogleUser.localId,
       scholarlyId: student?.scholarlyId || 'SND-STU',
       role: effectiveRole,
-      redirectUrl: effectiveRole === 'owner' || effectiveRole === 'admin' ? '/admin' : '/courses',
+      redirectUrl: effectiveRole === 'owner' || effectiveRole === 'admin' ? '/admin' : '/roadmap',
     })
 
     // ضمان إرفاق الكوكيز مباشرة على كائن NextResponse أيضاً لجميع البيئات والمتصفحات
