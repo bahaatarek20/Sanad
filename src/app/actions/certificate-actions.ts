@@ -11,12 +11,15 @@ import { getCurrentStudentUser } from '@/lib/auth-helper'
 import {
   getStudentProfileData,
   recordStudentCourseCompleted,
+  updateStudentExtendedProfile,
 } from '@/lib/student-tracking'
+import { getActiveCourseBySlug } from '@/lib/courses-store'
 import { sendSanadMessage } from '@/lib/messages-service'
 
 /**
  * إصدار إجازة قراءة وضبط للمتن باسم المنصة وتوثيقها برمز تجزئة ورقم تسلسلي
  * مع ربط تلقائي كامل بصفحة الكشكول وخارطة الطريق وصندوق رسائل الطالب
+ * مشترطاً إكمال كافة مجالس المتن بنسبة 100%، مع إتاحة تخصيص وتعديل اسم الطالب
  */
 export async function issueCourseCertificateAction(
   courseSlug: string,
@@ -28,26 +31,55 @@ export async function issueCourseCertificateAction(
       return { success: false, error: 'بيانات المتن مطلوبة لإصدار الإجازة' }
     }
 
-    // 1. استخراج بيانات الطالب المسجل فعلياً على الخادم لضمان صدور الإجازة باسمه الحقيقي
+    // 1. استخراج حساب الطالب
     let resolvedEmail = studentEmail?.toLowerCase().trim()
-    let resolvedName = studentName?.trim() || 'طالب العلم'
+    let resolvedName = studentName?.trim() || ''
 
     try {
       const user = await getCurrentStudentUser()
       if (user?.email) {
         resolvedEmail = user.email.toLowerCase().trim()
         const profile = getStudentProfileData(resolvedEmail)
-        if (profile?.name && profile.name.trim() && profile.name.trim() !== 'طالب العلم') {
-          resolvedName = profile.name.trim()
-        } else if (
-          user.user_metadata?.full_name &&
-          user.user_metadata.full_name.trim() &&
-          user.user_metadata.full_name.trim() !== 'طالب العلم'
-        ) {
-          resolvedName = user.user_metadata.full_name.trim()
+        if (!resolvedName) {
+          if (profile?.name && profile.name.trim() && profile.name.trim() !== 'طالب العلم') {
+            resolvedName = profile.name.trim()
+          } else if (
+            user.user_metadata?.full_name &&
+            user.user_metadata.full_name.trim() &&
+            user.user_metadata.full_name.trim() !== 'طالب العلم'
+          ) {
+            resolvedName = user.user_metadata.full_name.trim()
+          }
         }
       }
     } catch {}
+
+    if (!resolvedName) {
+      resolvedName = 'طالب العلم'
+    }
+
+    // 2. التحقق الصارم: هل أتم الطالب كافة مجالس هذا المتن بنسبة 100%؟
+    if (resolvedEmail) {
+      const profile = getStudentProfileData(resolvedEmail)
+      const course = getActiveCourseBySlug(courseSlug)
+      const totalLessons = course?.episodes?.length || course?.videoList?.length || course?.totalLessons || 1
+      const completedEpisodes = profile?.completedEpisodesMap?.[courseSlug]?.length || 0
+      const isMarkedCompleted = profile?.completedCourses?.includes(courseSlug)
+
+      if (!isMarkedCompleted && completedEpisodes < totalLessons) {
+        return {
+          success: false,
+          error: `يتعذر إصدار أو طباعة شهادة الإجازة: يجب إكمال كافة مجالس المتن بنسبة 100% أولاً (تم إنجاز ${completedEpisodes} من أصل ${totalLessons} مجالس).`,
+        }
+      }
+
+      // تحديث وحفظ الاسم المخصص في ملف الطالب ليستمر معه في الشهادة والمنصة
+      if (resolvedName && resolvedName !== 'طالب العلم') {
+        try {
+          updateStudentExtendedProfile(resolvedEmail, { name: resolvedName })
+        } catch {}
+      }
+    }
 
     const cert = issueCourseCertificate({
       courseSlug,

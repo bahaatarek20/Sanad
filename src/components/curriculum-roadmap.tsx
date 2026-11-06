@@ -502,7 +502,7 @@ export default function CurriculumRoadmap({
                     <Link
                       key={course.slug}
                       href={`/courses/${course.slug}`}
-                      className={`group relative flex flex-col justify-between rounded-3xl border p-5 transition-all duration-300 hover:shadow-md hover:scale-[1.01] ${
+                      className={`card-scholarly-3d group relative flex flex-col justify-between rounded-3xl border p-5 transition-all duration-300 ${
                         isDone
                           ? 'border-emerald-500/50 bg-emerald-50/40 dark:border-emerald-800/80 dark:bg-emerald-950/20'
                           : 'border-stone-200/90 bg-white hover:border-emerald-700/60 dark:border-stone-800 dark:bg-stone-900/90 dark:hover:border-emerald-600/60'

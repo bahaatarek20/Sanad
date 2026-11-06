@@ -6,7 +6,7 @@ const OFFLINE_URL = '/offline'
 const PRECACHE_ASSETS = [
   '/',
   '/offline',
-  '/courses',
+  '/roadmap',
   '/favicon.ico',
   '/icon.svg',
   '/manifest.json',
@@ -119,3 +119,64 @@ self.addEventListener('fetch', (event) => {
     })
   )
 })
+
+// استلام ومعالجة إشعارات الهواتف المحمولة والنظام المباشرة (Mobile Web Push)
+self.addEventListener('push', (event) => {
+  let data = { title: 'منصة سَنَد التأصيلية', body: 'تنبيه إداري جديد لطلاب العلم', url: '/' }
+  if (event.data) {
+    try {
+      data = { ...data, ...event.data.json() }
+    } catch {
+      data.body = event.data.text()
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [200, 100, 200, 100, 200],
+    dir: 'rtl',
+    lang: 'ar',
+    tag: data.tag || 'sanad-broadcast',
+    renotify: true,
+    data: { url: data.url || '/' },
+  }
+
+  event.waitUntil(self.registration.showNotification(data.title, options))
+})
+
+// التفاعل عند نقر الطالب على إشعار الهاتف المنسدل
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const targetUrl = event.notification.data?.url || '/'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
+      }
+    })
+  )
+})
+
+// استلام رسائل العميل الداخلي لإطلاق إشعار نظامي ينزل من شريط الهاتف
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NATIVE_NOTIFICATION') {
+    const { title, options } = event.data
+    self.registration.showNotification(title || 'منصة سَنَد التأصيلية', {
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      vibrate: [200, 100, 200],
+      dir: 'rtl',
+      lang: 'ar',
+      ...options,
+    })
+  }
+})
+

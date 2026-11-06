@@ -167,21 +167,13 @@ export interface PlatformStats {
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const REGISTRY_FILE = path.join(DATA_DIR, 'sanad_students_registry.json')
-const UPLOAD_REGISTRY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_students_registry.json')
 const STATS_FILE = path.join(DATA_DIR, 'sanad_platform_stats.json')
-const UPLOAD_STATS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_stats.json')
 const EVENTS_FILE = path.join(DATA_DIR, 'sanad_platform_events.json')
-const UPLOAD_EVENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_platform_events.json')
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'sanad_audit_log.json')
-const UPLOAD_AUDIT_LOG_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_audit_log.json')
 const MESSAGES_FILE = path.join(DATA_DIR, 'sanad_messages_registry.json')
-const UPLOAD_MESSAGES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_messages_registry.json')
 const CERTIFICATES_FILE = path.join(DATA_DIR, 'sanad_certificates.json')
-const UPLOAD_CERTIFICATES_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_certificates.json')
 const COMMUNITY_FILE = path.join(DATA_DIR, 'sanad_community_posts.json')
-const UPLOAD_COMMUNITY_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_community_posts.json')
 const DELETED_STUDENTS_FILE = path.join(DATA_DIR, 'sanad_deleted_students.json')
-const UPLOAD_DELETED_STUDENTS_FILE = path.join(process.cwd(), 'Sanad-upload', 'data', 'sanad_deleted_students.json')
 
 export const SUPER_ADMIN_EMAIL = 'bhaaljml480@gmail.com'
 
@@ -235,7 +227,7 @@ declare global {
 
 export function getDeletedStudentEmails(): Set<string> {
   const deleted = new Set<string>(globalThis.__sanad_deleted_emails__ || [])
-  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE, UPLOAD_DELETED_STUDENTS_FILE]) {
+  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE]) {
     try {
       if (fs.existsSync(file)) {
         const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -271,7 +263,7 @@ function recordDeletedStudentEmail(email: string, id?: string, scholarlyId?: str
   globalThis.__sanad_deleted_emails__ = deleted
 
   const payload = JSON.stringify(Array.from(deleted), null, 2)
-  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE, UPLOAD_DELETED_STUDENTS_FILE]) {
+  for (const file of [TMP_DELETED_STUDENTS_FILE, DELETED_STUDENTS_FILE]) {
     try {
       const dir = path.dirname(file)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -561,7 +553,6 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   }
 
   tryLoad(REGISTRY_FILE)
-  tryLoad(UPLOAD_REGISTRY_FILE)
   tryLoad(TMP_REGISTRY_FILE)
 
   // 2. فحص سجل الرسائل الموثقة لاستعادة أي حسابات سجلت أو تلقت إشعارات مسبقاً
@@ -631,7 +622,6 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   }
 
   tryLoadFromMessages(MESSAGES_FILE)
-  tryLoadFromMessages(UPLOAD_MESSAGES_FILE)
 
   // 3. فحص سجل أحداث المنصة لاستعادة أي حسابات قديمة سجلت قبل هذه الميزة
   const tryLoadFromEvents = (evtFilePath: string) => {
@@ -673,7 +663,6 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
   }
 
   tryLoadFromEvents(EVENTS_FILE)
-  tryLoadFromEvents(UPLOAD_EVENTS_FILE)
   tryLoadFromEvents(TMP_EVENTS_FILE)
 
   // 4. دمج الطلاب من الكاش السحابي الحقيقي إن وجد (Firestore Cloud Sync)
@@ -723,7 +712,7 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
     }
   }
 
-  let nextIdCounter = 1001
+  let nextIdCounter = 1
   const roleLocks = globalThis.__sanad_role_locks__ || {}
   for (const s of map.values()) {
     if (!s.scholarlyId) {
@@ -767,13 +756,7 @@ export function saveAllLocalStudents(students: StudentActivityRecord[]) {
     fs.writeFileSync(REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
   } catch {}
 
-  try {
-    const uploadDir = path.dirname(UPLOAD_REGISTRY_FILE)
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-    fs.writeFileSync(UPLOAD_REGISTRY_FILE, JSON.stringify(students, null, 2), 'utf8')
-  } catch {}
+
 }
 
 export function recordAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): AuditLogEntry {
@@ -805,13 +788,7 @@ export function recordAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): 
     try {
       fs.writeFileSync(TMP_AUDIT_LOG_FILE, JSON.stringify(logs, null, 2), 'utf8')
     } catch {}
-    try {
-      const uploadDir = path.dirname(UPLOAD_AUDIT_LOG_FILE)
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true })
-      }
-      fs.writeFileSync(UPLOAD_AUDIT_LOG_FILE, JSON.stringify(logs, null, 2), 'utf8')
-    } catch {}
+
   } catch (err) {
     console.error('Error recording audit log:', err)
   }
@@ -854,7 +831,7 @@ function readPlatformEventsLocal(): PlatformEvent[] {
   }
 
   addList(globalThis.__sanad_events_cache__)
-  for (const file of [TMP_EVENTS_FILE, EVENTS_FILE, UPLOAD_EVENTS_FILE]) {
+  for (const file of [TMP_EVENTS_FILE, EVENTS_FILE]) {
     try {
       if (fs.existsSync(file)) {
         addList(JSON.parse(fs.readFileSync(file, 'utf8')))
@@ -894,11 +871,7 @@ export function logPlatformEvent(event: Omit<PlatformEvent, 'id' | 'timestamp'>)
     try {
       fs.writeFileSync(EVENTS_FILE, payload, 'utf8')
     } catch {}
-    try {
-      const uploadDir = path.dirname(UPLOAD_EVENTS_FILE)
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
-      fs.writeFileSync(UPLOAD_EVENTS_FILE, payload, 'utf8')
-    } catch {}
+
 
     import('@/lib/cloud-db')
       .then(({ savePlatformEventToCloud }) => {
@@ -943,16 +916,10 @@ function readPlatformStatsLocal(): PlatformStats {
     }
   } catch {}
 
-  try {
-    if (fs.existsSync(UPLOAD_STATS_FILE)) {
-      uploadStats = JSON.parse(fs.readFileSync(UPLOAD_STATS_FILE, 'utf8'))
-    }
-  } catch {}
-
   const memStats = globalThis.__sanad_stats_cache__ || null
   const cloudSync = globalThis.__sanad_cloud_sync_cache__ || null
 
-  const candidates = [memStats, tmpStats, fileStats, uploadStats].filter(Boolean) as Partial<PlatformStats>[]
+  const candidates = [memStats, tmpStats, fileStats].filter(Boolean) as Partial<PlatformStats>[]
 
   // محرك التراكم التصاعدي الصارم (Monotonic Engine): لا يمكن لأي عداد أن ينقص أو يتراجع نهائياً
   const maxVisitors = Math.max(
@@ -1055,13 +1022,7 @@ function savePlatformStatsLocal(stats: PlatformStats) {
   try {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
   } catch {}
-  try {
-    const uploadDir = path.dirname(UPLOAD_STATS_FILE)
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-    fs.writeFileSync(UPLOAD_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
-  } catch {}
+
 }
 
 // 1. تسجيل زيارة جديدة للمنصة (مع التمييز بين الزائر المسجل والزائر بدون تسجيل واستبعاد صاحب المنصة)
@@ -1173,9 +1134,9 @@ export function resetVisitorCount(targetCount: number = 0): number {
   }
 }
 
-// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم (مثال: SND-1001)
+// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم (مثال: SND-1)
 export function generateScholarlyId(existingStudents: StudentActivityRecord[]): string {
-  let maxNum = 1000
+  let maxNum = 0
   for (const s of existingStudents) {
     if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
       const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
@@ -1599,8 +1560,8 @@ export async function permanentlyDeleteStudent(
     invalidateStudentProfileCache(targetEmail || clean)
     saveAllLocalStudents(remainingStudents)
 
-    // 3. مسح جميع أحداث العضو من سجل الأحداث (EVENTS_FILE, UPLOAD_EVENTS_FILE, TMP_EVENTS_FILE)
-    for (const evtFile of [EVENTS_FILE, UPLOAD_EVENTS_FILE, TMP_EVENTS_FILE]) {
+    // 3. مسح جميع أحداث العضو من سجل الأحداث (EVENTS_FILE, TMP_EVENTS_FILE)
+    for (const evtFile of [EVENTS_FILE, TMP_EVENTS_FILE]) {
       try {
         if (fs.existsSync(evtFile)) {
           const parsed = JSON.parse(fs.readFileSync(evtFile, 'utf8'))
@@ -1615,9 +1576,9 @@ export async function permanentlyDeleteStudent(
       } catch {}
     }
 
-    // 4. مسح جميع رسائل العضو من سجل الرسائل (MESSAGES_FILE, UPLOAD_MESSAGES_FILE)
+    // 4. مسح جميع رسائل العضو من سجل الرسائل (MESSAGES_FILE, tmpMessagesFile)
     const tmpMessagesFile = path.join(TMP_DATA_DIR, 'sanad_messages_registry.json')
-    for (const msgFile of [MESSAGES_FILE, UPLOAD_MESSAGES_FILE, tmpMessagesFile]) {
+    for (const msgFile of [MESSAGES_FILE, tmpMessagesFile]) {
       try {
         if (fs.existsSync(msgFile)) {
           const parsed = JSON.parse(fs.readFileSync(msgFile, 'utf8'))
@@ -1635,9 +1596,9 @@ export async function permanentlyDeleteStudent(
       } catch {}
     }
 
-    // 5. مسح أي إجازات علمية مرتبطة بالعضو المحذوف (CERTIFICATES_FILE, UPLOAD_CERTIFICATES_FILE)
+    // 5. مسح أي إجازات علمية مرتبطة بالعضو المحذوف (CERTIFICATES_FILE, tmpCertsFile)
     const tmpCertsFile = path.join(TMP_DATA_DIR, 'sanad_certificates.json')
-    for (const certFile of [CERTIFICATES_FILE, UPLOAD_CERTIFICATES_FILE, tmpCertsFile]) {
+    for (const certFile of [CERTIFICATES_FILE, tmpCertsFile]) {
       try {
         if (fs.existsSync(certFile)) {
           const parsed = JSON.parse(fs.readFileSync(certFile, 'utf8'))
@@ -2192,16 +2153,16 @@ export function applyStreakEngine(student: StudentActivityRecord, nowTimestamp: 
   } else {
     const cycleDiff = currentCycle - lastActiveCycle
     if (cycleDiff === 0) {
-      // نفس الدورة (بين 3 فجراً و 3 فجر اليوم التالي) -> لا زيادة وتظل ثابتة (Idempotent)
+      // نفس اليوم / نفس الدورة -> الحماسة ثابتة ومؤكدة
       currentStreak = Math.max(currentStreak, 1)
     } else if (cycleDiff === 1) {
       // الدورة التالية مباشرة -> زيادة الحماسة بمقدار +1
-      currentStreak = currentStreak + 1
+      currentStreak = (currentStreak > 0 ? currentStreak : 1) + 1
     } else if (cycleDiff <= 3) {
-      // فترة السماح (Grace Period حتى 3 دورات كاملة) -> تظل الحماسة محفوظة ومجمدة
-      currentStreak = Math.max(currentStreak, 1)
+      // فترة السماح (Grace Period حتى 3 أيام) -> استمرار الحماسة وزيادتها لعودة الطالب
+      currentStreak = (currentStreak > 0 ? currentStreak : 1) + 1
     } else {
-      // تجاوز غياب الطالب أكثر من 3 دورات كاملة -> تسقط الحماسة وتعود لـ 1 مع عودته
+      // تجاوز غياب الطالب فترة السماح -> تبدأ الحماسة من جديد بيوم 1
       currentStreak = 1
     }
   }
@@ -2210,6 +2171,72 @@ export function applyStreakEngine(student: StudentActivityRecord, nowTimestamp: 
   student.streak_count = currentStreak
   student.last_streak_cycle = currentCycle
   student.last_active_at = new Date(nowTimestamp).toISOString()
+}
+
+// 2.7 نبض مدة البقاء في طلب العلم العام عبر المنصة (يحسب الوقت الفعلي أثناء التصفح والمدارسة)
+export function recordActiveStudyPresence(
+  email: string,
+  addedMinutes = 1
+): { totalMinutes: number; todayMinutes: number; streak: number } | null {
+  ensureDataFiles()
+  const cleanEmail = email.toLowerCase().trim()
+  if (!cleanEmail || isStudentDeleted(cleanEmail)) return null
+
+  let students = readAllLocalStudents(false)
+  let student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  if (!student) {
+    student = registerOrUpdateStudent(cleanEmail)
+    students = readAllLocalStudents(false)
+    student = students.find((s) => s.email?.toLowerCase().trim() === cleanEmail) || student
+  }
+  if (!student) return null
+
+  const now = new Date()
+  const todayStr = now.toISOString().split('T')[0]
+
+  student.lastActive = now.toISOString()
+  student.totalStudyMinutes = (student.totalStudyMinutes || 0) + addedMinutes
+
+  student.dailyStudyLog = student.dailyStudyLog || {}
+  student.dailyStudyLog[todayStr] = (student.dailyStudyLog[todayStr] || 0) + addedMinutes
+
+  applyStreakEngine(student, now.getTime())
+  student.lastStudiedDate = todayStr
+
+  saveAllLocalStudents(students)
+  saveStudentToCloud(student).catch(() => {})
+
+  // تحديث إحصائيات المنصة العامة
+  try {
+    const rawStats = fs.existsSync(TMP_STATS_FILE)
+      ? fs.readFileSync(TMP_STATS_FILE, 'utf8')
+      : fs.existsSync(STATS_FILE)
+      ? fs.readFileSync(STATS_FILE, 'utf8')
+      : '{}'
+    const stats: PlatformStats = {
+      totalVisitors: 0,
+      totalRegisteredStudents: students.length,
+      totalStudyMinutes: 0,
+      totalNotesCount: 0,
+      totalCompletedCoursesCount: 0,
+      lastUpdated: now.toISOString(),
+      ...JSON.parse(rawStats),
+    }
+    stats.totalStudyMinutes = (stats.totalStudyMinutes || 0) + addedMinutes
+    stats.lastUpdated = now.toISOString()
+    try {
+      fs.writeFileSync(TMP_STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), 'utf8')
+    } catch {}
+  } catch {}
+
+  return {
+    totalMinutes: student.totalStudyMinutes,
+    todayMinutes: student.dailyStudyLog[todayStr] || 0,
+    streak: student.streak || 1,
+  }
 }
 
 // 2.6 نبض المدارسة التلقائي اللحظي (يحسب الوقت الفعلي بالدقيقة ويزيد الـ Streak والمنحنى اليومي)
@@ -2688,7 +2715,7 @@ export function getAdminDashboardData(forceRefresh: boolean = false): {
   }
 
   // التأكد من معرف فريد وبيانات التتبع لكل طالب
-  let currentMax = 1000
+  let currentMax = 0
   for (const s of students) {
     if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
       const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
@@ -3598,7 +3625,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
   const defaultLeader: LeaderboardStudentEntry = rankedEntries[0] || {
     rank: 1,
     id: 'first_student',
-    scholarlyId: 'SND-1001',
+    scholarlyId: 'SND-1',
     name: 'طالب العلم',
     maskedEmail: 'student@sanad.edu',
     totalStudyMinutes: 0,

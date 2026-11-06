@@ -34,13 +34,16 @@ export default function FooterVisibilityGuard({
     return () => window.removeEventListener('storage', checkLogin)
   }, [pathname, initialIsLoggedIn])
 
-  // إخفاء الفوتر نهائياً في صفحة التسجيل والدخول أو في حال لم يتم تسجيل الدخول للمنصة بعد
+  // إخفاء الفوتر في الصفحات التي لا يناسبها وجوده (صفحات الدخول، قاعة الدرس والمدارسة، وبوابات الإدارة)
   const isAuthPage =
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/register') ||
     pathname?.startsWith('/signup')
 
-  if (isAuthPage || !clientLoggedIn) {
+  const isClassroomPage = pathname?.includes('/lessons/')
+  const isAdminPage = pathname?.startsWith('/sanad-control-gate') || pathname?.startsWith('/admin')
+
+  if (isAuthPage || isClassroomPage || isAdminPage || !clientLoggedIn) {
     return null
   }
 

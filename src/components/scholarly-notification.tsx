@@ -225,9 +225,66 @@ function playNotificationChime() {
   }
 }
 
+// إطلاق إشعار أصلي ينزل من أعلى شاشة الهاتف المحمول أو شريط مهام النظام
+function fireNativeMobileNotification(title: string, body: string, tag: string) {
+  try {
+    if (typeof window === 'undefined') return
+    if (!('Notification' in window)) return
+
+    if (Notification.permission === 'granted') {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NATIVE_NOTIFICATION',
+          title,
+          options: {
+            body,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            vibrate: [200, 100, 200, 100, 200],
+            tag,
+            renotify: true,
+            data: { url: '/' },
+          },
+        })
+      } else {
+        new Notification(title, {
+          body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag,
+        })
+      }
+    }
+  } catch {}
+}
+
 export default function ScholarlyNotification() {
   const [currentNotification, setCurrentNotification] = useState<ScholarlyQuote | null>(null)
   const [isVisible, setIsVisible] = useState(false)
+  const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setHasNotificationPermission(Notification.permission === 'granted')
+    }
+  }, [])
+
+  const requestNativeNotificationAccess = async () => {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const perm = await Notification.requestPermission()
+        if (perm === 'granted') {
+          setHasNotificationPermission(true)
+          playNotificationChime()
+          fireNativeMobileNotification(
+            'منصة سَنَد التأصيلية 🕌',
+            'تم تفعيل إشعارات الهاتف بنجاح! ستصلك تنبيهات المدارسة والإعلانات هنا.',
+            'welcome-permission'
+          )
+        }
+      }
+    } catch {}
+  }
 
   useEffect(() => {
     let isCancelled = false
@@ -238,7 +295,6 @@ export default function ScholarlyNotification() {
       const broadcastsEnabled = typeof window === 'undefined' || localStorage.getItem('sanad_notify_broadcasts_enabled') !== 'false'
       try {
         if (!broadcastsEnabled) {
-          // المشرف أو الطالب عطل الإعلانات الإدارية من الإعدادات
           return
         }
 
@@ -249,14 +305,23 @@ export default function ScholarlyNotification() {
             const broadcastId = data.notice.timestamp || data.notice.message
             const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
             if (lastSeen !== broadcastId) {
+              const speaker = data.notice.sender || 'إدارة منصة سَنَد'
+              const quote = data.notice.message
+              const encouragement = data.notice.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.'
+
               setCurrentNotification({
                 type: 'broadcast',
-                speaker: data.notice.sender || 'إدارة منصة سَنَد',
-                quote: data.notice.message,
-                encouragement: data.notice.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
+                speaker,
+                quote,
+                encouragement,
               })
               setIsVisible(true)
               playNotificationChime()
+              fireNativeMobileNotification(
+                `📢 ${speaker}`,
+                quote,
+                `broadcast-${broadcastId}`
+              )
               localStorage.setItem('sanad_last_broadcast_seen', broadcastId)
               return
             }
@@ -272,14 +337,23 @@ export default function ScholarlyNotification() {
               const broadcastId = b.timestamp || b.message
               const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
               if (lastSeen !== broadcastId) {
+                const speaker = b.sender || 'إدارة منصة سَنَد'
+                const quote = b.message
+                const encouragement = b.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.'
+
                 setCurrentNotification({
                   type: 'broadcast',
-                  speaker: b.sender || 'إدارة منصة سَنَد',
-                  quote: b.message,
-                  encouragement: b.subtext || 'إعلان وتنبيه عام لجميع طلاب المنصة.',
+                  speaker,
+                  quote,
+                  encouragement,
                 })
                 setIsVisible(true)
                 playNotificationChime()
+                fireNativeMobileNotification(
+                  `📢 ${speaker}`,
+                  quote,
+                  `broadcast-${broadcastId}`
+                )
                 localStorage.setItem('sanad_last_broadcast_seen', broadcastId)
                 return
               }
@@ -383,6 +457,19 @@ export default function ScholarlyNotification() {
         <p className="text-[11px] font-medium text-emerald-900 dark:text-emerald-400">
           {currentNotification.encouragement}
         </p>
+
+        {hasNotificationPermission === false && (
+          <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex justify-end">
+            <button
+              type="button"
+              onClick={requestNativeNotificationAccess}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-100/70 px-2.5 py-1 text-[10px] font-bold text-emerald-900 hover:bg-emerald-200/80 dark:bg-emerald-950/70 dark:text-emerald-300 transition-colors cursor-pointer"
+            >
+              <Bell className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+              <span>تفعيل نزول الإشعارات من الهاتف مباشرة 🔔</span>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )

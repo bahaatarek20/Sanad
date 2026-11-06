@@ -24,16 +24,10 @@ export default function BottomNav({ isLoggedIn }: BottomNavProps) {
       isActive: pathname === '/',
     },
     {
-      href: '/courses',
-      label: 'المتون',
-      icon: Compass,
-      isActive: pathname.startsWith('/courses'),
-    },
-    {
       href: '/roadmap',
-      label: 'الخارطة',
-      icon: GitFork,
-      isActive: pathname.startsWith('/roadmap'),
+      label: 'خارطة الطريق',
+      icon: Compass,
+      isActive: pathname.startsWith('/roadmap') || pathname.startsWith('/courses'),
     },
     {
       href: '/community',

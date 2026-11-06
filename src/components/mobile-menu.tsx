@@ -122,16 +122,10 @@ export default function MobileMenu({
       icon: Home,
     },
     {
-      href: '/courses',
-      label: 'فهرس المتون',
-      sub: '78 متناً تأصيلياً',
-      icon: Compass,
-    },
-    {
       href: '/roadmap',
-      label: 'خارطة الطريق',
-      sub: 'المسار المنهجي المتدرج',
-      icon: GitFork,
+      label: 'خارطة الطريق التأصيلية',
+      sub: 'المسار المنهجي المتدرج في المتون',
+      icon: Compass,
     },
     {
       href: '/community',

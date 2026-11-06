@@ -20,6 +20,9 @@ import {
   Wifi,
   RefreshCw,
   Settings,
+  ShieldAlert,
+  CheckCircle2,
+  X,
 } from 'lucide-react'
 import { MatnCourse } from '@/lib/curriculum-data'
 
@@ -171,6 +174,41 @@ export default function CommunityHub({
   const [upvotedIds, setUpvotedIds] = useState<string[]>([])
   const [isPending, startTransition] = useTransition()
   const [syncStatus, setSyncStatus] = useState<'live' | 'reconnecting'>('live')
+
+  // نظام الإبلاغ عن المحتوى المخالف
+  const [reportingItem, setReportingItem] = useState<{
+    postId: string
+    replyId?: string
+    postAuthor?: string
+    content: string
+  } | null>(null)
+  const [reportReason, setReportReason] = useState('مخالف لضوابط المدارسة الشرعية والعقيدة')
+  const [reportSubmitted, setReportSubmitted] = useState(false)
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+
+  const handleSubmitReport = async () => {
+    if (!reportingItem) return
+    setReportSubmitting(true)
+    try {
+      const { reportCommunityContentAction } = await import('@/app/community/actions')
+      await reportCommunityContentAction({
+        postId: reportingItem.postId,
+        replyId: reportingItem.replyId,
+        postAuthor: reportingItem.postAuthor,
+        postContent: reportingItem.content,
+        reason: reportReason,
+      })
+      setReportSubmitted(true)
+      setTimeout(() => {
+        setReportSubmitted(false)
+        setReportingItem(null)
+      }, 2500)
+    } catch {
+      setReportingItem(null)
+    } finally {
+      setReportSubmitting(false)
+    }
+  }
 
   const syncCommunityFeed = useCallback(async () => {
     try {
@@ -722,6 +760,22 @@ export default function CommunityHub({
                         <span>مدارسة وتعقيب ({post.replies?.length || 0})</span>
                       </button>
                     </div>
+
+                    {/* زر إبلاغ المشرف عن المنشور */}
+                    <button
+                      onClick={() =>
+                        setReportingItem({
+                          postId: post.id,
+                          postAuthor: post.anonymous_alias,
+                          content: post.content,
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-bold text-stone-400 hover:text-rose-700 hover:bg-rose-50/80 transition cursor-pointer dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                      title="إبلاغ الإدارة عن محتوى مخالف"
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      <span>إبلاغ</span>
+                    </button>
                   </div>
 
                   {/* قسم الردود مع عرض الصورة الرمزية والاسم لكل مشارك في الرد */}
@@ -771,14 +825,30 @@ export default function CommunityHub({
                                   </span>
                                 </div>
                               </div>
-                              <span className="text-[10px] text-stone-400">
-                                {new Date(reply.created_at).toLocaleDateString('ar-SA', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-stone-400">
+                                  {new Date(reply.created_at).toLocaleDateString('ar-SA', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    setReportingItem({
+                                      postId: post.id,
+                                      replyId: reply.id,
+                                      postAuthor: reply.anonymous_alias,
+                                      content: reply.content,
+                                    })
+                                  }
+                                  className="text-stone-300 hover:text-rose-600 transition dark:text-stone-600 dark:hover:text-rose-400 cursor-pointer"
+                                  title="إبلاغ عن تعليق مخالف"
+                                >
+                                  <ShieldAlert className="h-3 w-3" />
+                                </button>
+                              </div>
                             </div>
                             <p className="text-stone-700 dark:text-stone-300 leading-relaxed pr-1">
                               {reply.content}
@@ -822,6 +892,89 @@ export default function CommunityHub({
           )}
         </div>
       </div>
+
+      {/* نافذة الإبلاغ عن المحتوى المخالف في مجلس المذاكرة */}
+      {reportingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl dark:border-stone-800 dark:bg-stone-900 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-stone-800">
+              <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                <ShieldAlert className="h-5 w-5" />
+                <h3 className="font-black text-sm text-stone-900 dark:text-white">
+                  إبلاغ المشرف العام عن محتوى مخالف
+                </h3>
+              </div>
+              <button
+                onClick={() => setReportingItem(null)}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {reportSubmitted ? (
+              <div className="py-6 text-center space-y-2">
+                <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto" />
+                <p className="font-bold text-sm text-stone-900 dark:text-white">
+                  تم استلام بلاغك بنجاح!
+                </p>
+                <p className="text-xs text-stone-500 leading-relaxed">
+                  سيقوم مشرف المنصة بمراجعة المنشور وحذف المخالفة فوراً إن وُجدت، جزاك الله خيراً على صيانة مجلس المدارسة.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-stone-600 dark:text-stone-400">
+                  يرجى تحديد سبب الإبلاغ لمساعدة الإدارة على اتخاذ الإجراء الشرعي السريع:
+                </p>
+
+                <div className="space-y-2 text-xs">
+                  {[
+                    'مخالف لضوابط المدارسة الشرعية والعقيدة',
+                    'ألفاظ غير لائقة أو تجريح وتطاول',
+                    'إعلان تجاري أو روابط غير موثوقة (سبام)',
+                    'محتوى مكرر أو لا صلة له بطلب العلم',
+                  ].map((reason) => (
+                    <label
+                      key={reason}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition ${
+                        reportReason === reason
+                          ? 'border-rose-400 bg-rose-50/60 text-rose-950 dark:bg-rose-950/40 dark:text-rose-200 font-bold'
+                          : 'border-stone-200 hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-800/50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="reportReason"
+                        checked={reportReason === reason}
+                        onChange={() => setReportReason(reason)}
+                        className="text-rose-600 focus:ring-rose-500"
+                      />
+                      <span>{reason}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                  <button
+                    onClick={() => setReportingItem(null)}
+                    className="rounded-xl px-4 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    onClick={handleSubmitReport}
+                    disabled={reportSubmitting}
+                    className="rounded-xl bg-rose-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-800 transition cursor-pointer disabled:opacity-50"
+                  >
+                    {reportSubmitting ? 'جاري الإرسال...' : 'إرسال البلاغ للإشراف'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

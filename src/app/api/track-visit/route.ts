@@ -3,6 +3,7 @@ import {
   recordVisitorHit,
   registerOrUpdateStudentAsync,
   recordStudentPresenceHeartbeat,
+  recordActiveStudyPresence,
   ADMIN_EMAILS,
 } from '@/lib/student-tracking'
 import { verifySessionToken } from '@/lib/auth-helper'
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     let pagePath = '/'
     let pageTitle: string | undefined
     let eventType: 'visit' | 'navigation' | 'heartbeat' = 'visit'
+    let trackStudyMinute = false
 
     try {
       const body = await request.json()
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
         (body.eventType === 'visit' || body.eventType === 'navigation' || body.eventType === 'heartbeat')
       ) {
         eventType = body.eventType
+      }
+      if (body && body.trackStudyMinute === true) {
+        trackStudyMinute = true
       }
     } catch {}
 
@@ -70,6 +75,11 @@ export async function POST(request: NextRequest) {
             eventType: eventType === 'navigation' ? 'navigation' : 'heartbeat',
             telemetry: clientTelemetry,
           })
+
+          // احتساب مدة البقاء في طلب العلم طالما الطالب نشط داخل المنصة
+          if (trackStudyMinute) {
+            recordActiveStudyPresence(email, 1)
+          }
         }
       } catch {}
     }

@@ -423,6 +423,7 @@ export function deleteLocalCommunityPost(postId: string): CommunityPost[] {
   const updated = posts.filter((p) => p.id !== postId)
   writeCommunityPosts(updated)
   recordDeletedCommunityId(postId)
+  resolveCommunityReportForPost(postId)
   return enrichCommunityPostsForPublic(updated)
 }
 
@@ -440,6 +441,138 @@ export function deleteLocalCommunityReply(postId: string, replyId: string): Comm
   writeCommunityPosts(updated)
   recordDeletedCommunityId(replyId)
   return enrichCommunityPostsForPublic(updated)
+}
+
+export interface CommunityReportEntry {
+  id: string
+  postId: string
+  replyId?: string
+  postAuthor?: string
+  authorEmail?: string
+  postContent: string
+  reportedBy: string
+  reason: string
+  createdAt: string
+  status: 'pending' | 'resolved' | 'dismissed'
+}
+
+const REPORTS_FILE = path.join(DATA_DIR, 'sanad_community_reports.json')
+
+export function getCommunityReports(): CommunityReportEntry[] {
+  try {
+    if (fs.existsSync(REPORTS_FILE)) {
+      const raw = fs.readFileSync(REPORTS_FILE, 'utf8')
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+  return []
+}
+
+export function saveCommunityReport(
+  report: Omit<CommunityReportEntry, 'id' | 'createdAt' | 'status'>
+): CommunityReportEntry {
+  const reports = getCommunityReports()
+  const newReport: CommunityReportEntry = {
+    ...report,
+    id: `rep_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+  }
+  reports.unshift(newReport)
+  try {
+    fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports.slice(0, 200), null, 2), 'utf8')
+  } catch {}
+  return newReport
+}
+
+export function dismissCommunityReport(reportId: string): void {
+  const reports = getCommunityReports()
+  const updated = reports.map((r) =>
+    r.id === reportId ? { ...r, status: 'dismissed' as const } : r
+  )
+  try {
+    fs.writeFileSync(REPORTS_FILE, JSON.stringify(updated, null, 2), 'utf8')
+  } catch {}
+}
+
+export function resolveCommunityReportForPost(postId: string): void {
+  const reports = getCommunityReports()
+  const updated = reports.map((r) =>
+    r.postId === postId ? { ...r, status: 'resolved' as const } : r
+  )
+  try {
+    fs.writeFileSync(REPORTS_FILE, JSON.stringify(updated, null, 2), 'utf8')
+  } catch {}
+}
+
+/**
+ * جلب المنشورات المُبلغ عنها لإشراف الإدارة العامة
+ */
+export function getReportedModerationPosts(): Array<{
+  id: string
+  reportId?: string
+  user_id?: string
+  anonymous_alias: string
+  content: string
+  course_slug?: string
+  post_type: string
+  upvotes_count: number
+  created_at: string
+  reportReason?: string
+  reportedBy?: string
+}> {
+  const reports = getCommunityReports().filter((r) => r.status === 'pending')
+  const posts = getRawLocalCommunityPosts()
+  const postMap = new Map(posts.map((p) => [p.id, p]))
+
+  const list: Array<{
+    id: string
+    reportId?: string
+    user_id?: string
+    anonymous_alias: string
+    content: string
+    course_slug?: string
+    post_type: string
+    upvotes_count: number
+    created_at: string
+    reportReason?: string
+    reportedBy?: string
+  }> = []
+
+  for (const rep of reports) {
+    const post = postMap.get(rep.postId)
+    if (post) {
+      list.push({
+        id: post.id,
+        reportId: rep.id,
+        user_id: post.author_email || post.user_id || rep.authorEmail,
+        anonymous_alias: post.anonymous_alias,
+        content: post.content,
+        course_slug: post.course_slug,
+        post_type: post.post_type,
+        upvotes_count: post.upvotes_count || 0,
+        created_at: post.created_at,
+        reportReason: rep.reason,
+        reportedBy: rep.reportedBy,
+      })
+    } else {
+      list.push({
+        id: rep.postId,
+        reportId: rep.id,
+        user_id: rep.authorEmail,
+        anonymous_alias: rep.postAuthor || 'منشور مبلغ عنه',
+        content: rep.postContent,
+        post_type: 'بلاغ مباشر',
+        upvotes_count: 0,
+        created_at: rep.createdAt,
+        reportReason: rep.reason,
+        reportedBy: rep.reportedBy,
+      })
+    }
+  }
+
+  return list
 }
 
 /**

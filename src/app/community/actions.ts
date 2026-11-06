@@ -9,6 +9,7 @@ import {
   resolveAuthorCommunityIdentity,
   sanitizeCommunityContent,
   checkCommunityRateLimit,
+  saveCommunityReport,
 } from '@/lib/community-store'
 import {
   saveCommunityPostToCloud,
@@ -155,4 +156,38 @@ export async function upvoteCommunityPost(postId: string) {
     await upvoteCloudPost(postId).catch(() => {})
   }
   revalidatePath('/community')
+}
+
+export async function reportCommunityContentAction(params: {
+  postId: string
+  replyId?: string
+  postAuthor?: string
+  postContent: string
+  reason: string
+}) {
+  try {
+    const user = await getCurrentStudentUser()
+    const reporterEmail = user?.email || 'طالب مجهول'
+
+    const report = saveCommunityReport({
+      postId: params.postId,
+      replyId: params.replyId,
+      postAuthor: params.postAuthor,
+      postContent: params.postContent,
+      reportedBy: reporterEmail,
+      reason: params.reason || 'مخالف لضوابط المدارسة الشرعية',
+    })
+
+    logPlatformEvent({
+      type: 'community',
+      studentEmail: reporterEmail,
+      studentName: 'إبلاغ عن محتوى',
+      description: `تم تقديم بلاغ عن مشاركة في مجلس المذاكرة [السبب: ${params.reason}]`,
+    })
+
+    return { success: true, reportId: report.id }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'تعذر إرسال البلاغ'
+    return { success: false, error: message }
+  }
 }

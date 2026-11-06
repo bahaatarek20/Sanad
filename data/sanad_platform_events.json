@@ -3,7 +3,31 @@
     "type": "login",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",
-    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793928457452_aq1p",
+    "timestamp": "2026-11-06T01:27:37.452Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793925191050_gjfh",
+    "timestamp": "2026-11-06T00:33:11.050Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793923635518_7jn6",
+    "timestamp": "2026-11-06T00:07:15.518Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
     "id": "ev_1793571428827_kj2y",
     "timestamp": "2026-11-01T22:17:08.827Z"
   },
@@ -11,7 +35,7 @@
     "type": "login",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",
-    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
     "id": "ev_1793474751733_iwxv",
     "timestamp": "2026-10-31T19:25:51.733Z"
   },
@@ -19,7 +43,7 @@
     "type": "role",
     "studentEmail": "bhaaljml48@gmail.com",
     "studentName": "Bahaa Tarek",
-    "description": "تعديل رتبة العضو [Bahaa Tarek] [SND-1002] إلى رتبة طالب علم",
+    "description": "تعديل رتبة العضو [Bahaa Tarek] [SND-2] إلى رتبة طالب علم",
     "id": "ev_1793467442247_fqat",
     "timestamp": "2026-10-31T17:24:02.247Z"
   },
@@ -27,7 +51,7 @@
     "type": "role",
     "studentEmail": "bhaaljml48@gmail.com",
     "studentName": "Bahaa Tarek",
-    "description": "ترقية العضو [Bahaa Tarek] [SND-1002] إلى رتبة مشرف عام للمنصة",
+    "description": "ترقية العضو [Bahaa Tarek] [SND-2] إلى رتبة مشرف عام للمنصة",
     "id": "ev_1793467435792_cjfu",
     "timestamp": "2026-10-31T17:23:55.792Z"
   },
@@ -43,7 +67,7 @@
     "type": "unban",
     "studentEmail": "bhaaljml3@gmail.com",
     "studentName": "test 1",
-    "description": "ترقية العضو [test 1] [SND-1006] إلى رتبة مشرف عام للمنصة",
+    "description": "ترقية العضو [test 1] [SND-6] إلى رتبة مشرف عام للمنصة",
     "id": "ev_1792204319171_x1ww",
     "timestamp": "2026-10-17T02:31:59.171Z"
   },
@@ -51,7 +75,7 @@
     "type": "ban",
     "studentEmail": "bhaaljml3@gmail.com",
     "studentName": "test 1",
-    "description": "تعديل رتبة العضو [test 1] [SND-1006] إلى رتبة طالب علم",
+    "description": "تعديل رتبة العضو [test 1] [SND-6] إلى رتبة طالب علم",
     "id": "ev_1792204319094_m1l9",
     "timestamp": "2026-10-17T02:31:59.094Z"
   },
@@ -67,7 +91,7 @@
     "type": "register",
     "studentEmail": "bhaaljml3@gmail.com",
     "studentName": "test 1",
-    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-1005] من 🇪🇬 مصر (IP: 156.204.12.34)",
+    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-5] من 🇪🇬 مصر (IP: 156.204.12.34)",
     "id": "ev_1791906352784_43e4",
     "timestamp": "2026-10-13T15:45:52.784Z"
   },
@@ -75,7 +99,7 @@
     "type": "register",
     "studentEmail": "bhaaljml66@gmail.com",
     "studentName": "مي طارق",
-    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-1003] من 🇪🇬 مصر (IP: 156.204.12.34)",
+    "description": "انضمام طالب جديد إلى المنصة [المعرف: SND-3] من 🇪🇬 مصر (IP: 156.204.12.34)",
     "id": "ev_1791330362876_c2cd",
     "timestamp": "2026-10-06T23:46:02.876Z"
   },
@@ -123,7 +147,7 @@
     "type": "unban",
     "studentEmail": "bhaaljml48@gmail.com",
     "studentName": "Bahaa Tarek",
-    "description": "فك الحظر واستعادة حساب الطالب [Bahaa Tarek] [SND-1001] بنجاح",
+    "description": "فك الحظر واستعادة حساب الطالب [Bahaa Tarek] [SND-1] بنجاح",
     "id": "ev_1790635473252_nwc3",
     "timestamp": "2026-09-28T22:44:33.252Z"
   },
@@ -131,7 +155,7 @@
     "type": "ban",
     "studentEmail": "bhaaljml48@gmail.com",
     "studentName": "Bahaa Tarek",
-    "description": "حظر حساب الطالب [Bahaa Tarek] [SND-1001] إدارياً (حظر إداري بقرار من المشرف العام)",
+    "description": "حظر حساب الطالب [Bahaa Tarek] [SND-1] إدارياً (حظر إداري بقرار من المشرف العام)",
     "id": "ev_1790635456173_bcag",
     "timestamp": "2026-09-28T22:44:16.173Z"
   },

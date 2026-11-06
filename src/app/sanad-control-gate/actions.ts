@@ -35,7 +35,12 @@ import {
   CategoryItem,
 } from '@/lib/courses-store'
 import { MatnCourse } from '@/lib/curriculum-data'
-import { deleteLocalCommunityPost, deleteLocalCommunityReply } from '@/lib/community-store'
+import {
+  deleteLocalCommunityPost,
+  deleteLocalCommunityReply,
+  getReportedModerationPosts,
+  dismissCommunityReport,
+} from '@/lib/community-store'
 import { deleteCommunityPostFromCloud, deleteCommunityReplyFromCloud } from '@/lib/cloud-db'
 
 /**
@@ -78,6 +83,7 @@ export async function getAdminDashboardAction() {
   const broadcast = getBroadcastNotice()
   const auditLogs = getAuditLogs(50)
   const deletedEmails = Array.from(getDeletedStudentEmails())
+  const moderationPosts = getReportedModerationPosts()
 
   return {
     success: true,
@@ -86,6 +92,7 @@ export async function getAdminDashboardAction() {
     broadcast,
     auditLogs,
     deletedEmails,
+    moderationPosts,
     currentActor: {
       email: actor.email,
       role: actor.role,
@@ -257,6 +264,19 @@ export async function deleteCommunityPostAdminAction(postId: string) {
   } catch {}
 
   revalidatePath('/community')
+  revalidatePath('/sanad-control-gate')
+  return { success: true }
+}
+
+/**
+ * 7.5 تجاهل بلاغ مجتمعي (مشرف فقط)
+ */
+export async function dismissCommunityReportAdminAction(reportId: string) {
+  const isValid = await verifyAdminSession()
+  if (!isValid) {
+    return { success: false, error: 'غير مصرح' }
+  }
+  dismissCommunityReport(reportId)
   revalidatePath('/sanad-control-gate')
   return { success: true }
 }

@@ -370,18 +370,55 @@ export default function DownloadAppPage() {
               )}
 
               {activeTab === 'android' && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-950 dark:bg-emerald-950/20 space-y-3 text-xs sm:text-sm">
-                  <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">١</span>
-                    <span>في متصفح Chrome أو Samsung Internet: اضغط على الزر الأخضر أعلاه (تثبيت التطبيق).</span>
+                <div className="space-y-4">
+                  {/* بطاقة تحميل ملف APK المباشر */}
+                  <div className="rounded-2xl border-2 border-emerald-300 bg-linear-to-br from-emerald-50 via-white to-teal-50 p-4 dark:border-emerald-800 dark:bg-linear-to-br dark:from-emerald-950/40 dark:via-stone-900 dark:to-teal-950/30 space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-800 text-amber-300 font-bold text-xs">
+                          APK
+                        </span>
+                        <div>
+                          <h4 className="font-bold text-sm text-stone-900 dark:text-white">
+                            تحميل تطبيق سَنَد بصيغة APK مباشرة
+                          </h4>
+                          <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                            ملف تثبيت مباشر لجميع هواتف وشاشات أندرويد (Android Package)
+                          </p>
+                        </div>
+                      </div>
+                      <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200">
+                        خفيف جداً • ~500 KB
+                      </span>
+                    </div>
+
+                    <a
+                      href="/api/download/apk"
+                      download="Sanad.apk"
+                      className="w-full rounded-xl bg-emerald-700 hover:bg-emerald-800 py-3 px-4 text-xs sm:text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-center"
+                    >
+                      <Download className="h-4 w-4 text-amber-300 group-hover:scale-110 transition-transform" />
+                      <span>اضغط هنا لتحميل ملف Sanad.apk فوراً</span>
+                    </a>
+
+                    <div className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed bg-white/70 dark:bg-stone-800/60 p-2.5 rounded-lg border border-stone-200/60 dark:border-stone-700/60">
+                      💡 <strong>طريقة التثبيت:</strong> بعد اكتمال التحميل، افتح إشعار التحميل واضغط «تثبيت». إذا ظهر تنبيه الأمان، اختر «السماح بالتثبيت من هذا المصدر» ليكتمل التثبيت بنجاح.
+                    </div>
                   </div>
-                  <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">٢</span>
-                    <span>أو من قائمة المتصفح (الثلاث نقاط ⋮ أعلى اليسار)، اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</span>
-                  </div>
-                  <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">٣</span>
-                    <span>سيظهر تطبيق «سَنَد» بأيقونته الخضراء المذهبة على شاشتك الرئيسية كأي تطبيق أصلي تماماً.</span>
+
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-950 dark:bg-emerald-950/20 space-y-3 text-xs sm:text-sm">
+                    <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">١</span>
+                      <span>أو يمكنك التثبيت الفوري بنقرة واحدة عبر متصفح Chrome بدون تنزيل ملفات بالضغط على زر التثبيت الأخضر أعلاه.</span>
+                    </div>
+                    <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">٢</span>
+                      <span>أو من قائمة المتصفح (الثلاث نقاط ⋮ أعلى اليسار)، اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</span>
+                    </div>
+                    <div className="font-bold text-emerald-950 dark:text-emerald-300 flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white text-[11px]">٣</span>
+                      <span>سيظهر تطبيق «سَنَد» بأيقونته الخضراء المذهبة على شاشتك الرئيسية كأي تطبيق أصلي تماماً.</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -507,17 +544,17 @@ export default function DownloadAppPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
-            href="/courses"
+            href="/roadmap"
             className="group rounded-2xl border border-stone-200/80 bg-white/90 p-5 shadow-xs hover:border-emerald-600/70 hover:shadow-md transition-all dark:border-stone-800 dark:bg-stone-900/90 space-y-2.5"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 group-hover:scale-110 transition-transform">
-              <BookOpen className="h-5 w-5" />
+              <Compass className="h-5 w-5" />
             </div>
             <h3 className="font-bold text-sm text-stone-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
-              فهرس المتون الـ 78
+              خارطة الطريق والمتون الـ 78
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-              تصفح المتون المحققة، واستمع للشروح المرئية والصوتية مع تفكيك الألفاظ المستشكلة.
+              مسارات منهجية متدرجة من المرحلة التمهيدية حتى إتقان الفنون الشرعية والتخصص مع الشروح المرئية والمسموعة.
             </p>
           </Link>
 
@@ -552,29 +589,29 @@ export default function DownloadAppPage() {
           </Link>
 
           <Link
-            href="/roadmap"
+            href="/verify-ijaza"
             className="group rounded-2xl border border-stone-200/80 bg-white/90 p-5 shadow-xs hover:border-sky-600/70 hover:shadow-md transition-all dark:border-stone-800 dark:bg-stone-900/90 space-y-2.5"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-300 group-hover:scale-110 transition-transform">
-              <Compass className="h-5 w-5" />
+              <Award className="h-5 w-5" />
             </div>
             <h3 className="font-bold text-sm text-stone-900 dark:text-white group-hover:text-sky-700 dark:group-hover:text-sky-400">
-              خارطة الطريق التأصيلية
+              الإجازات والشهادات الرقمية
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-              مسارات منهجية متدرجة من المرحلة التمهيدية حتى إتقان الفنون الشرعية والتخصص.
+              تحقق من موثوقية شهادات الإجازة في المتون الشرعية الصادرة من المنصة بكود تحقق معتمد.
             </p>
           </Link>
         </div>
       </section>
 
-      {/* زر العودة لفهرس المتون */}
+      {/* زر العودة لخارطة الطريق */}
       <div className="text-center pt-4">
         <Link
-          href="/courses"
+          href="/roadmap"
           className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-emerald-800 hover:text-emerald-950 transition dark:text-emerald-400 dark:hover:text-emerald-300"
         >
-          <span>تصفح فهرس المتون التأصيلية المعتمدة</span>
+          <span>استكشف خارطة الطريق والمتون التأصيلية المعتمدة</span>
           <ArrowRight className="h-4 w-4 rotate-180" />
         </Link>
       </div>

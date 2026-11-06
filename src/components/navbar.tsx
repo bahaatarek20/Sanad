@@ -70,13 +70,9 @@ export default async function Navbar() {
             <Link href="/" className="rounded-lg px-2.5 py-1 transition hover:text-emerald-900 hover:bg-stone-100/80 dark:hover:text-emerald-400 dark:hover:bg-stone-800/60">
               الرئيسية
             </Link>
-            <Link href="/courses" className="flex items-center gap-1 rounded-lg px-2.5 py-1 transition hover:text-emerald-900 hover:bg-stone-100/80 dark:hover:text-emerald-400 dark:hover:bg-stone-800/60">
-              <Compass className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-              <span>فهرس المتون</span>
-            </Link>
             <Link href="/roadmap" className="flex items-center gap-1 rounded-lg px-2.5 py-1 transition hover:text-emerald-900 hover:bg-stone-100/80 dark:hover:text-emerald-400 dark:hover:bg-stone-800/60">
-              <GitFork className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-              <span>خارطة الطريق</span>
+              <Compass className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+              <span>خارطة الطريق التأصيلية</span>
             </Link>
             <Link href="/community" className="flex items-center gap-1 rounded-lg px-2.5 py-1 transition hover:text-emerald-900 hover:bg-stone-100/80 dark:hover:text-emerald-400 dark:hover:bg-stone-800/60">
               <Users className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />

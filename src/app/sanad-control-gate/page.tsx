@@ -93,6 +93,7 @@ import {
   resetVisitorCountAdminAction,
   updateStudentRoleAdminAction,
   deleteStudentAdminAction,
+  dismissCommunityReportAdminAction,
 } from './actions'
 import type { CategoryItem } from '@/lib/courses-store'
 import type { StudentActivityRecord, PlatformStats, PlatformEvent, AuditLogEntry } from '@/lib/student-tracking'
@@ -122,6 +123,9 @@ interface ModerationPost {
   post_type: string
   upvotes_count: number
   created_at: string
+  reportReason?: string
+  reportedBy?: string
+  reportId?: string
 }
 
 interface BatchPreviewItem {
@@ -828,6 +832,9 @@ export default function SanadControlGatePage() {
         }
         if (res.broadcast) {
           setBroadcast(res.broadcast)
+        }
+        if (res.moderationPosts && Array.isArray(res.moderationPosts)) {
+          setModerationPosts(res.moderationPosts)
         }
         if (typeof window !== 'undefined') {
           localStorage.setItem('sanad_is_platform_owner', 'true')
@@ -1956,6 +1963,13 @@ export default function SanadControlGatePage() {
     if (!confirm('هل أنت متأكد من حذف هذا المنشور؟')) return
     await deleteCommunityPostAdminAction(postId)
     setModerationPosts((prev) => prev.filter((p) => p.id !== postId))
+  }
+
+  const handleDismissReport = async (reportId?: string, postId?: string) => {
+    if (reportId) {
+      await dismissCommunityReportAdminAction(reportId)
+    }
+    setModerationPosts((prev) => prev.filter((p) => (reportId ? p.reportId !== reportId : p.id !== postId)))
   }
 
   const handleToggleBanUser = (userId: string) => {
@@ -5449,13 +5463,18 @@ export default function SanadControlGatePage() {
                     className="flex flex-col gap-3 rounded-2xl border border-stone-200 p-4 dark:border-stone-800"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-stone-900 dark:text-white">
                           الاسم المعروض: {post.anonymous_alias}
                         </span>
                         <span className="font-mono text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                           معرّف الحساب: {post.user_id || 'غير مسجل (زائر)'}
                         </span>
+                        {post.reportReason && (
+                          <span className="text-[10px] bg-rose-100 text-rose-900 font-bold px-2 py-0.5 rounded-full dark:bg-rose-950 dark:text-rose-300">
+                            سبب الإبلاغ: {post.reportReason}
+                          </span>
+                        )}
                       </div>
                       <span className="text-[11px] text-stone-400">
                         {new Date(post.created_at).toLocaleString('ar-EG')}
@@ -5466,12 +5485,19 @@ export default function SanadControlGatePage() {
                       {post.content}
                     </p>
 
-                    <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
                       <span className="text-[11px] text-stone-500">
-                        التأييدات: {post.upvotes_count} • الفئة: {post.post_type}
+                        التأييدات: {post.upvotes_count} • الفئة: {post.post_type} {post.reportedBy ? `• المُبَلِّغ: ${post.reportedBy}` : ''}
                       </span>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDismissReport(post.reportId, post.id)}
+                          className="rounded-xl border border-stone-200 bg-white px-3 py-1 text-xs font-bold text-stone-700 hover:bg-stone-100 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                        >
+                          تجاهل البلاغ (سليم)
+                        </button>
+
                         {post.user_id && (
                           <button
                             onClick={() => handleToggleBanUser(post.user_id!)}

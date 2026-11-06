@@ -67,9 +67,7 @@ async function performGitHubPush(studentsToSync: StudentActivityRecord[]): Promi
   if (!GITHUB_TOKEN || studentsToSync.length === 0) return false
 
   const regFilePath = 'data/sanad_students_registry.json'
-  const uploadRegFilePath = 'Sanad-upload/data/sanad_students_registry.json'
   const statsFilePath = 'data/sanad_platform_stats.json'
-  const uploadStatsFilePath = 'Sanad-upload/data/sanad_platform_stats.json'
 
   const currentRegFile = await getFileFromGitHub(regFilePath)
   if (!currentRegFile || !currentRegFile.sha) {
@@ -113,12 +111,6 @@ async function performGitHubPush(studentsToSync: StudentActivityRecord[]): Promi
   const updatedContent = JSON.stringify(existingStudents, null, 2)
   const regOk = await updateFileOnGitHub(regFilePath, updatedContent, currentRegFile.sha, commitMsg)
 
-  // تحديث نسخة Sanad-upload بالتوازي
-  const uploadRegFile = await getFileFromGitHub(uploadRegFilePath)
-  if (uploadRegFile && uploadRegFile.sha) {
-    await updateFileOnGitHub(uploadRegFilePath, updatedContent, uploadRegFile.sha, commitMsg).catch(() => {})
-  }
-
   // تحديث عدادات المنصة لتتطابق مع الإجمالي الجديد
   const currentStatsFile = await getFileFromGitHub(statsFilePath)
   if (currentStatsFile && currentStatsFile.sha) {
@@ -134,11 +126,6 @@ async function performGitHubPush(studentsToSync: StudentActivityRecord[]): Promi
 
       const statsContent = JSON.stringify(stats, null, 2)
       await updateFileOnGitHub(statsFilePath, statsContent, currentStatsFile.sha, `chore(stats): update baseline to ${regCount} students`).catch(() => {})
-
-      const uploadStatsFile = await getFileFromGitHub(uploadStatsFilePath)
-      if (uploadStatsFile && uploadStatsFile.sha) {
-        await updateFileOnGitHub(uploadStatsFilePath, statsContent, uploadStatsFile.sha, `chore(stats): update baseline to ${regCount} students`).catch(() => {})
-      }
     } catch {}
   }
 

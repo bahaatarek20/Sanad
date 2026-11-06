@@ -129,9 +129,9 @@ export default async function HomePage() {
 
         {/* بطاقات المؤشرات الأربع التفاعلية الفخمة */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-4xl mx-auto pt-4">
-          {/* عدد المتون */}
+          {/* عدد المتون في خارطة الطريق */}
           <Link
-            href="/courses"
+            href="/roadmap"
             className="group relative flex items-center gap-3 rounded-2xl border border-emerald-200/80 bg-white/90 p-3 sm:p-3.5 shadow-xs hover:border-emerald-600/80 hover:shadow-md hover:-translate-y-0.5 transition-all text-right dark:border-emerald-900/60 dark:bg-stone-900/90 dark:hover:border-emerald-500"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 group-hover:scale-110 transition-transform">

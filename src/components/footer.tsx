@@ -44,7 +44,7 @@ export default function Footer({ isLoggedIn = false }: FooterProps) {
                 return (
                   <Link
                     key={cat.slug}
-                    href={`/courses?cat=${cat.slug}`}
+                    href={`/roadmap?cat=${cat.slug}`}
                     className="hover:text-emerald-900 transition dark:hover:text-emerald-400 flex items-center gap-2 py-1 px-1.5 rounded-md hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 group"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
@@ -90,9 +90,9 @@ export default function Footer({ isLoggedIn = false }: FooterProps) {
                 </Link>
               </li>
               <li>
-                <Link href="/courses" className="flex items-center gap-2 hover:text-emerald-900 transition dark:hover:text-emerald-400">
+                <Link href="/roadmap" className="flex items-center gap-2 hover:text-emerald-900 transition dark:hover:text-emerald-400">
                   <Compass className="h-4 w-4 text-emerald-800" />
-                  <span>فهرس ومكتبة المتون المعتمدة</span>
+                  <span>خارطة الطريق التأصيلية والمتون</span>
                 </Link>
               </li>
               <li>

@@ -5,9 +5,8 @@ import StudentNotesList, { DashboardNoteItem } from '@/components/student-notes-
 import Dashboard3DStats from '@/components/dashboard-3d-stats'
 import StudentAnalytics from '@/components/student-analytics'
 import { getActiveCourses } from '@/lib/courses-store'
-import { getStudentProfileDataAsync, getScholarlyLeaderboardDataAsync, getStudentLocalNotes } from '@/lib/student-tracking'
+import { getStudentProfileDataAsync, getStudentLocalNotes } from '@/lib/student-tracking'
 import { getUnreadCount } from '@/lib/messages-service'
-import ScholarlyLeaderboard from '@/components/scholarly-leaderboard'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
 import { getRecommendedCoursesForStudent } from '@/lib/curriculum-intelligence'
 import { getStudentCertificates, VerifiedCertificate } from '@/lib/certificate-service'
@@ -82,13 +81,6 @@ export default async function DashboardPage() {
 
   // ترتيب الفوائد تنازلياً حسب تاريخ التدوين
   formattedNotes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-  let leaderboardData
-  try {
-    leaderboardData = await getScholarlyLeaderboardDataAsync(user.email || undefined)
-  } catch (err) {
-    console.error('Error getting leaderboard data:', err)
-  }
 
   let unreadMessagesCount = 0
   try {
@@ -222,8 +214,7 @@ export default async function DashboardPage() {
         currentStreak={currentStreak}
       />
 
-      {/* 4. ميدان التنافس وسباق أهل الهمم (وفي ذلك فليتنافس المتنافسون) */}
-      {leaderboardData && <ScholarlyLeaderboard data={leaderboardData} />}
+
 
       {/* 5. الإجازات العلمية الموثقة الصادرة للطالب */}
       {studentCertificates.length > 0 && (

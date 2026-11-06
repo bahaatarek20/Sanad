@@ -54,6 +54,23 @@ export default function VisitorTracker() {
       }
     }, 25000)
 
+    // 2.5 احتساب مدة البقاء في طلب العلم تلقائياً (دقيقة تحصيل إضافية كل 60 ثانية نشطة داخل أي صفحة في المنصة)
+    const studyTimerInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const pageTitle = typeof document !== 'undefined' ? document.title.split('|')[0]?.trim() : undefined
+        fetch('/api/track-visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            page: currentPath,
+            pageTitle,
+            eventType: 'heartbeat',
+            trackStudyMinute: true,
+          }),
+        }).catch(() => {})
+      }
+    }, 60000)
+
     // 3. تحديث التواجد فور عودة الطالب لنافذة المتصفح
     const handleVisibilityOrFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
@@ -66,6 +83,7 @@ export default function VisitorTracker() {
 
     return () => {
       clearInterval(heartbeatInterval)
+      clearInterval(studyTimerInterval)
       window.removeEventListener('focus', handleVisibilityOrFocus)
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
     }

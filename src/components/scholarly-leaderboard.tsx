@@ -19,6 +19,9 @@ import {
   ShieldCheck,
   CheckCircle2,
   Compass,
+  Search,
+  X,
+  ChevronDown,
 } from 'lucide-react'
 import { LeaderboardStudentEntry, ScholarlyLeaderboardData } from '@/lib/student-tracking'
 
@@ -37,9 +40,14 @@ export default function ScholarlyLeaderboard({
 }: ScholarlyLeaderboardProps) {
   const [activeTab, setActiveTab] = useState<SortCategory>('all')
   const [blessedStudents, setBlessedStudents] = useState<Record<string, number>>({})
+  const [prayedTodayMap, setPrayedTodayMap] = useState<Record<string, string>>({})
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [visibleCount, setVisibleCount] = useState(5)
 
-  // استرجاع الأدعية السابقة من التخزين المحلي لضمان عدم ضياعها عند إعادة التحميل
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+
+  // استرجاع الأدعية وسجل الأيام السابقة لتقييد الدعاء بظهر الغيب مرة واحدة يومياً
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('sanad_leaderboard_blessings')
@@ -49,11 +57,32 @@ export default function ScholarlyLeaderboard({
           setBlessedStudents(parsed)
         }
       }
+      const savedPrayed = localStorage.getItem('sanad_prayed_tracker')
+      if (savedPrayed) {
+        const parsedPrayed = JSON.parse(savedPrayed)
+        if (parsedPrayed && typeof parsedPrayed === 'object') {
+          setPrayedTodayMap(parsedPrayed)
+        }
+      }
     } catch {}
   }, [])
 
-  // وظيفة إرسال الدعاء بظهر الغيب لرفيق المدارسة وحفظه دائماً
+  // وظيفة إرسال الدعاء بظهر الغيب لرفيق المدارسة وحفظه بحد أقصى مرة واحدة لكل طالب يومياً
   const handleBlessStudent = (studentId: string, studentName: string) => {
+    if (prayedTodayMap[studentId] === todayStr) {
+      setToastMessage(`لقد دَعَوْتَ لأخيك «${studentName}» اليوم بظهر الغيب! تقبّل الله، وقال الملك: «ولك بمثل» 🤲`)
+      setTimeout(() => {
+        setToastMessage((cur) => (cur?.includes(studentName) ? null : cur))
+      }, 4000)
+      return
+    }
+
+    const nextPrayed = { ...prayedTodayMap, [studentId]: todayStr }
+    setPrayedTodayMap(nextPrayed)
+    try {
+      localStorage.setItem('sanad_prayed_tracker', JSON.stringify(nextPrayed))
+    } catch {}
+
     setBlessedStudents((prev) => {
       const next = {
         ...prev,
@@ -97,6 +126,29 @@ export default function ScholarlyLeaderboard({
     }
     return list
   }, [data.allRankedStudents, activeTab])
+
+  // فلترة الطلاب بالبحث المباشر (بالاسم، أو البريد، أو المعرف الأكاديمي)
+  const filteredStudents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return sortedStudents
+    const cleanQ = q.replace(/^snd-?/i, '')
+    return sortedStudents.filter((s) => {
+      const nameMatch = (s.name || '').toLowerCase().includes(q)
+      const emailMatch = (s.maskedEmail || '').toLowerCase().includes(q)
+      const idMatch =
+        (s.scholarlyId || '').toLowerCase().includes(q) ||
+        (s.scholarlyId || '').replace(/^SND-/i, '').includes(cleanQ)
+      return nameMatch || emailMatch || idMatch
+    })
+  }, [sortedStudents, searchQuery])
+
+  // عرض أول 5 طلاب افتراضياً وتوسيع القائمة تدريجياً بـ 10 طلاب لكل ضغطة
+  const displayedStudents = useMemo(() => {
+    if (searchQuery.trim().length > 0) {
+      return filteredStudents
+    }
+    return filteredStudents.slice(0, visibleCount)
+  }, [filteredStudents, searchQuery, visibleCount])
 
   const formatHoursAndMinutes = (minutes: number) => {
     const hrs = Math.floor(minutes / 60)
@@ -155,10 +207,10 @@ export default function ScholarlyLeaderboard({
 
       {/* 2. بطاقة الحالة الشخصية وموقعك بين الركب (Personal Stand & Gap Analysis) */}
       {currentStudent && (
-        <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-linear-to-r from-amber-50/80 via-white to-emerald-50/60 p-5 dark:border-amber-900/50 dark:from-stone-900 dark:via-stone-900 dark:to-emerald-950/30">
+        <div className="card-scholarly-3d relative overflow-hidden rounded-2xl border border-amber-300/80 bg-linear-to-r from-amber-50/80 via-white to-emerald-50/60 p-5 dark:border-amber-900/50 dark:from-stone-900 dark:via-stone-900 dark:to-emerald-950/30">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md font-black text-xl ring-4 ring-amber-100 dark:ring-amber-950">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md font-black text-xl ring-4 ring-amber-100 dark:ring-amber-950 animate-scholarly-float">
                 #{currentStudent.rank}
               </div>
 
@@ -203,7 +255,7 @@ export default function ScholarlyLeaderboard({
             </div>
 
             <Link
-              href="/courses"
+              href="/roadmap"
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-900 px-5 py-3 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800"
             >
               <Sparkles className="h-4 w-4 text-amber-300" />
@@ -217,7 +269,7 @@ export default function ScholarlyLeaderboard({
       {/* 3. فرسان الصدارة الأربعة (Four Pillars of Distinction Cards) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* أ. فارس المواظبة (Streak) */}
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-rose-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
+        <div className="card-scholarly-3d relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-rose-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-rose-900 dark:text-rose-400 flex items-center gap-1.5">
               <Flame className="h-4 w-4 fill-rose-500 text-rose-500" />
@@ -251,17 +303,26 @@ export default function ScholarlyLeaderboard({
             </span>
             <button
               onClick={() => handleBlessStudent(data.topStreakLeader.id, data.topStreakLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 dark:text-rose-400 transition shrink-0"
-              title="بارك الله في همتك"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 dark:text-rose-400 transition shrink-0 cursor-pointer"
+              title={prayedTodayMap[data.topStreakLeader.id] === todayStr ? 'دَعَوْتَ له اليوم بظهر الغيب تقبل الله' : 'بارك الله في همتك'}
             >
-              <Heart className="h-3.5 w-3.5 text-rose-500" />
-              <span>دعاء ({blessedStudents[data.topStreakLeader.id] || 0})</span>
+              {prayedTodayMap[data.topStreakLeader.id] === todayStr ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 dark:text-emerald-400">دَعَوْتَ له 🤲</span>
+                </>
+              ) : (
+                <>
+                  <Heart className="h-3.5 w-3.5 text-rose-500" />
+                  <span>دعاء ({blessedStudents[data.topStreakLeader.id] || 0})</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {/* ب. عميد ساعات المدارسة (Hours) */}
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-amber-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
+        <div className="card-scholarly-3d relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-amber-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-amber-900 dark:text-amber-400 flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-amber-600" />
@@ -295,17 +356,26 @@ export default function ScholarlyLeaderboard({
             </span>
             <button
               onClick={() => handleBlessStudent(data.topHoursLeader.id, data.topHoursLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 dark:text-amber-400 transition shrink-0"
-              title="بارك الله في همتك"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 dark:text-amber-400 transition shrink-0 cursor-pointer"
+              title={prayedTodayMap[data.topHoursLeader.id] === todayStr ? 'دَعَوْتَ له اليوم بظهر الغيب تقبل الله' : 'بارك الله في همتك'}
             >
-              <Heart className="h-3.5 w-3.5 text-amber-600" />
-              <span>دعاء ({blessedStudents[data.topHoursLeader.id] || 0})</span>
+              {prayedTodayMap[data.topHoursLeader.id] === todayStr ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 dark:text-emerald-400">دَعَوْتَ له 🤲</span>
+                </>
+              ) : (
+                <>
+                  <Heart className="h-3.5 w-3.5 text-amber-600" />
+                  <span>دعاء ({blessedStudents[data.topHoursLeader.id] || 0})</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {/* ج. سابق المتون (Completed Courses) */}
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-emerald-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
+        <div className="card-scholarly-3d relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-emerald-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-emerald-900 dark:text-emerald-400 flex items-center gap-1.5">
               <BookOpen className="h-4 w-4 text-emerald-600" />
@@ -339,17 +409,26 @@ export default function ScholarlyLeaderboard({
             </span>
             <button
               onClick={() => handleBlessStudent(data.topCoursesLeader.id, data.topCoursesLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 dark:text-emerald-400 transition shrink-0"
-              title="بارك الله في همتك"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 dark:text-emerald-400 transition shrink-0 cursor-pointer"
+              title={prayedTodayMap[data.topCoursesLeader.id] === todayStr ? 'دَعَوْتَ له اليوم بظهر الغيب تقبل الله' : 'بارك الله في همتك'}
             >
-              <Heart className="h-3.5 w-3.5 text-emerald-600" />
-              <span>دعاء ({blessedStudents[data.topCoursesLeader.id] || 0})</span>
+              {prayedTodayMap[data.topCoursesLeader.id] === todayStr ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 dark:text-emerald-400">دَعَوْتَ له 🤲</span>
+                </>
+              ) : (
+                <>
+                  <Heart className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>دعاء ({blessedStudents[data.topCoursesLeader.id] || 0})</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {/* د. قيّد الأوابد (Notes and Highlights) */}
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-indigo-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
+        <div className="card-scholarly-3d relative overflow-hidden rounded-2xl border border-stone-200/90 bg-linear-to-b from-indigo-50/60 to-white p-5 shadow-xs dark:border-stone-800 dark:from-stone-900 dark:to-stone-900/90">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-1.5">
               <Bookmark className="h-4 w-4 text-indigo-600" />
@@ -383,11 +462,20 @@ export default function ScholarlyLeaderboard({
             </span>
             <button
               onClick={() => handleBlessStudent(data.topNotesLeader.id, data.topNotesLeader.name)}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800 hover:text-indigo-950 dark:text-indigo-400 transition"
-              title="بارك الله في همتك"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800 hover:text-indigo-950 dark:text-indigo-400 transition shrink-0 cursor-pointer"
+              title={prayedTodayMap[data.topNotesLeader.id] === todayStr ? 'دَعَوْتَ له اليوم بظهر الغيب تقبل الله' : 'بارك الله في همتك'}
             >
-              <Heart className="h-3.5 w-3.5 text-indigo-600" />
-              <span>دعاء ({blessedStudents[data.topNotesLeader.id] || 0})</span>
+              {prayedTodayMap[data.topNotesLeader.id] === todayStr ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 dark:text-emerald-400">دَعَوْتَ له 🤲</span>
+                </>
+              ) : (
+                <>
+                  <Heart className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>دعاء ({blessedStudents[data.topNotesLeader.id] || 0})</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -395,12 +483,40 @@ export default function ScholarlyLeaderboard({
 
       {/* 4. تبويبات التصفية وقائمة المتصدرين التفاعلية */}
       <div className="space-y-4">
+        {/* شريط البحث المباشر عن الاسم أو الجيميل أو المعرف الأكاديمي */}
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-stone-400">
+            <Search className="h-4 w-4" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث مباشرة عن اسمك، أو بريدك (Gmail)، أو معرفك الأكاديمي (مثال: SND-1 أو 1)..."
+            className="w-full rounded-2xl border border-stone-200/90 bg-white py-2.5 pr-10 pl-10 text-xs sm:text-sm text-stone-800 placeholder-stone-400 shadow-2xs focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-stone-700 dark:bg-stone-800/90 dark:text-stone-200 dark:placeholder-stone-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 left-0 flex items-center pl-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+              title="مسح البحث"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
             <h3 className="font-black text-base text-stone-900 dark:text-white">
               ترتيب طلاب العلم والمبادرين
             </h3>
+            {searchQuery && (
+              <span className="text-xs font-mono bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full dark:bg-emerald-950 dark:text-emerald-300">
+                نتائج البحث: {filteredStudents.length}
+              </span>
+            )}
           </div>
 
           {/* أزرار الفلترة السريعة */}
@@ -462,9 +578,10 @@ export default function ScholarlyLeaderboard({
         
         {/* أ. نمط البطاقات المريحة للهواتف والشاشات الضيقة (sm:hidden) */}
         <div className="block sm:hidden space-y-3">
-          {sortedStudents.map((entry, idx) => {
+          {displayedStudents.map((entry, idx) => {
             const displayRank = idx + 1
             const isCurrent = entry.isCurrentStudent
+            const isPrayedToday = prayedTodayMap[entry.id] === todayStr
 
             return (
               <div
@@ -530,10 +647,23 @@ export default function ScholarlyLeaderboard({
                   </span>
                   <button
                     onClick={() => handleBlessStudent(entry.id, entry.name)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[10px] font-bold text-stone-600 hover:text-rose-600 transition dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-bold transition cursor-pointer ${
+                      isPrayedToday
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                        : 'border-stone-200 bg-stone-50 text-stone-600 hover:text-rose-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300'
+                    }`}
                   >
-                    <Heart className="h-3 w-3 text-rose-500" />
-                    <span>دعاء {blessedStudents[entry.id] ? `(+${blessedStudents[entry.id]})` : ''}</span>
+                    {isPrayedToday ? (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>دَعَوْتَ له 🤲</span>
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="h-3 w-3 text-rose-500" />
+                        <span>دعاء {blessedStudents[entry.id] ? `(+${blessedStudents[entry.id]})` : ''}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -556,9 +686,10 @@ export default function ScholarlyLeaderboard({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
-              {sortedStudents.map((entry, idx) => {
+              {displayedStudents.map((entry, idx) => {
                 const displayRank = idx + 1
                 const isCurrent = entry.isCurrentStudent
+                const isPrayedToday = prayedTodayMap[entry.id] === todayStr
 
                 return (
                   <tr
@@ -660,16 +791,29 @@ export default function ScholarlyLeaderboard({
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => handleBlessStudent(entry.id, entry.name)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-bold text-stone-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-rose-950/50 dark:hover:text-rose-300"
-                        title="بارك الله في همتك ودعاء بظهر الغيب"
+                        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                          isPrayedToday
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                            : 'border-stone-200 bg-white text-stone-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-rose-950/50 dark:hover:text-rose-300'
+                        }`}
+                        title={isPrayedToday ? 'دَعَوْتَ له اليوم بظهر الغيب وتقبل الله' : 'بارك الله في همتك ودعاء بظهر الغيب'}
                       >
-                        <Heart className="h-3 w-3 text-rose-500" />
-                        <span>بارك الله فيه</span>
-                        {blessedStudents[entry.id] ? (
-                          <span className="font-mono text-[10px] text-rose-600 font-black">
-                            +{blessedStudents[entry.id]}
-                          </span>
-                        ) : null}
+                        {isPrayedToday ? (
+                          <>
+                            <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                            <span>دَعَوْتَ له اليوم 🤲</span>
+                          </>
+                        ) : (
+                          <>
+                            <Heart className="h-3 w-3 text-rose-500" />
+                            <span>بارك الله فيه</span>
+                            {blessedStudents[entry.id] ? (
+                              <span className="font-mono text-[10px] text-rose-600 font-black">
+                                +{blessedStudents[entry.id]}
+                              </span>
+                            ) : null}
+                          </>
+                        )}
                       </button>
                     </td>
                   </tr>
@@ -678,6 +822,22 @@ export default function ScholarlyLeaderboard({
             </tbody>
           </table>
         </div>
+
+        {/* زر عرض المزيد: يظهر عند عدم البحث وعند وجود طلاب إضافيين بعد أول 5 طلاب */}
+        {!searchQuery && visibleCount < filteredStudents.length && (
+          <div className="text-center pt-2">
+            <button
+              onClick={() => setVisibleCount((prev) => prev + 10)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/80 bg-emerald-50/90 px-6 py-2.5 text-xs sm:text-sm font-bold text-emerald-950 shadow-2xs hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+            >
+              <ChevronDown className="h-4 w-4 animate-bounce" />
+              <span>عرض المزيد من أهل الهمم (+10 طلاب)</span>
+              <span className="text-[11px] font-mono opacity-75">
+                (المتبقي: {filteredStudents.length - visibleCount})
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 5. ميثاق التآخي والتنافس الصادق */}

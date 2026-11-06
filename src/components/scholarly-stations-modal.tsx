@@ -55,8 +55,10 @@ export default function ScholarlyStationsModal({
   const [activeTab, setActiveTab] = useState<'stations' | 'badges' | 'certificate'>('stations')
   const [selectedBadgeFilter, setSelectedBadgeFilter] = useState<'all' | 'station' | 'discipline' | 'habit'>('all')
   const [selectedCertCourse, setSelectedCertCourse] = useState<string>(
-    completedCourses.length > 0 ? completedCourses[0].title : 'الآجرومية في علم النحو'
+    completedCourses.length > 0 ? completedCourses[0].title : ''
   )
+  const [customStudentName, setCustomStudentName] = useState<string>(studentName || 'طالب العلم')
+  const [certErrorMessage, setCertErrorMessage] = useState<string | null>(null)
   const [verifiedCert, setVerifiedCert] = useState<VerifiedCertificate | null>(null)
   const certIdSeed = useId()
   const certSerialNumber = certIdSeed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6) || '849201'
@@ -77,21 +79,33 @@ export default function ScholarlyStationsModal({
   )
 
   const handlePrintCertificate = () => {
+    if (completedCourses.length === 0) {
+      setCertErrorMessage('تنبيه منهجي صارم: لا يُتاح طباعة الشهادة إلا بعد إتمام كافة مجالس المتن بنسبة 100%.')
+      return
+    }
     window.print()
   }
 
   const handleOpenVerifiedIjaza = async () => {
+    if (completedCourses.length === 0) {
+      setCertErrorMessage('تنبيه منهجي صارم: لا يُتاح إصدار أو توثيق الإجازة إلا بعد إتمام كافة مجالس المتن بنسبة 100%.')
+      return
+    }
     setIsIssuingCert(true)
+    setCertErrorMessage(null)
     try {
       const targetCourse = completedCourses.find((c) => c.title === selectedCertCourse) || completedCourses[0]
       const courseSlug = targetCourse?.slug || 'al-ajrumiyyah'
-      const res = await issueCourseCertificateAction(courseSlug, studentName)
+      const res = await issueCourseCertificateAction(courseSlug, customStudentName)
       if (res.success && res.certificate) {
         setVerifiedCert(res.certificate)
         setIsVerifiedIjazaOpen(true)
+      } else if (res.error) {
+        setCertErrorMessage(res.error)
       }
     } catch (err) {
       console.error(err)
+      setCertErrorMessage('حدث خطأ أثناء توثيق الإجازة. يرجى المحاولة لاحقاً.')
     } finally {
       setIsIssuingCert(false)
     }
@@ -234,7 +248,7 @@ export default function ScholarlyStationsModal({
                     return (
                       <div
                         key={st.id}
-                        className={`relative rounded-2xl border p-5 transition-all ${
+                        className={`card-scholarly-3d relative rounded-2xl border p-5 transition-all ${
                           isCurrent
                             ? 'border-amber-400 bg-amber-50/40 shadow-md ring-2 ring-amber-300/60 dark:border-amber-700 dark:bg-amber-950/20'
                             : isPassed
@@ -358,7 +372,7 @@ export default function ScholarlyStationsModal({
                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
                     }`}
                   >
-                    أوسمة المحطات (4)
+                    أوسمة المحطات ({evaluation.allBadges.filter((b) => b.category === 'station').length})
                   </button>
                   <button
                     type="button"
@@ -369,7 +383,7 @@ export default function ScholarlyStationsModal({
                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
                     }`}
                   >
-                    أوسمة العلوم واللسان (5)
+                    أوسمة العلوم واللسان ({evaluation.allBadges.filter((b) => b.category === 'discipline').length})
                   </button>
                   <button
                     type="button"
@@ -380,7 +394,7 @@ export default function ScholarlyStationsModal({
                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
                     }`}
                   >
-                    أوسمة الهمة والمواظبة (4)
+                    أوسمة الهمة والمواظبة ({evaluation.allBadges.filter((b) => b.category === 'habit').length})
                   </button>
                 </div>
 
@@ -396,7 +410,7 @@ export default function ScholarlyStationsModal({
                   return (
                     <div
                       key={badge.id}
-                      className={`relative overflow-hidden rounded-2xl border p-4 transition-all ${
+                      className={`card-scholarly-3d relative overflow-hidden rounded-2xl border p-4 transition-all ${
                         unlocked
                           ? 'border-amber-300 bg-linear-to-b from-amber-50/60 to-white shadow-xs dark:border-amber-800 dark:from-stone-900 dark:to-stone-900/90'
                           : 'border-stone-200 bg-stone-50/70 dark:border-stone-800 dark:bg-stone-800/40 opacity-75'
@@ -463,36 +477,30 @@ export default function ScholarlyStationsModal({
                     شهادة ضبط وإتقان متن شرعي بالسند المتصل
                   </h4>
                   <p className="text-xs text-stone-500 dark:text-stone-400">
-                    شهادة تخرج رسمية معتمدة لكل متن تتمه أو لكل مرحلة تجتازها، جاهزة للطباعة والتجليد.
+                    شهادة تخرج رسمية معتمدة لكل متن تتمه بنسبة 100%، جاهزة للطباعة والتجليد.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedCertCourse}
-                    onChange={(e) => setSelectedCertCourse(e.target.value)}
-                    className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-                  >
-                    {completedCourses.length > 0 ? (
-                      completedCourses.map((c) => (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {completedCourses.length > 0 ? (
+                    <select
+                      value={selectedCertCourse}
+                      onChange={(e) => setSelectedCertCourse(e.target.value)}
+                      className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                    >
+                      {completedCourses.map((c) => (
                         <option key={c.slug} value={c.title}>
                           {c.title}
                         </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="الآجرومية في علم النحو">متن الآجرومية في النحو (معاينة نموذجية)</option>
-                        <option value="بداية المتفقه في الفقه">متن بداية المتفقه (معاينة نموذجية)</option>
-                        <option value="الأصول الثلاثة في التوحيد">متن الأصول الثلاثة (معاينة نموذجية)</option>
-                      </>
-                    )}
-                  </select>
+                      ))}
+                    </select>
+                  ) : null}
 
                   <button
                     onClick={handleOpenVerifiedIjaza}
-                    disabled={isIssuingCert}
+                    disabled={isIssuingCert || completedCourses.length === 0}
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Award className="h-4 w-4" />
                     <span>{isIssuingCert ? 'جارٍ التوثيق المشفر...' : 'إجازة موثقة بـ QR وكود تجزئة'}</span>
@@ -500,14 +508,66 @@ export default function ScholarlyStationsModal({
 
                   <button
                     onClick={handlePrintCertificate}
+                    disabled={completedCourses.length === 0}
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-950 transition cursor-pointer dark:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Printer className="h-4 w-4" />
                     <span>طباعة الشهادة</span>
                   </button>
                 </div>
               </div>
+
+              {/* حقل تعديل وكتابة اسم الطالب المراد طباعته على الشهادة */}
+              <div className="rounded-2xl border border-amber-300/80 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 font-bold text-xs">
+                    ✍️
+                  </span>
+                  <div>
+                    <label htmlFor="custom-student-name" className="text-xs font-black text-amber-950 dark:text-amber-200 block">
+                      الاسم المعتمد في صك الإجازة والشهادة:
+                    </label>
+                    <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                      يمكنك تعديل اسمك هنا ليظهر مباشرة على صك الإجازة الرسمي
+                    </span>
+                  </div>
+                </div>
+
+                <div className="w-full sm:w-auto min-w-[240px]">
+                  <input
+                    id="custom-student-name"
+                    type="text"
+                    value={customStudentName}
+                    onChange={(e) => setCustomStudentName(e.target.value)}
+                    placeholder="اكتب اسمك الثلاثي أو الرباعي..."
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-900 shadow-2xs focus:outline-emerald-800 dark:border-amber-700 dark:bg-stone-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* تنبيه إذا لم يكمل الطالب المتن بنسبة 100% */}
+              {completedCourses.length === 0 ? (
+                <div className="rounded-2xl border border-rose-300 bg-rose-50/90 p-4 text-xs font-bold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-200 shrink-0">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h5 className="font-black text-sm">قفل الاستحقاق العلمي المنهجي</h5>
+                    <p className="text-[11px] font-normal leading-relaxed text-rose-800 dark:text-rose-300 mt-0.5">
+                      لا يمكن طباعة أو استخراج صك الإجازة لأي متن إلا بعد إكمال كافة مجالسه بنسبة 100% وضبط مسائله. ابدأ مدارسة أول متن في خارطة الطريق لتفتح لك الشهادات المعتمدة.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* رسالة الخطأ في حال وجود مانع إصدار */}
+              {certErrorMessage && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-200 flex items-center gap-2">
+                  <span className="font-bold">⚠️ تنبيه:</span>
+                  <span>{certErrorMessage}</span>
+                </div>
+              )}
 
               {/* قالب الشهادة التراثية الرصين */}
               <div className="print-certificate-container relative mx-auto max-w-2xl overflow-hidden rounded-3xl border-8 border-double border-amber-600/60 bg-[#fffdf8] p-8 text-center shadow-lg dark:bg-[#1f1d1a] dark:border-amber-700/60 space-y-6">
@@ -541,7 +601,7 @@ export default function ScholarlyStationsModal({
 
                   <div className="py-2">
                     <span className="inline-block border-b-2 border-amber-600 px-6 font-sans text-xl sm:text-2xl font-black text-emerald-950 dark:text-emerald-300">
-                      {studentName}
+                      {customStudentName || 'طالب العلم'}
                     </span>
                   </div>
 
@@ -551,7 +611,7 @@ export default function ScholarlyStationsModal({
 
                   <div className="py-1">
                     <span className="inline-block rounded-xl bg-amber-100/80 px-4 py-1.5 font-bold text-amber-950 dark:bg-amber-950 dark:text-amber-200">
-                      « {selectedCertCourse} »
+                      « {selectedCertCourse || 'الآجرومية في علم النحو'} »
                     </span>
                   </div>
 
