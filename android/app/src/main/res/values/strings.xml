@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">سَنَد</string>
+    <string name="app_tagline">منصة التأصيل العلمي والمدارسة الشرعية</string>
+    <string name="platform_url">https://sanad-edu1.vercel.app</string>
+    <string name="offline_title">تعذر الاتصال بالشبكة</string>
+    <string name="offline_desc">يرجى التأكد من اتصالك بالإنترنت للوصول إلى دروس ومتون منصة سَنَد ومزامنة إنجازك.</string>
+    <string name="offline_retry">إعادة المحاولة</string>
+    <string name="exit_prompt">اضغط مرة أخرى للخروج من سَنَد</string>
+    <string name="notification_channel_name">إشعارات سَنَد التأصيلية</string>
+    <string name="notification_channel_desc">تنبيهات الدروس المنهجية، مجالس المذاكرة، والتأصيل اليومي</string>
+</resources>

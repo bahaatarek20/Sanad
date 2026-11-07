@@ -15,12 +15,12 @@
     "role": "owner",
     "stage": "طالب علم متأصل",
     "bio": "المشرف العام ومؤسس منصة سَنَد للتعليم والتأصيل المنهجي.",
-    "totalStudyMinutes": 1003,
+    "totalStudyMinutes": 1141,
     "studyMinutes": 872,
     "streak": 3,
     "streak_count": 3,
     "last_streak_cycle": 20764,
-    "last_active_at": "2026-11-07T11:32:28.173Z",
+    "last_active_at": "2026-11-07T15:49:36.879Z",
     "completedCourses": [],
     "completedTexts": 0,
     "completedEpisodesMap": {
@@ -40,7 +40,7 @@
       "2026-09-27": 66,
       "2026-11-06": 131,
       "2026-09-30": 15,
-      "2026-11-07": 5
+      "2026-11-07": 143
     },
     "listenedSessions": [
       {
@@ -96,7 +96,7 @@
     "registeredAt": "2026-10-07T15:27:17.418Z",
     "createdAt": "2026-10-07T15:27:17.418Z",
     "joined_at": "2026-10-07T15:27:17.418Z",
-    "lastActive": "2026-11-07T11:32:28.173Z",
+    "lastActive": "2026-11-07T15:49:36.879Z",
     "lastActiveAt": "2026-11-01T23:19:42.425Z",
     "lastAction": "يتصفح الآن: منصة سَنَد التعليمية",
     "username": "bhaaljml480",

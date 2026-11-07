@@ -1,0 +1,13 @@
+<resources>
+    <color name="primary_emerald_dark">#064e3b</color>
+    <color name="primary_emerald_base">#065f46</color>
+    <color name="primary_emerald_light">#10b981</color>
+    <color name="accent_gold">#d97706</color>
+    <color name="accent_amber_light">#fef3c7</color>
+    <color name="background_light">#fdfbf7</color>
+    <color name="background_dark">#12100e</color>
+    <color name="surface_card">#ffffff</color>
+    <color name="text_primary">#1c1917</color>
+    <color name="text_secondary">#78716c</color>
+    <color name="status_bar_color">#064e3b</color>
+</resources>
