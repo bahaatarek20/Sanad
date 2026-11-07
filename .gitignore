@@ -56,3 +56,10 @@ data/pdfs public/uploads/pdfs
 /data/pdfs/
 /backups/
 /.restore_test_sandbox/
+
+# Android binaries (keep in release folder locally, exclude from git history)
+*.apk
+*.aab
+*.idsig
+/build_native/
+/build_aab/
