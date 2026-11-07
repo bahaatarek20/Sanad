@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { getCurrentStudentUser } from '@/lib/auth-helper'
-import CurriculumBoard from '@/components/curriculum-board'
+import CurriculumRoadmap from '@/components/curriculum-roadmap'
 import DynamicQuotesBanner from '@/components/dynamic-quotes-banner'
 import { Sparkles, Compass, BookOpen, Star, ArrowLeft, Flame } from 'lucide-react'
 import { redirect } from 'next/navigation'
@@ -204,21 +204,21 @@ export default async function HomePage() {
 
         {/* أزرار الدعوة للعمل */}
         <div className="flex flex-wrap items-center justify-center gap-4 pt-3">
-          <Link
-            href="/roadmap"
+          <a
+            href="#roadmap"
             className="inline-flex items-center gap-2.5 rounded-2xl bg-emerald-900 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-950/25 hover:bg-emerald-950 hover:shadow-emerald-950/40 transition-all duration-200 cursor-pointer dark:bg-emerald-800 dark:hover:bg-emerald-700"
           >
             <Compass className="h-4 w-4 text-amber-300" />
             <span>خارطة الطريق لطلب العلم (المسارات المنهجية)</span>
-          </Link>
+          </a>
 
-          <a
-            href="#curriculum"
+          <Link
+            href="/community"
             className="inline-flex items-center gap-2.5 rounded-2xl border border-stone-300/80 bg-white px-6 py-3.5 text-sm font-bold text-stone-800 shadow-sm hover:border-emerald-800 hover:text-emerald-900 hover:bg-emerald-50/50 transition-all duration-200 cursor-pointer dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:text-emerald-400 dark:hover:bg-stone-700"
           >
-            <ArrowLeft className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-            <span>فهرس المتون ({courses.length} متناً)</span>
-          </a>
+            <Star className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+            <span>مجلس المذاكرة والتدارس</span>
+          </Link>
         </div>
       </section>
 
@@ -285,11 +285,13 @@ export default async function HomePage() {
       {/* ═══════════════════════════════════════════════════
           القسم الرابع: خريطة المتون المنهجية التفاعلية
       ═══════════════════════════════════════════════════ */}
-      <section id="curriculum" className="pt-12 sm:pt-20 border-t border-stone-200/80 dark:border-stone-800/80 space-y-8">
-        <CurriculumBoard
-          categories={allCategories}
+      <section id="roadmap" className="pt-12 sm:pt-20 border-t border-stone-200/80 dark:border-stone-800/80 space-y-8 scroll-mt-20">
+        <div id="curriculum" className="sr-only" />
+        <CurriculumRoadmap
           courses={courses}
+          categories={allCategories}
           completedCourseSlugs={completedCourseSlugs}
+          isLoggedIn={Boolean(user)}
         />
       </section>
     </div>

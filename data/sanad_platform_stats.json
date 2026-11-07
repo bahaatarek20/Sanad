@@ -1,12 +1,12 @@
 {
-  "totalVisitors": 117,
-  "totalRegisteredStudents": 117,
-  "totalStudyMinutes": 1210,
+  "totalVisitors": 9,
+  "totalRegisteredStudents": 8,
+  "totalStudyMinutes": 1341,
   "totalNotesCount": 0,
   "totalCompletedCoursesCount": 0,
-  "lastUpdated": "2026-11-06T02:03:44.485Z",
+  "lastUpdated": "2026-11-07T11:31:33.484Z",
   "unregisteredVisitors": 0,
-  "registeredVisitsCount": 117,
+  "registeredVisitsCount": 9,
   "recentVisitorsLog": [],
   "statsResetAt": "2026-10-31T17:45:00.000Z"
 }

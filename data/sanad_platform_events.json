@@ -1,11 +1,342 @@
 [
   {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1794051084515_z12j",
+    "timestamp": "2026-11-07T11:31:24.515Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1794047553529_ox9g",
+    "timestamp": "2026-11-07T10:32:33.529Z"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1794045584390_knek",
+    "timestamp": "2026-11-07T09:59:44.390Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1794044248826_vx6x",
+    "timestamp": "2026-11-07T09:37:28.826Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793966812943_vtzx",
+    "timestamp": "2026-11-06T12:06:52.943Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793965738271_hn18",
+    "timestamp": "2026-11-06T11:48:58.271Z"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1793940605299_sr5y",
+    "timestamp": "2026-11-06T04:50:05.299Z"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1793939466858_h3d6",
+    "timestamp": "2026-11-06T04:31:06.858Z"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1793939321016_ut5n",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-06T04:28:41.020Z",
+    "type": "navigation",
+    "timestamp": "2026-11-06T04:28:41.016Z"
+  },
+  {
+    "updatedAt": "2026-11-06T04:28:40.115Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "type": "navigation",
+    "id": "ev_1793939320112_r56t",
+    "studentName": "بشمهندس بهاء طارق",
+    "timestamp": "2026-11-06T04:28:40.112Z"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "timestamp": "2026-11-06T03:38:15.043Z",
+    "updatedAt": "2026-11-06T03:38:15.044Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "id": "ev_1793936295043_zhbr",
+    "type": "navigation"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «كشكول الطالب» [SND-1]",
+    "id": "ev_1793936094989_zwpf",
+    "timestamp": "2026-11-06T03:34:54.989Z"
+  },
+  {
+    "type": "navigation",
+    "updatedAt": "2026-11-06T03:28:15.045Z",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1001]",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "id": "ev_1793935695043_4m7f",
+    "studentName": "بشمهندس بهاء طارق",
+    "timestamp": "2026-11-06T03:28:15.043Z"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "updatedAt": "2026-11-06T03:23:15.138Z",
+    "timestamp": "2026-11-06T03:23:15.136Z",
+    "type": "navigation",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1793935395136_il9d"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «كشكول الطالب» [SND-1]",
+    "id": "ev_1793935191621_fqsc",
+    "timestamp": "2026-11-06T03:19:51.621Z"
+  },
+  {
+    "timestamp": "2026-11-06T03:18:02.979Z",
+    "updatedAt": "2026-11-06T03:18:02.983Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "id": "ev_1793935082979_1ilx",
+    "type": "login",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇫🇷 فرنسا (كمبيوتر محمول (Windows))",
+    "studentEmail": "bhaaljml480@gmail.com"
+  },
+  {
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇫🇷 فرنسا (كمبيوتر محمول (Windows))",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "type": "login",
+    "timestamp": "2026-11-06T03:18:01.701Z",
+    "id": "ev_1793935081701_5bu1",
+    "updatedAt": "2026-11-06T03:18:01.704Z"
+  },
+  {
+    "type": "login",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
+    "id": "ev_1793934107296_k5no",
+    "timestamp": "2026-11-06T03:01:47.296Z"
+  },
+  {
+    "updatedAt": "2026-11-06T02:20:25.103Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "timestamp": "2026-11-06T02:20:25.099Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation",
+    "id": "ev_1793931625099_56mr"
+  },
+  {
+    "timestamp": "2026-11-06T02:20:00.000Z",
+    "updatedAt": "2026-11-06T02:20:00.006Z",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "id": "ev_1793931600000_vadu"
+  },
+  {
+    "timestamp": "2026-11-06T02:19:55.867Z",
+    "updatedAt": "2026-11-06T02:19:55.870Z",
+    "studentEmail": "guest@visitor.sanad",
+    "id": "ev_1793931595867_te5p",
+    "studentName": "زائر بدون تسجيل",
+    "type": "visit",
+    "description": "تصفح المنصة كزائر بدون تسجيل حساب من 🇺🇸 الولايات المتحدة (حاسوب (Linux))"
+  },
+  {
+    "studentName": "بشمهندس بهاء طارق",
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "updatedAt": "2026-11-06T02:17:55.359Z",
+    "timestamp": "2026-11-06T02:17:55.358Z",
+    "id": "ev_1793931475358_7oim"
+  },
+  {
+    "type": "navigation",
+    "studentName": "بشمهندس بهاء طارق",
+    "id": "ev_1793931295276_kr1e",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "updatedAt": "2026-11-06T02:14:55.282Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "timestamp": "2026-11-06T02:14:55.276Z"
+  },
+  {
+    "studentName": "بشمهندس بهاء طارق",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation",
+    "description": "متصل الآن على المنصة ويتواجد في «كشكول الطالب» [SND-1]",
+    "timestamp": "2026-11-06T02:06:06.985Z",
+    "updatedAt": "2026-11-06T02:06:06.991Z",
+    "id": "ev_1793930766985_i4by"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "timestamp": "2026-11-06T02:01:32.659Z",
+    "updatedAt": "2026-11-06T02:01:32.660Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "type": "navigation",
+    "id": "ev_1793930492659_yc51"
+  },
+  {
+    "id": "ev_1793930117705_hn6z",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-06T01:55:17.711Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation",
+    "timestamp": "2026-11-06T01:55:17.705Z"
+  },
+  {
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1]",
+    "id": "ev_1793930017941_9acu",
+    "updatedAt": "2026-11-06T01:53:37.946Z",
+    "timestamp": "2026-11-06T01:53:37.941Z",
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "updatedAt": "2026-11-06T01:52:22.702Z",
+    "timestamp": "2026-11-06T01:52:22.701Z",
+    "type": "login",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇩🇪 ألمانيا (كمبيوتر محمول (Windows))",
+    "id": "ev_1793929942701_vr2d"
+  },
+  {
+    "id": "ev_1793929762053_g5nd",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "timestamp": "2026-11-06T01:49:22.053Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-06T01:49:22.054Z",
+    "type": "navigation",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1001]"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "id": "ev_1793929757653_k7e0",
+    "timestamp": "2026-11-06T01:49:17.653Z",
+    "updatedAt": "2026-11-06T01:49:17.653Z",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1001]"
+  },
+  {
+    "type": "login",
+    "id": "ev_1793929703357_1sbn",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇫🇷 فرنسا (هاتف ذكي (Android))",
+    "updatedAt": "2026-11-06T01:48:23.359Z",
+    "timestamp": "2026-11-06T01:48:23.357Z",
+    "studentName": "بشمهندس بهاء طارق"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇫🇷 فرنسا (هاتف ذكي (Android))",
+    "timestamp": "2026-11-06T01:48:20.752Z",
+    "type": "login",
+    "updatedAt": "2026-11-06T01:48:20.753Z",
+    "id": "ev_1793929700752_g6r1",
+    "studentName": "بشمهندس بهاء طارق"
+  },
+  {
+    "studentName": "بشمهندس بهاء طارق",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇩🇪 ألمانيا (كمبيوتر محمول (Windows))",
+    "type": "login",
+    "id": "ev_1793929472043_prqc",
+    "timestamp": "2026-11-06T01:44:32.043Z",
+    "updatedAt": "2026-11-06T01:44:32.052Z"
+  },
+  {
+    "id": "ev_1793929469478_akjl",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇩🇪 ألمانيا (كمبيوتر محمول (Windows))",
+    "type": "login",
+    "timestamp": "2026-11-06T01:44:29.478Z",
+    "updatedAt": "2026-11-06T01:44:29.486Z"
+  },
+  {
+    "timestamp": "2026-11-06T01:40:34.255Z",
+    "studentName": "المهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «الملف الشخصي وإعدادات الحساب» [SND-1001]",
+    "updatedAt": "2026-11-06T01:40:34.263Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation",
+    "id": "ev_1793929234255_hgqk"
+  },
+  {
+    "timestamp": "2026-11-06T01:40:33.134Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation",
+    "updatedAt": "2026-11-06T01:40:33.135Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "description": "متصل الآن على المنصة ويتواجد في «الملف الشخصي وإعدادات الحساب» [SND-1001]",
+    "id": "ev_1793929233134_prcn"
+  },
+  {
     "type": "login",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",
     "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
     "id": "ev_1793928457452_aq1p",
     "timestamp": "2026-11-06T01:27:37.452Z"
+  },
+  {
+    "timestamp": "2026-11-06T01:20:03.241Z",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇩🇪 ألمانيا (كمبيوتر محمول (Windows))",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-06T01:20:03.259Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "login",
+    "id": "ev_1793928003241_cgdc"
+  },
+  {
+    "updatedAt": "2026-11-06T01:19:48.694Z",
+    "timestamp": "2026-11-06T01:19:48.683Z",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق",
+    "type": "login",
+    "id": "ev_1793927988683_blzw",
+    "description": "سجّل الدخول إلى المنصة [SND-1001] من 🇩🇪 ألمانيا (كمبيوتر محمول (Windows))"
   },
   {
     "type": "login",
@@ -16,12 +347,75 @@
     "timestamp": "2026-11-06T00:33:11.050Z"
   },
   {
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1001]",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "timestamp": "2026-11-06T00:23:33.425Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-06T00:23:33.426Z",
+    "id": "ev_1793924613425_1wwt",
+    "type": "navigation"
+  },
+  {
     "type": "login",
     "studentEmail": "bhaaljml480@gmail.com",
     "studentName": "بشمهندس بهاء طارق",
     "description": "سجّل الدخول إلى المنصة [SND-1] من 🇪🇬 مصر (كمبيوتر محمول (Windows))",
     "id": "ev_1793923635518_7jn6",
     "timestamp": "2026-11-06T00:07:15.518Z"
+  },
+  {
+    "updatedAt": "2026-11-06T00:04:07.931Z",
+    "id": "ev_1793923447930_5w9g",
+    "type": "navigation",
+    "timestamp": "2026-11-06T00:04:07.930Z",
+    "description": "متصل الآن على المنصة ويتواجد في «منصة سَنَد التعليمية» [SND-1001]",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "بشمهندس بهاء طارق"
+  },
+  {
+    "studentEmail": "guest@visitor.sanad",
+    "timestamp": "2026-11-05T23:55:39.836Z",
+    "description": "تصفح المنصة كزائر بدون تسجيل حساب من 🇪🇬 مصر (هاتف ذكي (Android))",
+    "studentName": "زائر بدون تسجيل",
+    "id": "ev_1793922939836_465f",
+    "type": "visit",
+    "updatedAt": "2026-11-05T23:55:39.838Z"
+  },
+  {
+    "description": "متصل الآن على المنصة ويتواجد في «كشكول الطالب» [SND-1001]",
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "studentName": "المهندس بهاء طارق",
+    "updatedAt": "2026-11-05T23:54:51.581Z",
+    "id": "ev_1793922891573_hux6",
+    "timestamp": "2026-11-05T23:54:51.574Z"
+  },
+  {
+    "updatedAt": "2026-11-05T23:51:02.486Z",
+    "timestamp": "2026-11-05T23:51:02.485Z",
+    "studentName": "المهندس بهاء طارق",
+    "id": "ev_1793922662485_10h8",
+    "description": "متصل الآن على المنصة ويتواجد في «خارطة الطريق لطلب العلم والتأصيل الشرعي» [SND-1001]",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "type": "navigation"
+  },
+  {
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «مجلس المذاكرة العام» [SND-1001]",
+    "id": "ev_1793922389105_z6xg",
+    "timestamp": "2026-11-05T23:46:29.105Z",
+    "studentName": "بشمهندس بهاء طارق",
+    "updatedAt": "2026-11-05T23:46:29.106Z",
+    "type": "navigation"
+  },
+  {
+    "type": "navigation",
+    "studentEmail": "bhaaljml480@gmail.com",
+    "description": "متصل الآن على المنصة ويتواجد في «مجلس المذاكرة العام» [SND-1001]",
+    "id": "ev_1793921837443_3o11",
+    "studentName": "المهندس بهاء طارق",
+    "updatedAt": "2026-11-05T23:37:17.447Z",
+    "timestamp": "2026-11-05T23:37:17.443Z"
   },
   {
     "type": "login",
