@@ -22,9 +22,10 @@ export async function POST(request: NextRequest) {
     let pageTitle: string | undefined
     let eventType: 'visit' | 'navigation' | 'heartbeat' = 'visit'
     let trackStudyMinute = false
+    let body: any = null
 
     try {
-      const body = await request.json()
+      body = await request.json()
       if (body && typeof body.page === 'string') {
         pagePath = body.page
       }
@@ -45,7 +46,9 @@ export async function POST(request: NextRequest) {
     // 1. مزامنة تسجيل الطالب الفعلي وتحديث حالته (متصل الآن + الصفحة الحالية + التحرك اللحظي)
     let registeredStudentEmail = ''
     let registeredStudentName = ''
+    let studyMinutesResult: { totalMinutes: number; todayMinutes: number; streak: number } | null = null
     const studentUserCookie = cookies.get('sanad_student_user')?.value
+
     if (studentUserCookie) {
       try {
         const student = verifySessionToken(studentUserCookie)
@@ -78,10 +81,40 @@ export async function POST(request: NextRequest) {
 
           // احتساب مدة البقاء في طلب العلم طالما الطالب نشط داخل المنصة
           if (trackStudyMinute) {
-            recordActiveStudyPresence(email, 1)
+            studyMinutesResult = recordActiveStudyPresence(email, 1)
           }
         }
       } catch {}
+    }
+
+    // دعم إضافي موثوق: في حال كان الكوكي محجوباً أو غير مفعل في بعض الهواتف، نعتمد إيميل الجلسة المُرسل من العميل
+    if (!registeredStudentEmail && body && typeof body.email === 'string') {
+      const cleanEmail = body.email.trim().toLowerCase()
+      if (cleanEmail.includes('@') && cleanEmail !== 'guest@visitor.sanad') {
+        registeredStudentEmail = cleanEmail
+        registeredStudentName = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : cleanEmail.split('@')[0]
+
+        try {
+          if (eventType === 'visit') {
+            await registerOrUpdateStudentAsync(cleanEmail, registeredStudentName, {
+              ...clientTelemetry,
+            })
+          }
+
+          await recordStudentPresenceHeartbeat({
+            email: cleanEmail,
+            name: registeredStudentName,
+            pagePath,
+            pageTitle,
+            eventType: eventType === 'navigation' ? 'navigation' : 'heartbeat',
+            telemetry: clientTelemetry,
+          })
+
+          if (trackStudyMinute) {
+            studyMinutesResult = recordActiveStudyPresence(cleanEmail, 1)
+          }
+        } catch {}
+      }
     }
 
     // 2. إذا كان الطلب مجرد نبض تواجد (heartbeat) أو تنقل داخلي (navigation)، لا نزيد عداد الزيارات الكلية مرة أخرى
@@ -89,6 +122,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         counted: false,
         presenceUpdated: Boolean(registeredStudentEmail),
+        studyMinutes: studyMinutesResult?.totalMinutes,
+        todayMinutes: studyMinutesResult?.todayMinutes,
         reason: 'presence_heartbeat_updated',
       })
     }

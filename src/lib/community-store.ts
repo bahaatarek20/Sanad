@@ -546,7 +546,7 @@ export function getReportedModerationPosts(): Array<{
       list.push({
         id: post.id,
         reportId: rep.id,
-        user_id: post.author_email || post.user_id || rep.authorEmail,
+        user_id: post.author_email || (post as any).user_id || rep.authorEmail,
         anonymous_alias: post.anonymous_alias,
         content: post.content,
         course_slug: post.course_slug,

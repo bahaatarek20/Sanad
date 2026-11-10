@@ -49,6 +49,8 @@ cp.execFileSync(aapt2, [
   'link',
   '--version-code', '1',
   '--version-name', '1.0.0',
+  '--min-sdk-version', '24',
+  '--target-sdk-version', '34',
   '-I', androidJar,
   '--manifest', path.join(rootDir, 'android/app/src/main/AndroidManifest.xml'),
   '-o', unalignedApk,
@@ -118,6 +120,8 @@ cp.execFileSync(aapt2, [
   '--proto-format',
   '--version-code', '1',
   '--version-name', '1.0.0',
+  '--min-sdk-version', '24',
+  '--target-sdk-version', '34',
   '-I', androidJar,
   '--manifest', path.join(rootDir, 'android/app/src/main/AndroidManifest.xml'),
   '-o', protoApk,
@@ -164,10 +168,21 @@ cp.execFileSync(jarsigner, [
   'sanad-key'
 ], { stdio: 'inherit' });
 
-// Also update public downloads
-fs.copyFileSync(finalApk, path.join(rootDir, 'sanad/public/downloads/Sanad.apk'));
+// Also copy to public downloads and top-level release directory
+const topReleaseDir = path.resolve(rootDir, '..', 'release');
+if (fs.existsSync(topReleaseDir)) {
+  fs.copyFileSync(finalApk, path.join(topReleaseDir, 'app-release.apk'));
+  fs.copyFileSync(finalAab, path.join(topReleaseDir, 'app-release.aab'));
+}
+
+const pubDownloads = path.join(rootDir, 'public', 'downloads');
+if (!fs.existsSync(pubDownloads)) fs.mkdirSync(pubDownloads, { recursive: true });
+fs.copyFileSync(finalApk, path.join(pubDownloads, 'Sanad.apk'));
 
 console.log('=== [8/8] Success! Artifacts generated in /release ===');
 console.log('1. APK:', finalApk);
 console.log('2. AAB:', finalAab);
 console.log('3. Keystore:', keystore);
+if (fs.existsSync(topReleaseDir)) {
+  console.log('4. Top-level Release APK:', path.join(topReleaseDir, 'app-release.apk'));
+}

@@ -26,7 +26,7 @@ const cairo = Cairo({
   display: 'swap',
 })
 
-const siteUrl = 'https://sanad-edu1.vercel.app'
+const siteUrl = 'https://sanad-red.vercel.app'
 
 export const viewport: Viewport = {
   themeColor: [
@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     'Bahaa Tarek',
   ],
   authors: [
-    { name: 'المهندس بهاء طارق (م. بهاء طارق)', url: 'https://sanad-edu1.vercel.app/about' },
+    { name: 'المهندس بهاء طارق (م. بهاء طارق)', url: 'https://sanad-red.vercel.app/about' },
     { name: 'منصة سَنَد التعليمية' },
   ],
   creator: 'م. بهاء طارق (بشمهندس بهاء طارق)',

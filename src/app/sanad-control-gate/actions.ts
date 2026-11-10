@@ -500,4 +500,22 @@ export async function deleteStudentAdminAction(studentEmailOrId: string) {
   }
 }
 
+/**
+ * حسم وإصلاح أي معرفات أكاديمية مكررة وضمان فرادتها التامة وحفظها على السيرفر
+ */
+export async function reconcileStudentsAdminAction() {
+  const actor = await getAdminActor()
+  if (!actor.authorized) {
+    return { success: false, error: 'غير مصرح' }
+  }
+
+  const { reconcileAndDeduplicateScholarlyIds, readAllLocalStudents, saveAllLocalStudents } = await import('@/lib/student-tracking')
+  const students = readAllLocalStudents(true)
+  const hadChanges = reconcileAndDeduplicateScholarlyIds(students)
+  if (hadChanges) {
+    saveAllLocalStudents(students)
+  }
+  return { success: true, count: students.length, hadChanges }
+}
+
 

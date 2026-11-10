@@ -7,12 +7,9 @@ import {
   Download,
   CheckCircle2,
   Share2,
-  Sparkles,
   WifiOff,
-  ShieldCheck,
   BookOpen,
   ArrowRight,
-  ExternalLink,
   Laptop,
   Check,
   Monitor,
@@ -26,7 +23,10 @@ import {
   Info,
   Maximize2,
   Minus,
+  Copy,
+  QrCode,
 } from 'lucide-react'
+import QRCode from 'qrcode'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -39,7 +39,8 @@ export default function DownloadAppPage() {
   const [installSuccess, setInstallSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<'desktop' | 'android' | 'ios'>('desktop')
   const [showGuideModal, setShowGuideModal] = useState(false)
-  const [detectedOs, setDetectedOs] = useState<'windows' | 'mac' | 'android' | 'ios' | 'other'>('windows')
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const [copiedLink, setCopiedLink] = useState(false)
 
   useEffect(() => {
     document.title = 'سند'
@@ -56,20 +57,18 @@ export default function DownloadAppPage() {
         setIsInstalled(true)
       }
 
-      // 2. كشف نظام التشغيل تلقائياً لضبط الواجهة بالشكل المناسب
+      // 2. كشف نظام التشغيل تلقائياً أو قراءة ?tab= لضبط الواجهة بالشكل المناسب
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
       const ua = navigator.userAgent || ''
-      if (/iPad|iPhone|iPod/.test(ua)) {
+      if (tabParam === 'android' || tabParam === 'ios' || tabParam === 'desktop') {
+        setActiveTab(tabParam)
+      } else if (/iPad|iPhone|iPod/.test(ua)) {
         setActiveTab('ios')
-        setDetectedOs('ios')
       } else if (/Android/.test(ua)) {
         setActiveTab('android')
-        setDetectedOs('android')
-      } else if (/Macintosh|Mac OS X/.test(ua)) {
-        setActiveTab('desktop')
-        setDetectedOs('mac')
       } else {
         setActiveTab('desktop')
-        setDetectedOs('windows')
       }
     }, 0)
 
@@ -88,12 +87,37 @@ export default function DownloadAppPage() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
 
+    QRCode.toDataURL('https://sanad-red.vercel.app/api/download/apk', {
+      margin: 1,
+      width: 170,
+      color: { dark: '#064e3b', light: '#ffffff' },
+    })
+      .then(setQrDataUrl)
+      .catch(() => {})
+
     return () => {
       clearTimeout(t)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }
   }, [])
+
+  const handleCopyApkLink = () => {
+    try {
+      const link = 'https://sanad-red.vercel.app/api/download/apk'
+      navigator.clipboard.writeText(link)
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2500)
+    } catch {}
+  }
+
+  const whatsappShareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+    '🕌 تطبيق منصة سَنَد التأصيلية الرسمي لهواتف أندرويد (APK مستقل):\n' +
+    'حمّل التطبيق الآن برابط مباشر بنقرة واحدة:\n' +
+    'https://sanad-red.vercel.app/api/download/apk\n\n' +
+    'أو قم بزيارة صفحة التثبيت الرسمية:\n' +
+    'https://sanad-red.vercel.app/download?tab=android'
+  )}`
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
@@ -316,7 +340,9 @@ export default function DownloadAppPage() {
                 <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
                   {activeTab === 'desktop'
                     ? 'يفتح في نافذة مستقلة كأي برنامج، خفيف جداً، وبدون أشرطة المتصفح المشتتة.'
-                    : 'لا يتطلب متجر تطبيقات، حجم خفيف جداً (أقل من 3 ميجابايت)، ويعمل أوفلاين.'}
+                    : activeTab === 'android'
+                    ? 'تطبيق أندرويد مستقل تماماً بصيغة APK بإشعارات النظام المباشرة، أو تثبيت فوري بدون متجر.'
+                    : 'لا يتطلب متجر تطبيقات، خفيف جداً على الذاكرة، ويعمل بسلاسة كأي تطبيق أصلي.'}
                 </p>
               </div>
 
@@ -388,18 +414,75 @@ export default function DownloadAppPage() {
                         </div>
                       </div>
                       <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200">
-                        خفيف جداً • ~500 KB
+                        تطبيق أندرويد مستقل • 11.2 MB
                       </span>
                     </div>
 
                     <a
                       href="/api/download/apk"
                       download="Sanad.apk"
-                      className="w-full rounded-xl bg-emerald-700 hover:bg-emerald-800 py-3 px-4 text-xs sm:text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-center"
+                      className="w-full rounded-xl bg-emerald-700 hover:bg-emerald-800 py-3.5 px-4 text-xs sm:text-sm font-black text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-center"
                     >
                       <Download className="h-4 w-4 text-amber-300 group-hover:scale-110 transition-transform" />
                       <span>اضغط هنا لتحميل ملف Sanad.apk فوراً</span>
                     </a>
+
+                    {/* أزرار المشاركة والنسخ السريع بدلاً من إرسال الملف يدوياً */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyApkLink}
+                        className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white py-2.5 px-3 text-xs font-bold text-emerald-900 hover:bg-emerald-50 transition cursor-pointer dark:border-emerald-800 dark:bg-stone-800 dark:text-emerald-300 dark:hover:bg-stone-700"
+                      >
+                        {copiedLink ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>تم نسخ رابط التحميل ✓</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 text-emerald-700" />
+                            <span>نسخ رابط التحميل المباشر</span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={whatsappShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50/80 py-2.5 px-3 text-xs font-bold text-teal-900 hover:bg-teal-100 transition cursor-pointer dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
+                      >
+                        <Share2 className="h-3.5 w-3.5 text-teal-700 dark:text-teal-400" />
+                        <span>مشاركة الرابط عبر واتساب 💬</span>
+                      </a>
+                    </div>
+
+                    {/* باركود التحميل السريع بالمسح بالكاميرا */}
+                    {qrDataUrl && (
+                      <div className="flex flex-col sm:flex-row items-center gap-4 rounded-xl border border-emerald-200/80 bg-white/90 p-3 dark:border-emerald-900 dark:bg-stone-900/90">
+                        <div className="shrink-0 rounded-xl border border-stone-200 bg-white p-1.5 shadow-2xs">
+                          <img src={qrDataUrl} alt="QR Code تحميل تطبيق سند" className="h-24 w-24 rounded-lg" />
+                        </div>
+                        <div className="space-y-1.5 text-center sm:text-right flex-1">
+                          <div className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-900 dark:text-emerald-300">
+                            <QrCode className="h-4 w-4 text-amber-600" />
+                            <span>باركود التثبيت السريع للأندرويد (QR Code)</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-stone-600 dark:text-stone-400">
+                            وجّه كاميرا الهاتف نحو الرمز ليبدأ تحميل تطبيق «سَنَد» (APK) مباشرةً بدون الحاجة لإرسال الملف يدوياً!
+                          </p>
+                          <a
+                            href={qrDataUrl}
+                            download="Sanad-APK-QR.png"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-100 transition dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                          >
+                            <Download className="h-3 w-3" />
+                            <span>حفظ صورة الباركود للمشاركة (PNG)</span>
+                          </a>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed bg-white/70 dark:bg-stone-800/60 p-2.5 rounded-lg border border-stone-200/60 dark:border-stone-700/60">
                       💡 <strong>طريقة التثبيت:</strong> بعد اكتمال التحميل، افتح إشعار التحميل واضغط «تثبيت». إذا ظهر تنبيه الأمان، اختر «السماح بالتثبيت من هذا المصدر» ليكتمل التثبيت بنجاح.

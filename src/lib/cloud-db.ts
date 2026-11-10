@@ -860,14 +860,15 @@ export async function getPlatformEventsFromCloud(maxLimit = 40): Promise<Platfor
  * يضمن منع أي تضارب تزامن (Race Condition) عند تسجيل طالب جديد في نفس اللحظة
  */
 export async function getNextAtomicScholarlyId(): Promise<string> {
-  const counterRef = doc(db, 'counters', 'students')
+  const counterRef = doc(db, 'site_stats', 'scholarly_counter')
   try {
     const nextNum = await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(counterRef)
-      let currentVal = 1089
+      // قاعدة البداية هي 119 طالباً المسجلين بالفعل في المنصة
+      let currentVal = 119
       if (snap.exists()) {
         const data = snap.data()
-        if (typeof data.last_id === 'number') {
+        if (typeof data.last_id === 'number' && data.last_id >= 119) {
           currentVal = data.last_id
         }
       }
@@ -877,8 +878,22 @@ export async function getNextAtomicScholarlyId(): Promise<string> {
     })
     return `SND-${nextNum}`
   } catch (err) {
-    console.warn('Atomic counter transaction warning, falling back to local counter:', err)
+    console.warn('Atomic counter transaction notice, checking cloud students fallback:', err)
+    try {
+      const students = await getStudentsFromCloud()
+      let max = 119
+      for (const s of students) {
+        const extraAcademicId = (s as unknown as { academic_id?: string }).academic_id || ''
+        const raw = (s.scholarlyId || extraAcademicId).trim()
+        if (raw.startsWith('SND-')) {
+          const num = parseInt(raw.replace('SND-', ''), 10)
+          if (!isNaN(num) && num > max) max = num
+        }
+      }
+      return `SND-${max + 1}`
+    } catch {}
     return ''
+
   }
 }
 

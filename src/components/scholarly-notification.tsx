@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, X, BookOpen, Flame, Bell, Megaphone } from 'lucide-react'
+import { X, BookOpen, Flame, Bell, Megaphone } from 'lucide-react'
 
 interface ScholarlyQuote {
   type: 'milestone' | 'warning' | 'broadcast'
@@ -225,10 +225,31 @@ function playNotificationChime() {
   }
 }
 
+interface SanadNativeBridge {
+  isNativeApp?: () => boolean
+  hasNotificationPermission?: () => boolean
+  requestNotificationPermission?: () => void
+  showNotification?: (title: string, message: string, targetUrl: string) => void
+}
+
+declare global {
+  interface Window {
+    SanadNative?: SanadNativeBridge
+  }
+}
+
 // إطلاق إشعار أصلي ينزل من أعلى شاشة الهاتف المحمول أو شريط مهام النظام
 function fireNativeMobileNotification(title: string, body: string, tag: string) {
   try {
     if (typeof window === 'undefined') return
+
+    // 1. الأولوية لتطبيق الأندرويد الأصلي المستقل (Android Native App Notification)
+    if (window.SanadNative && typeof window.SanadNative.showNotification === 'function') {
+      window.SanadNative.showNotification(title, body, '/')
+      return
+    }
+
+    // 2. إشعارات النظام للمتصفحات (Web Notifications API)
     if (!('Notification' in window)) return
 
     if (Notification.permission === 'granted') {
@@ -240,9 +261,10 @@ function fireNativeMobileNotification(title: string, body: string, tag: string) 
             body,
             icon: '/icon-192.png',
             badge: '/icon-192.png',
-            vibrate: [200, 100, 200, 100, 200],
+            vibrate: [250, 150, 250, 150, 250],
             tag,
             renotify: true,
+            requireInteraction: true,
             data: { url: '/' },
           },
         })
@@ -252,8 +274,15 @@ function fireNativeMobileNotification(title: string, body: string, tag: string) 
           icon: '/icon-192.png',
           badge: '/icon-192.png',
           tag,
+          requireInteraction: true,
         })
       }
+    } else if (Notification.permission === 'default') {
+      Notification.requestPermission().then((perm) => {
+        if (perm === 'granted') {
+          fireNativeMobileNotification(title, body, tag)
+        }
+      }).catch(() => {})
     }
   } catch {}
 }
@@ -264,23 +293,50 @@ export default function ScholarlyNotification() {
   const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setHasNotificationPermission(Notification.permission === 'granted')
-    }
+    const t = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        if (window.SanadNative) {
+          setHasNotificationPermission(
+            typeof window.SanadNative.hasNotificationPermission === 'function'
+              ? window.SanadNative.hasNotificationPermission()
+              : true
+          )
+        } else if ('Notification' in window) {
+          setHasNotificationPermission(Notification.permission === 'granted')
+        }
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [])
 
   const requestNativeNotificationAccess = async () => {
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        const perm = await Notification.requestPermission()
-        if (perm === 'granted') {
+      if (typeof window !== 'undefined') {
+        if (window.SanadNative) {
+          if (typeof window.SanadNative.requestNotificationPermission === 'function') {
+            window.SanadNative.requestNotificationPermission()
+          }
           setHasNotificationPermission(true)
           playNotificationChime()
           fireNativeMobileNotification(
             'منصة سَنَد التأصيلية 🕌',
-            'تم تفعيل إشعارات الهاتف بنجاح! ستصلك تنبيهات المدارسة والإعلانات هنا.',
+            'تم تفعيل إشعارات الهاتف بنجاح! ستصلك تنبيهات المدارسة والإعلانات كإشعار في شريط الهاتف.',
             'welcome-permission'
           )
+          return
+        }
+
+        if ('Notification' in window) {
+          const perm = await Notification.requestPermission()
+          if (perm === 'granted') {
+            setHasNotificationPermission(true)
+            playNotificationChime()
+            fireNativeMobileNotification(
+              'منصة سَنَد التأصيلية 🕌',
+              'تم تفعيل إشعارات الهاتف بنجاح! ستصلك تنبيهات المدارسة والإعلانات كإشعار في شريط الهاتف.',
+              'welcome-permission'
+            )
+          }
         }
       }
     } catch {}
@@ -302,7 +358,7 @@ export default function ScholarlyNotification() {
         if (res.ok) {
           const data = await res.json()
           if (!isCancelled && data?.notice?.active && data.notice.message) {
-            const broadcastId = data.notice.timestamp || data.notice.message
+            const broadcastId = String(data.notice.timestamp || data.notice.message)
             const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
             if (lastSeen !== broadcastId) {
               const speaker = data.notice.sender || 'إدارة منصة سَنَد'
@@ -334,7 +390,7 @@ export default function ScholarlyNotification() {
           if (localRaw) {
             const b = JSON.parse(localRaw)
             if (b && b.active && b.message && !isCancelled) {
-              const broadcastId = b.timestamp || b.message
+              const broadcastId = String(b.timestamp || b.message)
               const lastSeen = localStorage.getItem('sanad_last_broadcast_seen')
               if (lastSeen !== broadcastId) {
                 const speaker = b.sender || 'إدارة منصة سَنَد'
@@ -401,8 +457,25 @@ export default function ScholarlyNotification() {
 
     checkLiveBroadcast()
 
+    // فحص دوري خفيف كل 25 ثانية لضمان وصول الإعلانات فور بثها من الإدارة
+    const pollInterval = setInterval(() => {
+      if (!isCancelled) {
+        checkLiveBroadcast()
+      }
+    }, 25000)
+
+    // الاستماع للتحديثات المحلية عبر التبويبات المتعددة
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sanad_admin_broadcast') {
+        checkLiveBroadcast()
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+
     return () => {
       isCancelled = true
+      clearInterval(pollInterval)
+      window.removeEventListener('storage', handleStorageChange)
       if (autoHideTimer) clearTimeout(autoHideTimer)
     }
   }, [])

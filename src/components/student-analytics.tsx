@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   TrendingUp,
   Clock,
@@ -43,10 +43,8 @@ export default function StudentAnalytics({
 }: StudentAnalyticsProps) {
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily')
   const [sessionSeconds, setSessionSeconds] = useState(0)
-  const [isTabActive, setIsTabActive] = useState(true)
+  const [isTabActive] = useState(true)
   const [isStationsModalOpen, setIsStationsModalOpen] = useState(false)
-  const isTabActiveRef = useRef(true)
-  const sessionSecondsRef = useRef(0)
 
   const badgesEvaluation = useMemo(() => {
     return evaluateStudentBadges({
@@ -57,72 +55,47 @@ export default function StudentAnalytics({
     })
   }, [completedCourses, initialTotalStudyMinutes, initialStreak, totalNotesCount])
 
-  // 1. عداد الجلسة الحية المتصل بوجود الطالب الفعلي: يعد فقط أثناء تواجد الطالب وتفاعله داخل المنصة
+  // 1. عداد الجلسة الحية المتصل بوجود الطالب الفعلي: يستمر في العد من أول فتح للمنصة وحتى الخروج النهائي
   useEffect(() => {
-    // استرجاع الثواني النشطة السابقة في هذه الجلسة إن وجدت
-    let initialSec = 0
+    let sessionStart = Date.now()
     try {
-      const stored = sessionStorage.getItem('sanad_active_session_seconds')
-      if (stored) {
-        initialSec = Number(stored) || 0
+      const storedStart = sessionStorage.getItem('sanad_session_start_timestamp')
+      if (storedStart) {
+        const parsed = parseInt(storedStart, 10)
+        if (!isNaN(parsed) && parsed > 0) {
+          sessionStart = parsed
+        }
+      } else {
+        sessionStorage.setItem('sanad_session_start_timestamp', String(sessionStart))
       }
     } catch {}
 
-    sessionSecondsRef.current = initialSec
-
-    const checkTabActive = () => {
-      if (typeof document === 'undefined') return true
-      return !document.hidden && document.hasFocus()
+    const updateElapsed = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000))
+      setSessionSeconds(elapsed)
+      try {
+        sessionStorage.setItem('sanad_active_session_seconds', String(elapsed))
+      } catch {}
     }
 
-    const handleVisibilityChange = () => {
-      const active = checkTabActive()
-      isTabActiveRef.current = active
-      setIsTabActive(active)
-    }
+    const initTimer = setTimeout(updateElapsed, 0)
 
-    const handleFocus = () => {
-      const active = typeof document !== 'undefined' && !document.hidden
-      isTabActiveRef.current = active
-      setIsTabActive(active)
-    }
-
-    const handleBlur = () => {
-      isTabActiveRef.current = false
-      setIsTabActive(false)
-    }
-
-    // فحص مبدئي للحالة
-    const initiallyActive = checkTabActive()
-    isTabActiveRef.current = initiallyActive
-
-    const t = setTimeout(() => {
-      setSessionSeconds(initialSec)
-      setIsTabActive(initiallyActive)
-    }, 0)
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('blur', handleBlur)
-
-    // المؤقت يزيد ثانية واحدة فقط عند كل ثانية إذا كان الطالب نشطاً في المنصة
-    const timer = setInterval(() => {
-      if (isTabActiveRef.current) {
-        sessionSecondsRef.current += 1
-        const nextSec = sessionSecondsRef.current
-        setSessionSeconds(nextSec)
-        try {
-          sessionStorage.setItem('sanad_active_session_seconds', String(nextSec))
-        } catch {}
+    // الاستماع للنبض القادم من VisitorTracker الموحد عبر كل صفحات المنصة
+    const handleTick = (e: Event) => {
+      const customEvent = e as CustomEvent<{ seconds: number }>
+      if (customEvent.detail && typeof customEvent.detail.seconds === 'number') {
+        setSessionSeconds(customEvent.detail.seconds)
       }
-    }, 1000)
+    }
+    window.addEventListener('sanad_session_seconds_tick', handleTick)
+
+    // مؤقت احتياطي محلي كل ثانية لضمان حركة العداد بسلاسة فائقة
+    const localTimer = setInterval(updateElapsed, 1000)
 
     return () => {
-      clearTimeout(t)
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('blur', handleBlur)
+      clearTimeout(initTimer)
+      clearInterval(localTimer)
+      window.removeEventListener('sanad_session_seconds_tick', handleTick)
     }
   }, [])
 

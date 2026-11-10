@@ -776,6 +776,51 @@ export default function SanadControlGatePage() {
   })
   const [broadcastSavedNotice, setBroadcastSavedNotice] = useState(false)
 
+  // دالة أمان إضافية لمنع ظهور أي معرفات أكاديمية مكررة في لوحة التحكم نهائياً
+  const sanitizeClientScholarlyIds = (list: StudentActivityRecord[]): StudentActivityRecord[] => {
+    if (!list || list.length === 0) return []
+    const usedNumbers = new Set<number>()
+    let maxNum = 119
+
+    // فرز تسلسلي بحسب أقدمية التسجيل لمنح الأسبقية لمن سجل أولاً في الاحتفاظ برقمه
+    const sortedByDate = [...list].sort((a, b) => {
+      const tA = new Date(a.registeredAt || (a as any).createdAt || 0).getTime()
+      const tB = new Date(b.registeredAt || (b as any).createdAt || 0).getTime()
+      return tA - tB
+    })
+
+    const duplicateStudents = new Set<string>()
+
+    for (const s of sortedByDate) {
+      const rawId = (s.scholarlyId || '').trim()
+      if (rawId.startsWith('SND-')) {
+        const num = parseInt(rawId.replace('SND-', ''), 10)
+        if (!isNaN(num) && num > 0) {
+          if (!usedNumbers.has(num)) {
+            usedNumbers.add(num)
+            if (num > maxNum) maxNum = num
+            continue
+          }
+        }
+      }
+      duplicateStudents.add(s.id || s.email)
+    }
+
+    if (duplicateStudents.size === 0) return list
+
+    let nextAvailable = Math.max(maxNum + 1, 120)
+    return list.map((s) => {
+      if (!duplicateStudents.has(s.id || s.email)) return s
+      while (usedNumbers.has(nextAvailable)) {
+        nextAvailable++
+      }
+      const newId = `SND-${nextAvailable}`
+      usedNumbers.add(nextAvailable)
+      nextAvailable++
+      return { ...s, scholarlyId: newId }
+    })
+  }
+
   // جلب بيانات لوحة التحكم من السيرفر (بما فيها المتون والإعلانات والفنون المعتمدة على مستوى المنصة كاملة)
   const refreshDashboardData = async () => {
     try {
@@ -805,8 +850,9 @@ export default function SanadControlGatePage() {
             const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
             return timeB - timeA
           })
-          saveStudentsBackupToLocal(merged)
-          return merged
+          const finalUnique = sanitizeClientScholarlyIds(merged)
+          saveStudentsBackupToLocal(finalUnique)
+          return finalUnique
         })
         if (res.stats) {
           setStats(res.stats)
@@ -1012,8 +1058,9 @@ export default function SanadControlGatePage() {
               const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
               return timeB - timeA
             })
-            saveStudentsBackupToLocal(merged)
-            return merged
+            const finalUnique = sanitizeClientScholarlyIds(merged)
+            saveStudentsBackupToLocal(finalUnique)
+            return finalUnique
           })
           if (json.stats) {
             setStats(json.stats)
@@ -1115,8 +1162,9 @@ export default function SanadControlGatePage() {
                 const timeB = new Date(b.lastActive || b.registeredAt || 0).getTime()
                 return timeB - timeA
               })
-              saveStudentsBackupToLocal(merged)
-              return merged
+              const finalUnique = sanitizeClientScholarlyIds(merged)
+              saveStudentsBackupToLocal(finalUnique)
+              return finalUnique
             })
           }
         },

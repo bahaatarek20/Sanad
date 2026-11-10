@@ -699,30 +699,10 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
     }
   }
 
-  // 7. ترقيم تسلسلي لمعرفات الطلاب المفقودة وضمان فرادتها التامة
-  const assignedIds = new Set<string>()
-  for (const s of map.values()) {
-    if (s.scholarlyId) {
-      if (!assignedIds.has(s.scholarlyId)) {
-        assignedIds.add(s.scholarlyId)
-      } else {
-        // مكرر، سيتم إعادة ترقيمه لاحقاً
-        s.scholarlyId = undefined
-      }
-    }
-  }
-
-  let nextIdCounter = 1
+  const list = Array.from(map.values())
   const roleLocks = globalThis.__sanad_role_locks__ || {}
-  for (const s of map.values()) {
-    if (!s.scholarlyId) {
-      while (assignedIds.has(`SND-${nextIdCounter}`)) {
-        nextIdCounter++
-      }
-      s.scholarlyId = `SND-${nextIdCounter}`
-      assignedIds.add(s.scholarlyId)
-      nextIdCounter++
-    }
+
+  for (const s of list) {
     if (s.isBanned === undefined) {
       s.isBanned = false
     }
@@ -738,7 +718,14 @@ export function readAllLocalStudents(forceRefresh: boolean = false): StudentActi
     ensureStudentTelemetryDefaults(s)
   }
 
-  const list = Array.from(map.values())
+  // 7. فحص وإصلاح المعرفات الأكاديمية وحسم أي تكرار فوراً مع الحفظ التلقائي
+  const deduplicated = reconcileAndDeduplicateScholarlyIds(list)
+  if (deduplicated) {
+    try {
+      saveAllLocalStudents(list)
+    } catch {}
+  }
+
   globalThis.__sanad_registry_cache__ = list
   return list
 }
@@ -1134,18 +1121,101 @@ export function resetVisitorCount(targetCount: number = 0): number {
   }
 }
 
-// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم (مثال: SND-1)
-export function generateScholarlyId(existingStudents: StudentActivityRecord[]): string {
-  let maxNum = 0
-  for (const s of existingStudents) {
-    if (s.scholarlyId && s.scholarlyId.startsWith('SND-')) {
-      const numPart = parseInt(s.scholarlyId.replace('SND-', ''), 10)
-      if (!isNaN(numPart) && numPart > maxNum) {
-        maxNum = numPart
+// 1.5.1 فحص ومعالجة المعرفات الأكاديمية وضمان فرادتها التامة بدون أي تكرار
+export function reconcileAndDeduplicateScholarlyIds(students: StudentActivityRecord[]): boolean {
+  if (!students || students.length === 0) return false
+  let hasChanges = false
+  const usedNumbers = new Set<number>()
+  const duplicatesOrMissing: StudentActivityRecord[] = []
+
+  // 1. فرز الطلاب ترتيباً زمنياً وفق تاريخ التسجيل أو الانضمام لمنح الأسبقية لمن سجل أولاً
+  const sorted = [...students].sort((a, b) => {
+    const timeA = new Date(a.registeredAt || (a as any).createdAt || (a as any).joined_at || 0).getTime()
+    const timeB = new Date(b.registeredAt || (b as any).createdAt || (b as any).joined_at || 0).getTime()
+    return timeA - timeB
+  })
+
+  // 2. حجز الأرقام للطلاب الذين يمتلكون معرفات صحيحة غير مكررة
+  for (const st of sorted) {
+    const rawId = (st.scholarlyId || (st as any).academicId || (st as any).academic_id || '').trim()
+    if (rawId && rawId.startsWith('SND-')) {
+      const num = parseInt(rawId.replace('SND-', ''), 10)
+      if (!isNaN(num) && num > 0 && !usedNumbers.has(num)) {
+        usedNumbers.add(num)
+        st.scholarlyId = `SND-${num}`
+        ;(st as any).academicId = `SND-${num}`
+        ;(st as any).academic_id = `SND-${num}`
+        continue
+      }
+    }
+    duplicatesOrMissing.push(st)
+  }
+
+  // 3. إعادة توليد معرفات متسلسلة فريدة 100% للطلاب أصحاب المعرفات المكررة أو المفقودة
+  if (duplicatesOrMissing.length > 0) {
+    let maxUsed = 119
+    usedNumbers.forEach((n) => {
+      if (n > maxUsed) maxUsed = n
+    })
+    let nextAvailable = maxUsed + 1
+    for (const st of duplicatesOrMissing) {
+      while (usedNumbers.has(nextAvailable)) {
+        nextAvailable++
+      }
+      const newId = `SND-${nextAvailable}`
+      st.scholarlyId = newId
+      ;(st as any).academicId = newId
+      ;(st as any).academic_id = newId
+      usedNumbers.add(nextAvailable)
+      nextAvailable++
+      hasChanges = true
+      // مزامنة سحابية للطالب المصحح معرفه
+      saveStudentToCloud(st).catch(() => {})
+    }
+  }
+
+  return hasChanges
+}
+
+// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم (مثال: SND-121) مع فحص شامل لكافة السجلات المحلية والسحابية
+export function generateScholarlyId(existingStudents?: StudentActivityRecord[]): string {
+  // الحد الأدنى للمعرف هو 119 (عدد الطلاب المعتمدين والموثقين بالمنصة) لمنع توليد أي رقم متكرر نهائياً
+  let maxNum = 119
+  const usedNumbers = new Set<number>()
+  const allToCheck: StudentActivityRecord[] = []
+
+  if (existingStudents && Array.isArray(existingStudents)) {
+    allToCheck.push(...existingStudents)
+  }
+
+  try {
+    const onDisk = readAllLocalStudents(false)
+    if (Array.isArray(onDisk)) allToCheck.push(...onDisk)
+  } catch {}
+
+  if (globalThis.__sanad_cloud_sync_cache__?.students) {
+    allToCheck.push(...globalThis.__sanad_cloud_sync_cache__.students)
+  }
+
+  for (const s of allToCheck) {
+    const rawId = (s.scholarlyId || (s as any).academicId || (s as any).academic_id || '').trim()
+    if (rawId && rawId.startsWith('SND-')) {
+      const numPart = parseInt(rawId.replace('SND-', ''), 10)
+      if (!isNaN(numPart) && numPart > 0) {
+        usedNumbers.add(numPart)
+        if (numPart > maxNum) {
+          maxNum = numPart
+        }
       }
     }
   }
-  return `SND-${maxNum + 1}`
+
+  let nextCandidate = maxNum + 1
+  while (usedNumbers.has(nextCandidate)) {
+    nextCandidate++
+  }
+
+  return `SND-${nextCandidate}`
 }
 
 // 1.6 فحص هل حساب الطالب محظور إدارياً أو محذوف نهائياً
@@ -1748,7 +1818,8 @@ export function registerOrUpdateStudent(
       students[existingIdx].userAgent = meta.userAgent
     }
     if (!students[existingIdx].scholarlyId) {
-      students[existingIdx].scholarlyId = meta?.scholarlyId || generateScholarlyId(students)
+      const isMetaTaken = meta?.scholarlyId && students.some((s, idx) => idx !== existingIdx && s.scholarlyId === meta.scholarlyId)
+      students[existingIdx].scholarlyId = (meta?.scholarlyId && !isMetaTaken) ? meta.scholarlyId : generateScholarlyId(students)
     }
     if (students[existingIdx].isBanned === undefined) {
       students[existingIdx].isBanned = false
@@ -1786,7 +1857,8 @@ export function registerOrUpdateStudent(
 
     return students[existingIdx]
   } else {
-    const scholarlyId = meta?.scholarlyId || generateScholarlyId(students)
+    const isMetaTaken = meta?.scholarlyId && students.some((s) => s.scholarlyId === meta.scholarlyId)
+    const scholarlyId = (meta?.scholarlyId && !isMetaTaken) ? meta.scholarlyId : generateScholarlyId(students)
     const newStudent: StudentActivityRecord = {
       id: meta?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       scholarlyId,
@@ -1821,6 +1893,7 @@ export function registerOrUpdateStudent(
 
     ensureStudentTelemetryDefaults(newStudent)
     students.unshift(newStudent)
+    reconcileAndDeduplicateScholarlyIds(students)
 
     // تسجيل فوري للمستخدم الجديد في الذاكرة لتسمع اللوحة في 0 ثانية
     globalThis.__sanad_latest_registered_student__ = newStudent
@@ -2934,6 +3007,12 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     }
     ensureStudentTelemetryDefaults(st)
   })
+
+  // فحص وإصلاح المعرفات الأكاديمية وضمان فرادتها التامة بدون أي تكرار
+  const idReconciled = reconcileAndDeduplicateScholarlyIds(mergedStudents);
+  if (idReconciled) {
+    hasMergedChanges = true;
+  }
 
   // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
   mergedStudents.sort((a, b) => {

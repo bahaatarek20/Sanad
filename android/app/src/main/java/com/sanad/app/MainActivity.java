@@ -2,13 +2,18 @@ package com.sanad.app;
 
 import android.app.Activity;
 import android.app.DownloadManager;
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -19,6 +24,8 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -34,9 +41,10 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    private static final String PLATFORM_URL = "https://sanad-edu1.vercel.app";
-    private static final String BASE_HOST = "sanad-edu1.vercel.app";
+    private static final String PLATFORM_URL = "https://sanad-red.vercel.app";
+    private static final String BASE_HOST = "sanad-red.vercel.app";
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 1002;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -54,14 +62,27 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Window window = getWindow();
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            window.setStatusBarColor(0xFF064E3B);
+            window.setNavigationBarColor(0xFF064E3B);
+        }
+
         setContentView(R.layout.activity_main);
 
         initViews();
         initNotifications();
+        checkAndRequestNotificationPermission();
         setupNetworkListener();
         setupWebView();
 
-        loadPlatform();
+        if (getIntent() != null && getIntent().hasExtra("TARGET_URL")) {
+            handleIntentUrl(getIntent());
+        } else {
+            loadPlatform();
+        }
     }
 
     private void initViews() {
@@ -93,10 +114,20 @@ public class MainActivity extends Activity {
             );
             channel.setDescription(getString(R.string.notification_channel_desc));
             channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 250, 150, 250});
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
 
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
             }
         }
     }
@@ -126,12 +157,16 @@ public class MainActivity extends Activity {
     }
 
     private void setupWebView() {
+        webView.setBackgroundColor(0xFFFDFBF7);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -148,6 +183,9 @@ public class MainActivity extends Activity {
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
+
+        // Native Notification Bridge to JavaScript
+        webView.addJavascriptInterface(new SanadNativeInterface(this), "SanadNative");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -222,6 +260,13 @@ public class MainActivity extends Activity {
                 progressBar.setProgress(newProgress);
                 if (newProgress >= 100) {
                     progressBar.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    request.grant(request.getResources());
                 }
             }
 
@@ -315,6 +360,120 @@ public class MainActivity extends Activity {
                 }
             }
         });
+    }
+
+    public void displaySystemNotification(String title, String message, String targetUrl) {
+        try {
+            initNotifications();
+
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null) return;
+
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            if (targetUrl != null && !targetUrl.isEmpty()) {
+                intent.putExtra("TARGET_URL", targetUrl);
+            }
+
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+            int reqCode = (int) (System.currentTimeMillis() & 0xfffffff);
+            PendingIntent pendingIntent = PendingIntent.getActivity(this, reqCode, intent, flags);
+
+            Notification.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                builder = new Notification.Builder(this, "sanad_main_channel");
+            } else {
+                builder = new Notification.Builder(this);
+            }
+
+            String displayTitle = (title != null && !title.isEmpty()) ? title : getString(R.string.app_name);
+
+            builder.setContentTitle(displayTitle)
+                   .setContentText(message)
+                   .setStyle(new Notification.BigTextStyle().bigText(message).setSummaryText(getString(R.string.app_name)))
+                   .setSmallIcon(R.mipmap.ic_launcher)
+                   .setAutoCancel(true)
+                   .setContentIntent(pendingIntent)
+                   .setPriority(Notification.PRIORITY_HIGH)
+                   .setVibrate(new long[]{0, 250, 150, 250})
+                   .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
+
+            try {
+                Bitmap largeIcon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+                if (largeIcon != null) {
+                    builder.setLargeIcon(largeIcon);
+                }
+            } catch (Throwable ignored) {}
+
+            int notificationId = (int) (System.currentTimeMillis() % 100000);
+            manager.notify(notificationId, builder.build());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public class SanadNativeInterface {
+        private final Context mContext;
+
+        public SanadNativeInterface(Context context) {
+            this.mContext = context;
+        }
+
+        @JavascriptInterface
+        public boolean isNativeApp() {
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean hasNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= 33) {
+                return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            }
+            return true;
+        }
+
+        @JavascriptInterface
+        public void requestNotificationPermission() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    checkAndRequestNotificationPermission();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void showNotification(final String title, final String message, final String targetUrl) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    displaySystemNotification(title, message, targetUrl);
+                }
+            });
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntentUrl(intent);
+    }
+
+    private void handleIntentUrl(Intent intent) {
+        if (intent != null && intent.hasExtra("TARGET_URL")) {
+            String targetUrl = intent.getStringExtra("TARGET_URL");
+            if (targetUrl != null && !targetUrl.isEmpty() && webView != null) {
+                if (targetUrl.startsWith("/")) {
+                    webView.loadUrl(PLATFORM_URL + targetUrl);
+                } else if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
+                    webView.loadUrl(targetUrl);
+                }
+            }
+        }
     }
 
     @Override
