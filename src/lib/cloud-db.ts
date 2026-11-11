@@ -173,7 +173,7 @@ export async function getSingleStudentFromCloud(email: string): Promise<StudentA
       const snap = await getDoc(doc(db, STUDENTS_COLLECTION, studentDocId))
       if (snap.exists()) {
         const data = snap.data() as StudentActivityRecord
-        if (data && data.email) {
+        if (data && data.email && !(data as unknown as { isDeleted?: boolean }).isDeleted) {
           return data
         }
       }
@@ -219,7 +219,7 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
       if (snapshotRes.status === 'fulfilled') {
         snapshotRes.value.forEach((d) => {
           const raw = d.data() as Record<string, unknown>
-          if (raw && raw.email && typeof raw.email === 'string') {
+          if (raw && raw.email && typeof raw.email === 'string' && raw.isDeleted !== true) {
             const cleanEm = raw.email.toLowerCase().trim()
             if (!deletedEmailsSet.has(cleanEm)) {
               const data = raw as unknown as StudentActivityRecord
@@ -279,7 +279,7 @@ export async function getStudentsFromCloud(): Promise<StudentActivityRecord[]> {
               existing.role = u.role
               if (uRoleUpdatedAt) existing.roleUpdatedAt = uRoleUpdatedAt
             }
-            if (u.scholarlyId && typeof u.scholarlyId === 'string') existing.scholarlyId = u.scholarlyId
+            if (!existing.scholarlyId && u.scholarlyId && typeof u.scholarlyId === 'string') existing.scholarlyId = u.scholarlyId
             if (lastLoginAtStr > (existing.lastActive || '')) existing.lastActive = lastLoginAtStr
           } else {
             const isGmail = email.endsWith('@gmail.com')
@@ -864,11 +864,11 @@ export async function getNextAtomicScholarlyId(): Promise<string> {
   try {
     const nextNum = await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(counterRef)
-      // قاعدة البداية هي 119 طالباً المسجلين بالفعل في المنصة
-      let currentVal = 119
+      // يبدأ الترقيم التصاعدي المنضبط من 1+ حسب أحدث قيمة في العداد السحابي
+      let currentVal = 0
       if (snap.exists()) {
         const data = snap.data()
-        if (typeof data.last_id === 'number' && data.last_id >= 119) {
+        if (typeof data.last_id === 'number' && data.last_id > 0) {
           currentVal = data.last_id
         }
       }
@@ -881,8 +881,9 @@ export async function getNextAtomicScholarlyId(): Promise<string> {
     console.warn('Atomic counter transaction notice, checking cloud students fallback:', err)
     try {
       const students = await getStudentsFromCloud()
-      let max = 119
+      let max = 0
       for (const s of students) {
+        if ((s as unknown as { isDeleted?: boolean }).isDeleted === true) continue
         const extraAcademicId = (s as unknown as { academic_id?: string }).academic_id || ''
         const raw = (s.scholarlyId || extraAcademicId).trim()
         if (raw.startsWith('SND-')) {

@@ -256,7 +256,9 @@ export default function SanadControlGatePage() {
   const [intelligenceType, setIntelligenceType] = useState<'matn' | 'science'>('matn')
 
   // بيانات التتبع والإحصائيات
-  const deletedEmailsRef = useRef<Set<string>>(new Set())
+  const deletedEmailsRef = useRef<Set<string>>(
+    new Set(['201012728516@student.sanad.edu', 'student_1790694776796_phone'])
+  )
   const [students, setStudents] = useState<StudentActivityRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -304,6 +306,7 @@ export default function SanadControlGatePage() {
   const [studentSearch, setStudentSearch] = useState('')
   const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'online' | 'offline' | 'active' | 'banned'>('all')
   const [studentRoleFilter, setStudentRoleFilter] = useState<'all' | 'student' | 'admin'>('all')
+  const [studentSortOrder, setStudentSortOrder] = useState<'asc' | 'desc'>('asc')
   const [studentViewMode, setStudentViewMode] = useState<'cards' | 'table'>('cards')
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<StudentActivityRecord | null>(null)
   const [banModalStudent, setBanModalStudent] = useState<StudentActivityRecord | null>(null)
@@ -776,11 +779,30 @@ export default function SanadControlGatePage() {
   })
   const [broadcastSavedNotice, setBroadcastSavedNotice] = useState(false)
 
+  // دالة موحدة لترتيب الطلاب بالرقم الأكاديمي (تصاعدياً من 1+ أو تنازلياً للأحدث)
+  const sortStudentsByScholarlyOrder = (
+    list: StudentActivityRecord[],
+    order: 'asc' | 'desc' = 'asc'
+  ): StudentActivityRecord[] => {
+    return [...list].sort((a, b) => {
+      const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+      const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+      if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
+        return order === 'asc' ? idNumA - idNumB : idNumB - idNumA
+      }
+      if (idNumA > 0 && idNumB <= 0) return order === 'asc' ? -1 : 1
+      if (idNumB > 0 && idNumA <= 0) return order === 'asc' ? 1 : -1
+      const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
+      const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
+      return order === 'asc' ? timeA - timeB : timeB - timeA
+    })
+  }
+
   // دالة أمان إضافية لمنع ظهور أي معرفات أكاديمية مكررة في لوحة التحكم نهائياً
   const sanitizeClientScholarlyIds = (list: StudentActivityRecord[]): StudentActivityRecord[] => {
     if (!list || list.length === 0) return []
     const usedNumbers = new Set<number>()
-    let maxNum = 119
+    let maxNum = 0
 
     // فرز تسلسلي بحسب أقدمية التسجيل لمنح الأسبقية لمن سجل أولاً في الاحتفاظ برقمه
     const sortedByDate = [...list].sort((a, b) => {
@@ -808,7 +830,7 @@ export default function SanadControlGatePage() {
 
     if (duplicateStudents.size === 0) return list
 
-    let nextAvailable = Math.max(maxNum + 1, 120)
+    let nextAvailable = maxNum + 1
     return list.map((s) => {
       if (!duplicateStudents.has(s.id || s.email)) return s
       while (usedNumbers.has(nextAvailable)) {
@@ -838,18 +860,7 @@ export default function SanadControlGatePage() {
               map.set(em, s)
             }
           })
-          const merged = applyRoleOverrides(Array.from(map.values()), prev)
-          merged.sort((a, b) => {
-            // فرز تنازلي: الأحدث تسجيلاً أو الأكبر في المعرف الأكاديمي يظهر في الأعلى افتراضياً
-            const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-            const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-            if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
-              return idNumB - idNumA
-            }
-            const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
-            const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
-            return timeB - timeA
-          })
+          const merged = sortStudentsByScholarlyOrder(applyRoleOverrides(Array.from(map.values()), prev), 'asc')
           const finalUnique = sanitizeClientScholarlyIds(merged)
           saveStudentsBackupToLocal(finalUnique)
           return finalUnique
@@ -1005,7 +1016,10 @@ export default function SanadControlGatePage() {
               !deletedEmailsRef.current.has((s.email || '').toLowerCase().trim()) &&
               !deletedEmailsRef.current.has((s.id || '').toLowerCase().trim())
           )
-          const latest: StudentActivityRecord | null = json.latestStudent || freshStudents[0] || null
+          const newestByReg = [...freshStudents].sort(
+            (a, b) => new Date(b.registeredAt || 0).getTime() - new Date(a.registeredAt || 0).getTime()
+          )[0]
+          const latest: StudentActivityRecord | null = json.latestStudent || newestByReg || null
 
           setLastLivePollTime(new Date().toLocaleTimeString('ar-EG'))
 
@@ -1047,17 +1061,7 @@ export default function SanadControlGatePage() {
                 map.set(em, s)
               }
             })
-            const merged = applyRoleOverrides(Array.from(map.values()), prev)
-            merged.sort((a, b) => {
-              const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-              const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-              if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
-                return idNumB - idNumA
-              }
-              const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
-              const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
-              return timeB - timeA
-            })
+            const merged = sortStudentsByScholarlyOrder(applyRoleOverrides(Array.from(map.values()), prev), 'asc')
             const finalUnique = sanitizeClientScholarlyIds(merged)
             saveStudentsBackupToLocal(finalUnique)
             return finalUnique
@@ -1097,8 +1101,11 @@ export default function SanadControlGatePage() {
           if (!snapshot.empty) {
             const firestoreStudents: StudentActivityRecord[] = []
             snapshot.forEach((docSnap) => {
-              const data = docSnap.data() as StudentActivityRecord
-              if (data && data.email) {
+              const data = docSnap.data() as StudentActivityRecord & { isDeleted?: boolean; academic_id?: string }
+              if (data && data.email && data.isDeleted !== true) {
+                if (!data.scholarlyId && typeof data.academic_id === 'string') {
+                  data.scholarlyId = data.academic_id
+                }
                 const cleanEm = data.email.toLowerCase().trim()
                 const cleanId = (data.id || '').toLowerCase().trim()
                 if (deletedEmailsRef.current.has(cleanEm) || (cleanId && deletedEmailsRef.current.has(cleanId))) {
@@ -1151,17 +1158,7 @@ export default function SanadControlGatePage() {
                   })
                 }
               })
-              const merged = applyRoleOverrides(Array.from(map.values()), prev)
-              merged.sort((a, b) => {
-                const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-                const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
-                if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
-                  return idNumB - idNumA
-                }
-                const timeA = new Date(a.lastActive || a.registeredAt || 0).getTime()
-                const timeB = new Date(b.lastActive || b.registeredAt || 0).getTime()
-                return timeB - timeA
-              })
+              const merged = sortStudentsByScholarlyOrder(applyRoleOverrides(Array.from(map.values()), prev), 'asc')
               const finalUnique = sanitizeClientScholarlyIds(merged)
               saveStudentsBackupToLocal(finalUnique)
               return finalUnique
@@ -2163,33 +2160,36 @@ export default function SanadControlGatePage() {
   )
 
   // تصفية الطلاب بالمعرف الأكاديمي والاسم والبريد والدولة والـ IP والجهاز والدور وحالة الاتصال الحي
-  const filteredStudents = students.filter((s) => {
-    if (studentStatusFilter === 'online' && !isStudentOnlineNow(s)) return false
-    if (studentStatusFilter === 'offline' && isStudentOnlineNow(s)) return false
-    if (studentStatusFilter === 'active' && s.isBanned) return false
-    if (studentStatusFilter === 'banned' && !s.isBanned) return false
+  const filteredStudents = sortStudentsByScholarlyOrder(
+    students.filter((s) => {
+      if (studentStatusFilter === 'online' && !isStudentOnlineNow(s)) return false
+      if (studentStatusFilter === 'offline' && isStudentOnlineNow(s)) return false
+      if (studentStatusFilter === 'active' && s.isBanned) return false
+      if (studentStatusFilter === 'banned' && !s.isBanned) return false
 
-    const isAdminUser = isStudentAdmin(s)
-    if (studentRoleFilter === 'admin' && !isAdminUser) return false
-    if (studentRoleFilter === 'student' && isAdminUser) return false
+      const isAdminUser = isStudentAdmin(s)
+      if (studentRoleFilter === 'admin' && !isAdminUser) return false
+      if (studentRoleFilter === 'student' && isAdminUser) return false
 
-    const query = studentSearch.toLowerCase().trim()
-    if (!query) return true
-    return (
-      (s.scholarlyId && s.scholarlyId.toLowerCase().includes(query)) ||
-      s.email.toLowerCase().includes(query) ||
-      s.name.toLowerCase().includes(query) ||
-      (s.ip && s.ip.toLowerCase().includes(query)) ||
-      (s.country && s.country.toLowerCase().includes(query)) ||
-      (s.countryCode && s.countryCode.toLowerCase().includes(query)) ||
-      (s.city && s.city.toLowerCase().includes(query)) ||
-      (s.device && s.device.toLowerCase().includes(query)) ||
-      (s.browser && s.browser.toLowerCase().includes(query)) ||
-      (s.phone && s.phone.includes(query)) ||
-      (Array.isArray(s.completedCourses) &&
-        s.completedCourses.some((slug) => slug.toLowerCase().includes(query)))
-    )
-  })
+      const query = studentSearch.toLowerCase().trim()
+      if (!query) return true
+      return (
+        (s.scholarlyId && s.scholarlyId.toLowerCase().includes(query)) ||
+        s.email.toLowerCase().includes(query) ||
+        s.name.toLowerCase().includes(query) ||
+        (s.ip && s.ip.toLowerCase().includes(query)) ||
+        (s.country && s.country.toLowerCase().includes(query)) ||
+        (s.countryCode && s.countryCode.toLowerCase().includes(query)) ||
+        (s.city && s.city.toLowerCase().includes(query)) ||
+        (s.device && s.device.toLowerCase().includes(query)) ||
+        (s.browser && s.browser.toLowerCase().includes(query)) ||
+        (s.phone && s.phone.includes(query)) ||
+        (Array.isArray(s.completedCourses) &&
+          s.completedCourses.some((slug) => slug.toLowerCase().includes(query)))
+      )
+    }),
+    studentSortOrder
+  )
 
   // نسخ المعرف الأكاديمي بنقرة واحدة
   const handleCopyId = (id: string, e?: React.MouseEvent) => {
@@ -3367,6 +3367,36 @@ export default function SanadControlGatePage() {
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
+              {/* أزرار ترتيب المعرف الأكاديمي: تصاعدي من 1+ أو تنازلي */}
+              <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100/80 p-1 dark:border-stone-800 dark:bg-stone-900/80 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setStudentSortOrder('asc')}
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                    studentSortOrder === 'asc'
+                      ? 'bg-amber-600 text-white shadow-2xs dark:bg-amber-700'
+                      : 'text-stone-600 hover:text-amber-800 dark:text-stone-400'
+                  }`}
+                  title="ترتيب الطلاب تصاعدياً بالمعرف الأكاديمي بدءاً من SND-1"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  <span>من 1+ تصاعدي</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentSortOrder('desc')}
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                    studentSortOrder === 'desc'
+                      ? 'bg-amber-600 text-white shadow-2xs dark:bg-amber-700'
+                      : 'text-stone-600 hover:text-amber-800 dark:text-stone-400'
+                  }`}
+                  title="ترتيب الطلاب تنازلياً من الأحدث تسجيلاً"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  <span>الأحدث تنازلي</span>
+                </button>
+              </div>
+
               {/* أزرار نمط العرض: بطاقات تفاعلية أو جدول تفصيلي */}
               <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100/80 p-1 dark:border-stone-800 dark:bg-stone-900/80 shadow-2xs">
                 <button

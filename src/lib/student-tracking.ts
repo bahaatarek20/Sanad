@@ -1121,7 +1121,7 @@ export function resetVisitorCount(targetCount: number = 0): number {
   }
 }
 
-// 1.5.1 فحص ومعالجة المعرفات الأكاديمية وضمان فرادتها التامة بدون أي تكرار
+// 1.5.1 فحص ومعالجة المعرفات الأكاديمية وضمان فرادتها التامة بدون أي تكرار وبداية متسلسلة من 1+
 export function reconcileAndDeduplicateScholarlyIds(students: StudentActivityRecord[]): boolean {
   if (!students || students.length === 0) return false
   let hasChanges = false
@@ -1151,9 +1151,9 @@ export function reconcileAndDeduplicateScholarlyIds(students: StudentActivityRec
     duplicatesOrMissing.push(st)
   }
 
-  // 3. إعادة توليد معرفات متسلسلة فريدة 100% للطلاب أصحاب المعرفات المكررة أو المفقودة
+  // 3. إعادة توليد معرفات متسلسلة فريدة 100% بدءاً من 1+ للطلاب أصحاب المعرفات المكررة أو المفقودة
   if (duplicatesOrMissing.length > 0) {
-    let maxUsed = 119
+    let maxUsed = 0
     usedNumbers.forEach((n) => {
       if (n > maxUsed) maxUsed = n
     })
@@ -1177,10 +1177,9 @@ export function reconcileAndDeduplicateScholarlyIds(students: StudentActivityRec
   return hasChanges
 }
 
-// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم (مثال: SND-121) مع فحص شامل لكافة السجلات المحلية والسحابية
+// 1.5 توليد معرف أكاديمي تسلسلي فريد لطالب العلم يبدأ من 1+ (مثال: SND-122) مع فحص شامل لكافة السجلات
 export function generateScholarlyId(existingStudents?: StudentActivityRecord[]): string {
-  // الحد الأدنى للمعرف هو 119 (عدد الطلاب المعتمدين والموثقين بالمنصة) لمنع توليد أي رقم متكرر نهائياً
-  let maxNum = 119
+  let maxNum = 0
   const usedNumbers = new Set<number>()
   const allToCheck: StudentActivityRecord[] = []
 
@@ -1767,6 +1766,8 @@ export function registerOrUpdateStudent(
     browser?: string
     userAgent?: string
     scholarlyId?: string
+    registeredAt?: string
+    cloudSeed?: Partial<StudentActivityRecord>
   }
 ): StudentActivityRecord {
   ensureDataFiles()
@@ -1859,40 +1860,43 @@ export function registerOrUpdateStudent(
   } else {
     const isMetaTaken = meta?.scholarlyId && students.some((s) => s.scholarlyId === meta.scholarlyId)
     const scholarlyId = (meta?.scholarlyId && !isMetaTaken) ? meta.scholarlyId : generateScholarlyId(students)
+    const seed = meta?.cloudSeed
     const newStudent: StudentActivityRecord = {
-      id: meta?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: meta?.id || seed?.id || `student_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       scholarlyId,
+      ...( { academicId: scholarlyId, academic_id: scholarlyId } as Record<string, string> ),
       email: cleanEmail,
-      name: studentName,
-      phone: meta?.phone,
-      authProvider: meta?.authProvider || (cleanEmail.includes('@gmail.com') ? 'google' : meta?.phone ? 'phone' : 'email'),
-      avatarUrl: meta?.avatarUrl,
-      ip: meta?.ip,
-      country: meta?.country,
-      countryCode: meta?.countryCode,
-      city: meta?.city,
-      device: meta?.device,
-      browser: meta?.browser,
-      userAgent: meta?.userAgent,
-      registeredAt: now,
+      name: studentName || seed?.name || cleanEmail.split('@')[0],
+      phone: meta?.phone || seed?.phone,
+      authProvider: meta?.authProvider || seed?.authProvider || (cleanEmail.includes('@gmail.com') ? 'google' : meta?.phone ? 'phone' : 'email'),
+      role: cleanEmail === SUPER_ADMIN_EMAIL ? 'owner' : (seed?.role || 'student'),
+      avatarUrl: meta?.avatarUrl || seed?.avatarUrl,
+      ip: meta?.ip || seed?.ip,
+      country: meta?.country || seed?.country,
+      countryCode: meta?.countryCode || seed?.countryCode,
+      city: meta?.city || seed?.city,
+      device: meta?.device || seed?.device,
+      browser: meta?.browser || seed?.browser,
+      userAgent: meta?.userAgent || seed?.userAgent,
+      registeredAt: meta?.registeredAt || seed?.registeredAt || now,
       lastActive: now,
-      currentPage: 'فهرس المتون والمقررات',
+      currentPage: seed?.currentPage || 'فهرس المتون والمقررات',
       lastAction: 'انضم وسجّل حساباً جديداً في المنصة',
-      totalStudyMinutes: 0,
-      streak: 1,
-      streak_count: 1,
-      last_streak_cycle: calculateAcademicCycleId(Date.now()),
+      totalStudyMinutes: seed?.totalStudyMinutes || 0,
+      streak: seed?.streak || 1,
+      streak_count: seed?.streak_count ?? seed?.streak ?? 1,
+      last_streak_cycle: seed?.last_streak_cycle ?? calculateAcademicCycleId(Date.now()),
       last_active_at: now,
-      completedCourses: [],
-      completedEpisodesMap: {},
-      dailyStudyLog: {},
-      listenedSessions: [],
-      notesCount: 0,
-      isBanned: false,
+      completedCourses: Array.isArray(seed?.completedCourses) ? seed.completedCourses : [],
+      completedEpisodesMap: seed?.completedEpisodesMap || {},
+      dailyStudyLog: seed?.dailyStudyLog || {},
+      listenedSessions: Array.isArray(seed?.listenedSessions) ? seed.listenedSessions : [],
+      notesCount: seed?.notesCount || 0,
+      isBanned: Boolean(seed?.isBanned),
     }
 
     ensureStudentTelemetryDefaults(newStudent)
-    students.unshift(newStudent)
+    students.push(newStudent)
     reconcileAndDeduplicateScholarlyIds(students)
 
     // تسجيل فوري للمستخدم الجديد في الذاكرة لتسمع اللوحة في 0 ثانية
@@ -1951,11 +1955,20 @@ export async function registerOrUpdateStudentAsync(
 ): Promise<StudentActivityRecord> {
   const cleanEmail = email.toLowerCase().trim()
   const currentStudents = readAllLocalStudents(false)
-  const isExisting = currentStudents.some((s) => s.email?.toLowerCase().trim() === cleanEmail && s.scholarlyId)
+  const localMatch = currentStudents.find((s) => s.email?.toLowerCase().trim() === cleanEmail)
+  const isExistingLocally = Boolean(localMatch?.scholarlyId)
 
-  // إذا كان طالباً جديداً ولم يتم تحديد المعرف مسبقاً، نجلبه عبر العداد الذري من Firestore
-  let atomicId = meta?.scholarlyId
-  if (!isExisting && !atomicId) {
+  // فحص Cloud Firestore أولاً لتجنب استهلاك رقم جديد إذا كان الطالب مسجلاً سحابياً مسبقاً
+  let cloudExisting: StudentActivityRecord | null = null
+  if (!isExistingLocally) {
+    try {
+      const { getSingleStudentFromCloud } = await import('@/lib/cloud-db')
+      cloudExisting = await getSingleStudentFromCloud(cleanEmail)
+    } catch {}
+  }
+
+  let atomicId = meta?.scholarlyId || localMatch?.scholarlyId || cloudExisting?.scholarlyId
+  if (!isExistingLocally && !atomicId) {
     try {
       const { getNextAtomicScholarlyId } = await import('@/lib/cloud-db')
       const fetchedId = await getNextAtomicScholarlyId()
@@ -1968,6 +1981,8 @@ export async function registerOrUpdateStudentAsync(
   const student = registerOrUpdateStudent(email, name, {
     ...meta,
     scholarlyId: atomicId || meta?.scholarlyId,
+    registeredAt: meta?.registeredAt || cloudExisting?.registeredAt,
+    cloudSeed: cloudExisting || meta?.cloudSeed,
   })
   try {
     const cloudPromise = saveStudentToCloud(student)
@@ -2945,10 +2960,19 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
             resolvedRole = 'owner'
           }
 
+          const earlierRegisteredAt = (() => {
+            const tL = localSt.registeredAt ? Date.parse(localSt.registeredAt) : NaN
+            const tC = cs.registeredAt ? Date.parse(cs.registeredAt) : NaN
+            if (Number.isFinite(tL) && Number.isFinite(tC)) return tL <= tC ? localSt.registeredAt : cs.registeredAt
+            return localSt.registeredAt || cs.registeredAt
+          })()
+
           if (cs.lastActive && (!localSt.lastActive || cs.lastActive > localSt.lastActive)) {
             mergedStudents[idx] = {
               ...localSt,
               ...cs,
+              scholarlyId: cs.scholarlyId || localSt.scholarlyId,
+              registeredAt: earlierRegisteredAt,
               role: resolvedRole,
               roleUpdatedAt: resolvedRoleTime,
             }
@@ -2957,6 +2981,7 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
           } else if (mergedStudents[idx].role !== resolvedRole) {
             mergedStudents[idx] = {
               ...localSt,
+              registeredAt: earlierRegisteredAt,
               role: resolvedRole,
               roleUpdatedAt: resolvedRoleTime,
             }
@@ -3014,11 +3039,18 @@ export async function getAdminDashboardDataAsync(forceRefresh: boolean = true): 
     hasMergedChanges = true;
   }
 
-  // ترتيب الطلاب تنازلياً بحيث يظهر أحدث طالب سجل في المنصة في المقدمة فوراً
+  // ترتيب الطلاب تصاعدياً بدءاً من الرقم الأكاديمي 1+ ثم بالأقدمية الزمنية للتسجيل
   mergedStudents.sort((a, b) => {
+    const idNumA = parseInt((a.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+    const idNumB = parseInt((b.scholarlyId || '').replace(/[^0-9]/g, '') || '0', 10)
+    if (idNumA > 0 && idNumB > 0 && idNumA !== idNumB) {
+      return idNumA - idNumB
+    }
+    if (idNumA > 0 && idNumB <= 0) return -1
+    if (idNumB > 0 && idNumA <= 0) return 1
     const timeA = new Date(a.registeredAt || a.lastActive || 0).getTime()
     const timeB = new Date(b.registeredAt || b.lastActive || 0).getTime()
-    return timeB - timeA
+    return timeA - timeB
   })
 
   // حفظ القائمة المدمجة فقط عند وجود تحديثات فعلية لتجنب الكتابة المتكررة على القرص
@@ -3637,7 +3669,7 @@ export function getScholarlyLeaderboardData(currentStudentEmail?: string): Schol
   // حساب ترتيب المتصدرين (منظومة الأسبقية والتفوق الذكية):
   // 1. التفوق الإنجازي والعلمي في المدارسة والمواظبة والمتون (من يتسابق في شيء يفوق الآخرين)
   // 2. عند التساوي في الإنجاز والنقاط (أو في بداية التسجيل): أسبقية التسجيل في المنصة (من سجل أولاً له الأسبقية)
-  // 3. كسر التعادل الإضافي برقم المعرف الأكاديمي (SND-1001 قبل SND-1002)
+  // 3. كسر التعادل الإضافي برقم المعرف الأكاديمي (SND-1 قبل SND-2)
   mergedList.sort((a, b) => {
     if (b.studyScore !== a.studyScore) {
       return b.studyScore - a.studyScore

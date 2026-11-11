@@ -107,7 +107,7 @@ export default function MobileMenu({
   }, [isOpen])
 
   const copyScholarlyId = () => {
-    const idToCopy = scholarlyId || 'SND-1001'
+    const idToCopy = scholarlyId || 'SND-1'
     navigator.clipboard?.writeText(idToCopy).then(() => {
       setCopiedId(true)
       setTimeout(() => setCopiedId(false), 2000)
@@ -147,15 +147,7 @@ export default function MobileMenu({
     },
   ]
 
-  const displayId =
-    scholarlyId ||
-    (userEmail
-      ? `SND-${Math.abs(
-          userEmail
-            .split('')
-            .reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0) % 9000 + 1000
-        )}`
-      : 'SND-1001')
+  const displayId = scholarlyId || (userEmail ? 'SND-...' : 'SND-1')
 
   return (
     <>

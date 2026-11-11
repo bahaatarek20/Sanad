@@ -89,31 +89,73 @@ export async function syncUserToFirestore(
       console.warn('Could not increment totalUsers in site_stats:', e)
     }
 
-    // مزامنة فورية دائمة في مجموعة students لضمان ظهور الطالب في لوحة الإدارة دون انقطاع
+    // مزامنة فورية دائمة في مجموعة students دون الكتابة فوق السجل أو المعرف الأكاديمي الموجود مسبقاً
     try {
       const studentDocId = cleanEmail.replace(/[.#$[\]]/g, '_')
       const studentDocRef = doc(db, 'students', studentDocId)
-      await setDoc(
-        studentDocRef,
-        {
-          id: uid,
-          email: cleanEmail,
-          name: data.fullName || cleanEmail.split('@')[0],
-          phone: data.phoneNumber || null,
-          avatarUrl: data.avatarUrl || null,
-          authProvider: cleanEmail.endsWith('@gmail.com') ? 'google' : data.phoneNumber ? 'phone' : 'email',
-          registeredAt: new Date().toISOString(),
-          lastActive: new Date().toISOString(),
-          totalStudyMinutes: 0,
-          streak: 0,
-          completedCourses: [],
-          notesCount: 0,
-          isBanned: false,
-          role: isDefaultAdmin ? 'owner' : 'student',
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      )
+      const existingStudentSnap = await getDoc(studentDocRef)
+      const nowIso = new Date().toISOString()
+
+      if (existingStudentSnap.exists() && existingStudentSnap.data()?.isDeleted !== true) {
+        const existingData = existingStudentSnap.data()
+        const existingScholarlyId =
+          typeof existingData?.scholarlyId === 'string' && existingData.scholarlyId.trim()
+            ? existingData.scholarlyId.trim()
+            : undefined
+        await setDoc(
+          studentDocRef,
+          {
+            id: uid,
+            email: cleanEmail,
+            name: existingData?.name || data.fullName || cleanEmail.split('@')[0],
+            ...(data.phoneNumber && !existingData?.phone ? { phone: data.phoneNumber } : {}),
+            ...(data.avatarUrl && !existingData?.avatarUrl ? { avatarUrl: data.avatarUrl } : {}),
+            lastActive: nowIso,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        )
+        if (existingScholarlyId) {
+          await setDoc(
+            userRef,
+            { scholarlyId: existingScholarlyId, academic_id: existingScholarlyId },
+            { merge: true }
+          ).catch(() => {})
+        }
+      } else {
+        const { getNextAtomicScholarlyId } = await import('@/lib/cloud-db')
+        const assignedScholarlyId = await getNextAtomicScholarlyId().catch(() => '')
+        await setDoc(
+          studentDocRef,
+          {
+            id: uid,
+            email: cleanEmail,
+            name: data.fullName || cleanEmail.split('@')[0],
+            phone: data.phoneNumber || null,
+            avatarUrl: data.avatarUrl || null,
+            authProvider: cleanEmail.endsWith('@gmail.com') ? 'google' : data.phoneNumber ? 'phone' : 'email',
+            ...(assignedScholarlyId ? { scholarlyId: assignedScholarlyId, academicId: assignedScholarlyId, academic_id: assignedScholarlyId } : {}),
+            registeredAt: nowIso,
+            lastActive: nowIso,
+            totalStudyMinutes: 0,
+            streak: 1,
+            streak_count: 1,
+            completedCourses: [],
+            notesCount: 0,
+            isBanned: false,
+            role: isDefaultAdmin ? 'owner' : 'student',
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        )
+        if (assignedScholarlyId) {
+          await setDoc(
+            userRef,
+            { scholarlyId: assignedScholarlyId, academic_id: assignedScholarlyId },
+            { merge: true }
+          ).catch(() => {})
+        }
+      }
     } catch (e) {
       console.warn('Could not sync to students collection in Firestore:', e)
     }

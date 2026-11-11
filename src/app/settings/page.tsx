@@ -63,7 +63,7 @@ export default async function SettingsPage(props: {
     user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
   const bio = user.bio !== undefined ? user.bio : profile?.bio || ''
   const educationLevel = user.educationLevel || profile?.educationLevel || 'طالب تأصيل منهجي'
-  const scholarlyId = profile?.scholarlyId || 'SND-1001'
+  const scholarlyId = profile?.scholarlyId || 'SND-1'
   const currentPhone = user.phone !== undefined ? user.phone : profile?.phone || ''
   const currentAvatar = profile?.avatarUrl || user.avatarUrl || ''
   const registeredAtFormatted = profile?.registeredAt

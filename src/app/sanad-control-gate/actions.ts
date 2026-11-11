@@ -509,8 +509,12 @@ export async function reconcileStudentsAdminAction() {
     return { success: false, error: 'غير مصرح' }
   }
 
-  const { reconcileAndDeduplicateScholarlyIds, readAllLocalStudents, saveAllLocalStudents } = await import('@/lib/student-tracking')
-  const students = readAllLocalStudents(true)
+  const {
+    getAdminDashboardDataAsync,
+    reconcileAndDeduplicateScholarlyIds,
+    saveAllLocalStudents,
+  } = await import('@/lib/student-tracking')
+  const { students } = await getAdminDashboardDataAsync(true)
   const hadChanges = reconcileAndDeduplicateScholarlyIds(students)
   if (hadChanges) {
     saveAllLocalStudents(students)

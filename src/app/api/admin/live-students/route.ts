@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
       void passwordSalt
       return rest
     })
-    const latestStudent = getLatestRegisteredStudent() || sanitizedStudents[0] || null
+    const newestByReg = [...sanitizedStudents].sort(
+      (a, b) => new Date(b.registeredAt || 0).getTime() - new Date(a.registeredAt || 0).getTime()
+    )[0]
+    const latestStudent = getLatestRegisteredStudent() || newestByReg || null
     const auditLogs = getAuditLogs(40)
 
     return NextResponse.json(
